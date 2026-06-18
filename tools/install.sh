@@ -11,7 +11,7 @@ BIN_SRC="$REPO_ROOT/target/release/ibus-bamboo"
 BIN_DIR="$HOME/.local/lib/ibus-bamboo-rs"
 BIN_DST="$BIN_DIR/ibus-engine-bamboo-rs"
 SYS_COMP="/usr/share/ibus/component/bamboo-rs.xml"
-ICON="/usr/share/ibus-bamboo/icons/vi.svg"   # reuse Go icon if present; harmless if missing
+ICON="$BIN_DIR/vi.svg"   # self-contained icon shipped in tools/icons/
 
 if [[ ! -x "$BIN_SRC" ]]; then
     echo "Release binary not found: $BIN_SRC"
@@ -19,9 +19,10 @@ if [[ ! -x "$BIN_SRC" ]]; then
     exit 1
 fi
 
-echo "1/4 Installing binary -> $BIN_DST"
+echo "1/4 Installing binary + icon -> $BIN_DIR"
 mkdir -p "$BIN_DIR"
 install -m 0755 "$BIN_SRC" "$BIN_DST"
+install -m 0644 "$REPO_ROOT/tools/icons/vi.svg" "$ICON"
 
 echo "2/4 Installing component (needs sudo) -> $SYS_COMP"
 TMP_XML="$(mktemp)"
