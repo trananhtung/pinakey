@@ -18,5 +18,8 @@ zbus = { version = "5", optional = true, features = ["tokio"] }
 serde = { version = "1", features = ["derive"], optional = true }
 tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros"] }
 
+[dev-dependencies]
+futures-util = "0.3"
+
 [lints]
 workspace = true
