@@ -1,0 +1,12 @@
+[package]
+name = "pinakey-platform"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Platform integration (X11/Wayland) for PinaKey: window-class detection and key injection"
+
+[dependencies]
+x11rb = "0.13"
+
+[lints]
+workspace = true

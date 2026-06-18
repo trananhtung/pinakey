@@ -1,23 +1,21 @@
 #!/usr/bin/env bash
-# Append ('ibus','BambooRs') to the GNOME input-source list (idempotent, additive).
+# Append ('ibus','PinaKey') to the GNOME input-source list (idempotent, additive).
 # Existing sources are preserved. Switch between sources with Super+Space.
 set -euo pipefail
 
-KEY="org.gnome.desktop.input-sources sources"
 cur="$(gsettings get org.gnome.desktop.input-sources sources)"
 
-if [[ "$cur" == *"'BambooRs'"* ]]; then
-    echo "BambooRs already in input sources: $cur"
+if [[ "$cur" == *"'PinaKey'"* ]]; then
+    echo "PinaKey already in input sources: $cur"
     exit 0
 fi
 
-# Insert before the closing bracket of the list.
 if [[ "$cur" == "@a(ss) []" || "$cur" == "[]" ]]; then
-    new="[('ibus', 'BambooRs')]"
+    new="[('ibus', 'PinaKey')]"
 else
-    new="${cur%]}, ('ibus', 'BambooRs')]"
+    new="${cur%]}, ('ibus', 'PinaKey')]"
 fi
 
 gsettings set org.gnome.desktop.input-sources sources "$new"
 echo "Input sources now: $(gsettings get org.gnome.desktop.input-sources sources)"
-echo "Press Super+Space to switch to 'Bamboo (Rust)' and start typing."
+echo "Press Super+Space to switch to 'PinaKey' and start typing."

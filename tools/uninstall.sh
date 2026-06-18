@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Remove the Rust ibus-bamboo ("BambooRs") installed by tools/install.sh. Leaves the Go engine
-# untouched. Run so the sudo prompt works:   ! bash tools/uninstall.sh
+# Remove PinaKey installed by tools/install.sh. Run so the sudo prompt works:
+#   ! bash tools/uninstall.sh
 set -euo pipefail
 
-BIN_DIR="$HOME/.local/lib/ibus-bamboo-rs"
-SYS_COMP="/usr/share/ibus/component/bamboo-rs.xml"
+BIN_DIR="$HOME/.local/lib/pinakey"
+SYS_COMP="/usr/share/ibus/component/pinakey.xml"
 
-# Drop ('ibus','BambooRs') from GNOME input sources.
+# Drop ('ibus','PinaKey') from GNOME input sources.
 if command -v gsettings >/dev/null 2>&1; then
     cur="$(gsettings get org.gnome.desktop.input-sources sources 2>/dev/null || echo '')"
-    if [[ "$cur" == *"'BambooRs'"* ]]; then
-        new="$(printf '%s' "$cur" | sed "s/, ('ibus', 'BambooRs')//; s/('ibus', 'BambooRs'), //; s/('ibus', 'BambooRs')//")"
+    if [[ "$cur" == *"'PinaKey'"* ]]; then
+        new="$(printf '%s' "$cur" | sed "s/, ('ibus', 'PinaKey')//; s/('ibus', 'PinaKey'), //; s/('ibus', 'PinaKey')//")"
         gsettings set org.gnome.desktop.input-sources sources "$new" || true
-        echo "Removed BambooRs from GNOME input sources."
+        echo "Removed PinaKey from GNOME input sources."
     fi
 fi
 
@@ -28,4 +28,4 @@ if [[ -z "${IBUS_ADDRESS:-}" ]]; then
 fi
 ibus write-cache >/dev/null 2>&1 || true
 ibus restart      >/dev/null 2>&1 || true
-echo "Done. The Go 'Bamboo' engine is unaffected."
+echo "Done."
