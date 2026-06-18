@@ -34,16 +34,7 @@ const CV_MATRIX: &[&[usize]] = &[
     &[7],
 ];
 
-const VC_MATRIX: &[&[usize]] = &[
-    &[0, 2],
-    &[0, 1, 2],
-    &[1, 2],
-    &[1, 2],
-    &[],
-    &[],
-    &[3],
-    &[4],
-];
+const VC_MATRIX: &[&[usize]] = &[&[0, 2], &[0, 1, 2], &[1, 2], &[1, 2], &[], &[], &[3], &[4]];
 
 /// Returns the matching row indices (empty == no match, mirroring Go's nil).
 fn lookup(seq: &[&str], input: &str, input_is_full: bool, input_is_complete: bool) -> Vec<usize> {
@@ -65,9 +56,12 @@ fn lookup(seq: &[&str], input: &str, input_is_full: bool, input_is_complete: boo
             }
             let mut is_match = true;
             for (k, &ic) in input_chars.iter().enumerate() {
-                if ic != canvas[k]
-                    && !(!input_is_complete && add_mark_to_toneless_char(canvas[k], 0) == ic)
-                {
+                // Boolean form mirrors upstream `spelling.go` verbatim so the port stays
+                // diff-comparable against the Go source; clippy's De Morgan rewrite would diverge.
+                #[allow(clippy::nonminimal_bool)]
+                let mismatch = ic != canvas[k]
+                    && !(!input_is_complete && add_mark_to_toneless_char(canvas[k], 0) == ic);
+                if mismatch {
                     is_match = false;
                     break;
                 }

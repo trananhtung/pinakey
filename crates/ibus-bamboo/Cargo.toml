@@ -12,3 +12,6 @@ path = "src/main.rs"
 [dependencies]
 bamboo-ibus = { path = "../bamboo-ibus" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

@@ -87,8 +87,7 @@ pub fn load_config(engine_name: &str) -> Config {
 
 /// Equivalent of Go `SaveConfig`.
 pub fn save_config(c: &Config, engine_name: &str) -> std::io::Result<()> {
-    let data = serde_json::to_string_pretty(c)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    let data = serde_json::to_string_pretty(c).map_err(std::io::Error::other)?;
     let dir = get_config_dir();
     std::fs::create_dir_all(&dir)?;
     std::fs::write(get_config_path(engine_name), data)

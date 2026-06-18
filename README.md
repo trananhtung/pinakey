@@ -26,8 +26,13 @@ against the upstream Go test suite, mapping Go's aliased `*Transformation` point
 ```sh
 cargo build --workspace          # all crates + binary
 cargo test --workspace           # 62 tests
+cargo fmt --all --check          # formatting gate (CI-enforced)
+cargo clippy --workspace --all-targets -- -D warnings   # lint gate
 ./target/debug/ibus-bamboo --version
 ```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the crate dependency graph and design rationale, and
+[CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and how to regenerate data tables.
 
 ## Architecture notes
 

@@ -11,3 +11,10 @@ repository = "https://github.com/BambooEngine/ibus-bamboo"
 [profile.release]
 lto = true
 opt-level = 3
+
+# Lints applied across every crate (each crate opts in with `[lints] workspace = true`).
+# CI runs `cargo clippy --all-targets -- -D warnings`, so these warn locally but block on CI.
+[workspace.lints.clippy]
+# Keep the port honest and readable without being pedantic.
+todo = "warn"
+dbg_macro = "warn"

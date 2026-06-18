@@ -1,10 +1,10 @@
 //! `BambooEngine` and the public `IEngine` API — ported from `bamboo.go`.
 
 use crate::bamboo_utils::{
-    break_composition, extract_last_word, extract_last_word_with_punctuation_marks,
-    extract_last_syllable, find_last_appending_trans, find_target, generate_fallback_transformations,
-    generate_transformations as gen_trans, is_valid, matches_uoh_tail, new_appending_trans,
-    refresh_last_tone_target as refresh_lt,
+    break_composition, extract_last_syllable, extract_last_word,
+    extract_last_word_with_punctuation_marks, find_last_appending_trans, find_target,
+    generate_fallback_transformations, generate_transformations as gen_trans, is_valid,
+    matches_uoh_tail, new_appending_trans, refresh_last_tone_target as refresh_lt,
 };
 use crate::flattener::flatten;
 use crate::rules::{flag, mode, Rule, TransRef, Transformation};
@@ -73,8 +73,11 @@ impl BambooEngine {
             is_upper_case,
         );
         if transformations.is_empty() {
-            transformations =
-                generate_fallback_transformations(&self.get_applicable_rules(lower_key), lower_key, is_upper_case);
+            transformations = generate_fallback_transformations(
+                &self.get_applicable_rules(lower_key),
+                lower_key,
+                is_upper_case,
+            );
             let mut new_composition = composition.to_vec();
             new_composition.extend(transformations.iter().cloned());
             if let Some(virtual_trans) = self.apply_uow_shortcut(&new_composition) {
@@ -141,8 +144,10 @@ impl IEngine for BambooEngine {
         if mode_flags & mode::FULL_TEXT != 0 {
             tmp = self.composition.clone();
         } else if mode_flags & mode::PUNCTUATION != 0 {
-            let (_, t) =
-                extract_last_word_with_punctuation_marks(&self.composition, &self.input_method.keys);
+            let (_, t) = extract_last_word_with_punctuation_marks(
+                &self.composition,
+                &self.input_method.keys,
+            );
             return flatten(&t, mode::VIETNAMESE);
         } else {
             let (_, t) = extract_last_word(&self.composition, &self.input_method.keys);

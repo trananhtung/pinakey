@@ -14,10 +14,22 @@ pub fn im_lookup_table() -> Vec<(i32, &'static str)> {
     vec![
         (PREEDIT_IM, "Cấu hình mặc định (Pre-edit)"),
         (SURROUNDING_TEXT_IM, "Sửa lỗi gạch chân (Surrounding Text)"),
-        (BACKSPACE_FORWARDING_IM, "Sửa lỗi gạch chân (ForwardKeyEvent I)"),
-        (SHIFT_LEFT_FORWARDING_IM, "Sửa lỗi gạch chân (ForwardKeyEvent II)"),
-        (FORWARD_AS_COMMIT_IM, "Sửa lỗi gạch chân (Forward as commit)"),
-        (XTEST_FAKE_KEY_EVENT_IM, "Sửa lỗi gạch chân (XTestFakeKeyEvent)"),
+        (
+            BACKSPACE_FORWARDING_IM,
+            "Sửa lỗi gạch chân (ForwardKeyEvent I)",
+        ),
+        (
+            SHIFT_LEFT_FORWARDING_IM,
+            "Sửa lỗi gạch chân (ForwardKeyEvent II)",
+        ),
+        (
+            FORWARD_AS_COMMIT_IM,
+            "Sửa lỗi gạch chân (Forward as commit)",
+        ),
+        (
+            XTEST_FAKE_KEY_EVENT_IM,
+            "Sửa lỗi gạch chân (XTestFakeKeyEvent)",
+        ),
         (US_IM, "Thêm vào danh sách loại trừ"),
     ]
 }

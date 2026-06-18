@@ -17,3 +17,6 @@ bamboo-platform = { path = "../bamboo-platform", optional = true }
 zbus = { version = "5", optional = true, features = ["tokio"] }
 serde = { version = "1", features = ["derive"], optional = true }
 tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

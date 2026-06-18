@@ -7,10 +7,7 @@ use x11rb::protocol::xproto::{AtomEnum, ConnectionExt, Window};
 /// Parse the `WM_CLASS` property value (two NUL-separated strings: instance then class).
 /// Returns the class (`res_class`) if present, else the instance (`res_name`).
 pub fn parse_wm_class(value: &[u8]) -> Option<String> {
-    let parts: Vec<&[u8]> = value
-        .split(|&b| b == 0)
-        .filter(|p| !p.is_empty())
-        .collect();
+    let parts: Vec<&[u8]> = value.split(|&b| b == 0).filter(|p| !p.is_empty()).collect();
     match parts.len() {
         0 => None,
         1 => Some(String::from_utf8_lossy(parts[0]).into_owned()),
@@ -69,8 +66,14 @@ mod tests {
 
     #[test]
     fn parses_instance_and_class() {
-        assert_eq!(parse_wm_class(b"google-chrome\0Google-chrome\0").as_deref(), Some("Google-chrome"));
-        assert_eq!(parse_wm_class(b"firefox\0Firefox\0").as_deref(), Some("Firefox"));
+        assert_eq!(
+            parse_wm_class(b"google-chrome\0Google-chrome\0").as_deref(),
+            Some("Google-chrome")
+        );
+        assert_eq!(
+            parse_wm_class(b"firefox\0Firefox\0").as_deref(),
+            Some("Firefox")
+        );
     }
 
     #[test]

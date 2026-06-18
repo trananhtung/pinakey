@@ -248,6 +248,9 @@ fn extract_cvc_appending_trans(
     if first_consonant.len() == 1 && !vowel.is_empty() {
         let fc0 = first_consonant[0].borrow().rule.result;
         let v0 = vowel[0].borrow().rule.result;
+        // The `!(… && …)` form mirrors upstream `bamboo_utils.go` so the port stays
+        // diff-comparable against the Go source; clippy's De Morgan rewrite would diverge.
+        #[allow(clippy::nonminimal_bool)]
         let gi_case = fc0 == 'g'
             && v0 == 'i'
             && vowel.len() > 1
@@ -390,7 +393,8 @@ pub fn find_target(
         let mut target: Option<TransRef> = None;
         if flags & crate::rules::flag::FREE_TONE_MARKING != 0 {
             if has_valid_tone(composition, Tone::from_u8(applicable_rule.effect)) {
-                target = find_tone_target(composition, flags & crate::rules::flag::STD_TONE_STYLE != 0);
+                target =
+                    find_tone_target(composition, flags & crate::rules::flag::STD_TONE_STYLE != 0);
             }
         } else if let Some(last_appending) = find_last_appending_trans(composition) {
             if is_vowel(last_appending.borrow().rule.effect_on) {
@@ -423,14 +427,19 @@ fn generate_undo_transformations(
     flags: u32,
 ) -> Vec<TransRef> {
     let mut transformations: Vec<TransRef> = Vec::new();
-    let s = flatten(composition, mode::VIETNAMESE | mode::TONE_LESS | mode::LOWER_CASE);
+    let s = flatten(
+        composition,
+        mode::VIETNAMESE | mode::TONE_LESS | mode::LOWER_CASE,
+    );
     for rule in rules {
         if rule.effect_type == EffectType::ToneTransformation {
             let mut target: Option<TransRef> = None;
             if flags & crate::rules::flag::FREE_TONE_MARKING != 0 {
                 if has_valid_tone(composition, Tone::from_u8(rule.effect)) {
-                    target =
-                        find_tone_target(composition, flags & crate::rules::flag::STD_TONE_STYLE != 0);
+                    target = find_tone_target(
+                        composition,
+                        flags & crate::rules::flag::STD_TONE_STYLE != 0,
+                    );
                 }
             } else if let Some(last_appending) = find_last_appending_trans(composition) {
                 if is_vowel(last_appending.borrow().rule.effect_on) {
@@ -548,8 +557,11 @@ pub fn generate_transformations(
                 Some(vowels[0].clone()),
                 false,
             );
-            let (target3, applicable_rule3) =
-                find_target(&with_appended(composition, trans.clone()), applicable_rules, flags);
+            let (target3, applicable_rule3) = find_target(
+                &with_appended(composition, trans.clone()),
+                applicable_rules,
+                flags,
+            );
             if let Some(target3) = target3 {
                 if !same(&target3, &vowels[0]) {
                     transformations.push(trans);
@@ -635,7 +647,11 @@ pub fn refresh_last_tone_target(composition: &[TransRef], std_style: bool) -> Ve
         ));
         let mut override_rule = last_tone_trans.borrow().rule.clone();
         override_rule.key = '\0';
-        transformations.push(Transformation::new_ref(override_rule, new_tone_target, false));
+        transformations.push(Transformation::new_ref(
+            override_rule,
+            new_tone_target,
+            false,
+        ));
     }
     transformations
 }

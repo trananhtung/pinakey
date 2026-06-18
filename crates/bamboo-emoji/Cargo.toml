@@ -8,3 +8,6 @@ description = "Emoji trie lookup and macro table for ibus-bamboo (Rust port of e
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+[lints]
+workspace = true

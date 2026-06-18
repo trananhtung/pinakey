@@ -7,3 +7,6 @@ description = "Platform integration (X11/Wayland) for ibus-bamboo: window-class 
 
 [dependencies]
 x11rb = "0.13"
+
+[lints]
+workspace = true

@@ -188,8 +188,8 @@ impl Factory {
         let config = load_config(&engine_name);
         let handle = EngineHandle::spawn(config);
         let engine = BambooEngine { handle };
-        let opath = OwnedObjectPath::try_from(path)
-            .map_err(|e| zbus::fdo::Error::Failed(e.to_string()))?;
+        let opath =
+            OwnedObjectPath::try_from(path).map_err(|e| zbus::fdo::Error::Failed(e.to_string()))?;
         server.at(&opath, engine).await?;
         Ok(opath)
     }
@@ -200,7 +200,9 @@ impl Factory {
 pub async fn run_embedded() -> zbus::Result<()> {
     let address = crate::address::ibus_address()
         .map_err(|e| zbus::Error::Address(format!("cannot find IBus address: {e}")))?;
-    let conn = connection::Builder::address(address.as_str())?.build().await?;
+    let conn = connection::Builder::address(address.as_str())?
+        .build()
+        .await?;
     conn.request_name(COMPONENT_NAME).await?;
     conn.object_server()
         .at("/org/freedesktop/IBus/Factory", Factory::new())

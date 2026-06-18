@@ -52,7 +52,7 @@ pub fn is_punctuation_mark(key: char) -> bool {
 }
 
 pub fn is_word_break_symbol(key: char) -> bool {
-    is_punctuation_mark(key) || ('0'..='9').contains(&key)
+    is_punctuation_mark(key) || key.is_ascii_digit()
 }
 
 pub fn is_vowel(chr: char) -> bool {
@@ -61,7 +61,10 @@ pub fn is_vowel(chr: char) -> bool {
 
 /// Position of `chr` in `VOWELS`, or -1.
 pub fn find_vowel_position(chr: char) -> isize {
-    VOWELS.iter().position(|&v| v == chr).map_or(-1, |p| p as isize)
+    VOWELS
+        .iter()
+        .position(|&v| v == chr)
+        .map_or(-1, |p| p as isize)
 }
 
 fn get_mark_family(chr: char) -> Vec<char> {
@@ -122,7 +125,7 @@ pub fn add_mark_to_char(chr: char, mark: u8) -> char {
 }
 
 pub fn is_alpha(c: char) -> bool {
-    ('a'..='z').contains(&c) || ('A'..='Z').contains(&c)
+    c.is_ascii_lowercase() || c.is_ascii_uppercase()
 }
 
 pub fn in_key_list(keys: &[char], key: char) -> bool {
@@ -166,9 +169,7 @@ pub fn is_vietnamese_rune(lower_key: char) -> bool {
 }
 
 pub fn has_any_vietnamese_rune(word: &str) -> bool {
-    word.chars().any(|chr| {
-        is_vietnamese_rune(to_lower(chr))
-    })
+    word.chars().any(|chr| is_vietnamese_rune(to_lower(chr)))
 }
 
 pub fn has_any_vietnamese_vowel(word: &str) -> bool {

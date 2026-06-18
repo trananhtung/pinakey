@@ -56,11 +56,11 @@ impl MacroTable {
         } else {
             key.to_string()
         };
-        self.m_table.get(&k).map_or(false, |v| !v.is_empty())
+        self.m_table.get(&k).is_some_and(|v| !v.is_empty())
     }
 
     pub fn has_prefix(&self, key: &str) -> bool {
-        if self.m_table.get(key).map_or(false, |v| !v.is_empty()) {
+        if self.m_table.get(key).is_some_and(|v| !v.is_empty()) {
             return true;
         }
         self.m_table.keys().any(|k| k.starts_with(key))

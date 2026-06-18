@@ -8,8 +8,8 @@
 
 use bamboo_config::{flags as cfg, Config};
 use bamboo_core::{
-    self as bamboo, build_input_method_from_pairs, mode, has_any_vietnamese_rune,
-    has_any_vietnamese_vowel, is_word_break_symbol, BambooEngine, IEngine,
+    self as bamboo, build_input_method_from_pairs, has_any_vietnamese_rune,
+    has_any_vietnamese_vowel, is_word_break_symbol, mode, BambooEngine, IEngine,
 };
 use bamboo_emoji::MacroTable;
 
@@ -182,7 +182,8 @@ impl EngineCore {
     }
 
     fn get_raw_key_len(&self) -> usize {
-        self.get_processed_string(mode::ENGLISH | mode::FULL_TEXT).len()
+        self.get_processed_string(mode::ENGLISH | mode::FULL_TEXT)
+            .len()
     }
 
     fn rune_count(&self) -> usize {
@@ -334,7 +335,7 @@ impl EngineCore {
                         self.preeditor.process_key(' ', mode::ENGLISH);
                     }
                     return (ret, is_wbs);
-                } else if new_text.chars().last() == Some(key_rune) {
+                } else if new_text.ends_with(key_rune) {
                     // f] => f]
                     let is_wbs = is_word_break_symbol(key_rune);
                     if is_wbs {
@@ -352,7 +353,11 @@ impl EngineCore {
                 return (self.get_preedit_string(), false);
             }
         } else if self.macro_enabled() {
-            if is_printable && self.macro_table.has_prefix(&format!("{}{}", old_text, key_s)) {
+            if is_printable
+                && self
+                    .macro_table
+                    .has_prefix(&format!("{}{}", old_text, key_s))
+            {
                 self.preeditor.process_key(key_rune, mode::ENGLISH);
                 return (format!("{}{}", old_text, key_s), false);
             }
@@ -396,7 +401,12 @@ impl EngineCore {
     }
 
     /// Main entry — returns `(handled, actions)`.
-    pub fn process_key_event(&mut self, key_val: u32, key_code: u32, state: u32) -> (bool, Vec<Action>) {
+    pub fn process_key_event(
+        &mut self,
+        key_val: u32,
+        key_code: u32,
+        state: u32,
+    ) -> (bool, Vec<Action>) {
         let mut out = Vec::new();
         if state & IBUS_RELEASE_MASK != 0 {
             return (false, out);

@@ -19,6 +19,9 @@ pub fn get_canvas(composition: &[TransRef], mode_flags: u32) -> Vec<char> {
 
     for trans in composition {
         let t = trans.borrow();
+        // The english / Appending branches share a body but are kept separate to mirror
+        // upstream `flattener.go`; clippy's collapse suggestion would diverge from the source.
+        #[allow(clippy::if_same_then_else)]
         if english {
             if t.rule.key == '\0' {
                 continue;

@@ -99,8 +99,7 @@ pub fn parse_rules(key: char, line: &str) -> Vec<Rule> {
     }
 }
 
-static REG_DSL: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"([a-zA-Z]+)_(\p{L}+)([\p{L}_]*)").unwrap());
+static REG_DSL: Lazy<Regex> = Lazy::new(|| Regex::new(r"([a-zA-Z]+)_(\p{L}+)([\p{L}_]*)").unwrap());
 static REG_DSL_APPENDING: Lazy<Regex> = Lazy::new(|| Regex::new(r"(_?)_(\p{L}+)").unwrap());
 
 pub fn parse_toneless_rules(key: char, line: &str) -> Vec<Rule> {
