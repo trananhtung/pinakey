@@ -65,6 +65,11 @@ impl EngineCore {
         self.wm_class = wm_class;
     }
 
+    /// Reset the underlying composition (IBus `Reset`).
+    pub fn reset_preeditor(&mut self) {
+        self.preeditor.reset();
+    }
+
     /// Rebuild the bamboo engine after a config change (input method / flags).
     pub fn rebuild_preeditor(&mut self) {
         self.preeditor = build_preeditor(&self.config);
