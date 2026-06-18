@@ -44,5 +44,7 @@ pub const IBUS_IFACE_SERVICE: &str = "org.freedesktop.IBus.Service";
 pub const IBUS_IFACE_ENGINE: &str = "org.freedesktop.IBus.Engine";
 pub const IBUS_IFACE_ENGINE_FACTORY: &str = "org.freedesktop.IBus.Factory";
 
-pub const COMPONENT_NAME: &str = "org.freedesktop.IBus.bamboo";
-pub const ENGINE_NAME: &str = "Bamboo";
+// Distinct from the upstream Go package's `org.freedesktop.IBus.bamboo` / `Bamboo` so the Rust
+// engine can be installed and run side-by-side with an existing Go ibus-bamboo.
+pub const COMPONENT_NAME: &str = "org.freedesktop.IBus.bamboors";
+pub const ENGINE_NAME: &str = "BambooRs";

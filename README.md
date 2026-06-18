@@ -34,6 +34,25 @@ cargo clippy --workspace --all-targets -- -D warnings   # lint gate
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the crate dependency graph and design rationale, and
 [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and how to regenerate data tables.
 
+## Install & use (Linux / IBus)
+
+The engine installs as **`BambooRs`** ("Bamboo (Rust)"), side-by-side with any existing Go
+`ibus-bamboo` — they use distinct IBus names so both can be present.
+
+```sh
+cargo build --release -p ibus-bamboo
+! bash tools/install.sh      # copies the component XML to /usr/share/ibus/component (needs sudo),
+                             # installs the binary under ~/.local/lib, refreshes IBus,
+                             # and adds BambooRs to your GNOME input sources
+```
+
+Then press **Super+Space** to switch to *Bamboo (Rust)* and type Telex (e.g. `vieetj` → `việt`).
+Remove it any time with `bash tools/uninstall.sh` (the Go engine is left untouched).
+
+> IBus only scans `/usr/share/ibus/component` on most setups, so the component XML needs root;
+> the engine binary itself stays in your home directory. A live end-to-end check is in
+> `cargo run -p bamboo-ibus --example smoketest`.
+
 ## Architecture notes
 
 - `bamboo-core` is `Rc`-based (single-threaded). Because zbus interfaces must be `Send + Sync`,
