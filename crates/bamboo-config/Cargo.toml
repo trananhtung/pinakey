@@ -1,0 +1,12 @@
+[package]
+name = "bamboo-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Config load/save and feature flags for ibus-bamboo (Rust port of config/)"
+
+[dependencies]
+bamboo-core = { path = "../bamboo-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "5"

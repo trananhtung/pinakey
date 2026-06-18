@@ -16,11 +16,13 @@ mod utils;
 pub use charset::{encode, get_charset_names, UNICODE};
 pub use engine::{new_engine, BambooEngine, IEngine};
 pub use flattener::flatten;
-pub use input_method_def::{input_method_definitions, InputMethodDefinition};
+pub use input_method_def::{
+    input_method_definitions, input_method_definitions_owned, InputMethodDefinition,
+};
 pub use rules::{flag, mode, EffectType, Mark, Rule, Tone, Transformation};
 pub use rules_parser::{
-    get_appending_rule, parse_builtin_input_method, parse_input_method, parse_rules,
-    parse_toneless_rule, parse_toneless_rules, InputMethod,
+    build_input_method_from_pairs, get_appending_rule, parse_builtin_input_method,
+    parse_input_method, parse_rules, parse_toneless_rule, parse_toneless_rules, InputMethod,
 };
 pub use utils::{
     add_mark_to_char, add_tone_to_char, find_tone_from_char, has_any_vietnamese_rune,

@@ -47,11 +47,23 @@ pub fn parse_builtin_input_method(im_name: &str) -> InputMethod {
 }
 
 fn build_input_method(name: &str, def: &InputMethodDefinition) -> InputMethod {
+    build_input_method_from_iter(name, def.iter().map(|(k, l)| (*k, *l)))
+}
+
+/// Parse an input method from owned `(key, line)` pairs (e.g. user-defined config definitions).
+pub fn build_input_method_from_pairs(name: &str, pairs: &[(String, String)]) -> InputMethod {
+    build_input_method_from_iter(name, pairs.iter().map(|(k, l)| (k.as_str(), l.as_str())))
+}
+
+fn build_input_method_from_iter<'a>(
+    name: &str,
+    entries: impl Iterator<Item = (&'a str, &'a str)>,
+) -> InputMethod {
     let mut im = InputMethod {
         name: name.to_string(),
         ..Default::default()
     };
-    for (key_str, line) in def {
+    for (key_str, line) in entries {
         let keys: Vec<char> = key_str.chars().collect();
         if keys.is_empty() {
             continue;

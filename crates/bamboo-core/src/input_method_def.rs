@@ -3,7 +3,25 @@
 //! Go uses `map[string]string`; we use ordered `Vec<(&str, &str)>` so parsing is deterministic
 //! (Go map iteration is randomized, but the engine is order-independent for the matched key).
 
+use std::collections::HashMap;
+
 pub type InputMethodDefinition = Vec<(&'static str, &'static str)>;
+
+/// Owned form of all definitions, as `name -> (key -> rule line)`, for storing in config and
+/// round-tripping through JSON (mirrors Go `GetInputMethodDefinitions`).
+pub fn input_method_definitions_owned() -> HashMap<String, HashMap<String, String>> {
+    input_method_definitions()
+        .into_iter()
+        .map(|(name, def)| {
+            (
+                name.to_string(),
+                def.into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+            )
+        })
+        .collect()
+}
 
 /// Returns the list of `(name, definition)` pairs, preserving a stable order.
 pub fn input_method_definitions() -> Vec<(&'static str, InputMethodDefinition)> {
