@@ -38,6 +38,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bamboo-ibus"
+version = "0.1.0"
+dependencies = [
+ "bamboo-config",
+ "bamboo-core",
+ "bamboo-emoji",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

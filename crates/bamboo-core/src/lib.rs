@@ -26,7 +26,7 @@ pub use rules_parser::{
 };
 pub use utils::{
     add_mark_to_char, add_tone_to_char, find_tone_from_char, has_any_vietnamese_rune,
-    has_any_vietnamese_vowel, is_vowel,
+    has_any_vietnamese_vowel, is_punctuation_mark, is_vowel, is_word_break_symbol,
 };
 
 #[cfg(test)]

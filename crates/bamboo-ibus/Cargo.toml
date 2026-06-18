@@ -1,0 +1,11 @@
+[package]
+name = "bamboo-ibus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "IBus engine layer for ibus-bamboo (Rust port of engine*.go over zbus)"
+
+[dependencies]
+bamboo-core = { path = "../bamboo-core" }
+bamboo-config = { path = "../bamboo-config" }
+bamboo-emoji = { path = "../bamboo-emoji" }
