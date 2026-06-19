@@ -236,9 +236,26 @@ async fn apply_actions(emitter: &SignalEmitter<'_>, actions: &[Action]) -> zbus:
                     PinaKeyEngine::hide_lookup_table(emitter).await?;
                 }
             }
+            Action::LaunchSettings => launch_settings(),
         }
     }
     Ok(())
+}
+
+/// Mở giao diện thiết lập đồ họa. IBus có thể chạy engine với `PATH` hạn chế nên thử cả `PATH` lẫn
+/// đường dẫn cài đặt mặc định.
+fn launch_settings() {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let candidates = [
+        "pinakey-settings".to_string(),
+        format!("{home}/.local/bin/pinakey-settings"),
+    ];
+    for c in &candidates {
+        if std::process::Command::new(c).spawn().is_ok() {
+            return;
+        }
+    }
+    eprintln!("pinakey: không tìm thấy 'pinakey-settings' để mở giao diện thiết lập");
 }
 
 fn make_text_value(text: &str, underline_len: Option<u32>) -> zbus::Result<OwnedValue> {

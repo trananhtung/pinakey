@@ -94,6 +94,7 @@ impl IBusText {
 }
 
 // PropType của IBus.
+const PROP_TYPE_NORMAL: u32 = 0;
 const PROP_TYPE_TOGGLE: u32 = 1;
 const PROP_TYPE_RADIO: u32 = 2;
 // PropState của IBus.
@@ -122,6 +123,7 @@ impl IBusProperty {
         let prop_type = match p.kind {
             PropKind::Toggle => PROP_TYPE_TOGGLE,
             PropKind::Radio => PROP_TYPE_RADIO,
+            PropKind::Action => PROP_TYPE_NORMAL,
         };
         let state = if p.checked {
             PROP_STATE_CHECKED

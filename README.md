@@ -80,7 +80,9 @@ cargo build --release -p pinakey-settings --features gui   # giao diện thiết
                              # vào nguồn nhập GNOME, và cài GUI thiết lập + mục menu (nếu đã build)
 ```
 
-Mở giao diện thiết lập bằng `pinakey-settings` hoặc mục **"PinaKey — Thiết lập"** trong menu ứng dụng.
+Mở giao diện thiết lập bằng `pinakey-settings`, mục **"PinaKey — Thiết lập"** trong menu ứng dụng,
+hoặc bấm **"Mở bảng thiết lập…"** ngay trong menu IBus (biểu tượng **vi** trên thanh trên cùng) khi
+đang chọn PinaKey.
 
 Gỡ bằng `bash tools/uninstall.sh`. Các bài kiểm tra đầu-cuối trực tiếp (cần IBus daemon đang chạy):
 

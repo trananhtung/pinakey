@@ -53,6 +53,8 @@ pub enum Action {
         page_size: u32,
         visible: bool,
     },
+    /// Mở giao diện thiết lập đồ họa (chạy binary `pinakey-settings`).
+    LaunchSettings,
 }
 
 pub struct EngineCore {
@@ -123,6 +125,8 @@ impl EngineCore {
         let mut out = Vec::new();
         if key == "vn_toggle" {
             self.toggle_vietnamese(&mut out);
+        } else if key == props::OPEN_SETTINGS_KEY {
+            out.push(Action::LaunchSettings);
         } else if let Some(im) = key.strip_prefix("im_") {
             if props::INPUT_METHODS.contains(&im) && self.config.input_method != im {
                 self.config.input_method = im.to_string();
@@ -1217,6 +1221,13 @@ mod tests {
         assert!(!core.is_vietnamese_enabled());
         core.on_property_activate("vn_toggle", 0);
         assert!(core.is_vietnamese_enabled());
+    }
+
+    #[test]
+    fn property_activate_open_settings_launches() {
+        let mut core = EngineCore::new(default_cfg());
+        let actions = core.on_property_activate(crate::props::OPEN_SETTINGS_KEY, 0);
+        assert_eq!(actions, vec![Action::LaunchSettings]);
     }
 
     #[test]

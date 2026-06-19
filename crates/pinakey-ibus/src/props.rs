@@ -11,7 +11,12 @@ pub enum PropKind {
     Toggle,
     /// Mục chọn một trong nhiều (radio).
     Radio,
+    /// Mục hành động bấm-một-lần (ví dụ "Mở bảng thiết lập…").
+    Action,
 }
+
+/// Khóa của mục menu mở giao diện thiết lập.
+pub const OPEN_SETTINGS_KEY: &str = "open_settings";
 
 /// Một mục trong menu thuộc tính.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +51,12 @@ pub fn build_props(input_method: &str, vietnamese_enabled: bool) -> Vec<Prop> {
             checked: input_method == im,
         });
     }
+    props.push(Prop {
+        key: OPEN_SETTINGS_KEY.to_string(),
+        label: "Mở bảng thiết lập…".to_string(),
+        kind: PropKind::Action,
+        checked: false,
+    });
     props
 }
 
@@ -81,5 +92,16 @@ mod tests {
         for im in INPUT_METHODS {
             assert!(p.iter().any(|x| x.key == format!("im_{im}")));
         }
+    }
+
+    #[test]
+    fn has_open_settings_action() {
+        let p = build_props("Telex", true);
+        let s = p
+            .iter()
+            .find(|x| x.key == OPEN_SETTINGS_KEY)
+            .expect("phải có mục mở thiết lập");
+        assert_eq!(s.kind, PropKind::Action);
+        assert!(!s.checked);
     }
 }
