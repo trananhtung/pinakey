@@ -17,6 +17,8 @@ use pinakey_emoji::{load_bundled, MacroTable, TrieNode};
 use crate::backspace::{correction_actions, diff_correction};
 use crate::constants::*;
 use crate::lookup::{EmojiState, EMOJI_PAGE_SIZE};
+use crate::props::{self, Prop};
+use crate::shortcuts::{match_shortcut, ShortcutAction};
 
 /// Một tác động phụ (side effect) mà lớp transport phải thực hiện (tương ứng với các signal của
 /// engine goibus dùng trong luồng preedit).
@@ -69,6 +71,10 @@ pub struct EngineCore {
     emoji: EmojiState,
     /// Trie emoji được nạp lười (chỉ khi lần đầu vào chế độ emoji).
     emoji_trie: Option<TrieNode>,
+    /// Có đang gõ tiếng Việt không (phím tắt bật/tắt sẽ lật cờ này; tắt = gõ thẳng tiếng Anh).
+    vietnamese_enabled: bool,
+    /// Từ điển kiểm tra chính tả (chỉ nạp khi bật cờ `IB_SPELL_CHECK_WITH_DICTS`).
+    dictionary: Option<core::Dictionary>,
 }
 
 const VN_CASE_ALL_SMALL: u8 = 1;
@@ -80,6 +86,7 @@ impl EngineCore {
         let preeditor = build_preeditor(&config);
         let macro_table = MacroTable::new(config.ib_flags & cfg::IB_AUTO_CAPITALIZE_MACRO != 0);
         let input_mode = config.default_input_mode;
+        let dictionary = load_dictionary(&config);
         EngineCore {
             preeditor,
             config,
@@ -91,7 +98,52 @@ impl EngineCore {
             previous_text: String::new(),
             emoji: EmojiState::new(),
             emoji_trie: None,
+            vietnamese_enabled: true,
+            dictionary,
         }
+    }
+
+    /// Có đang gõ tiếng Việt không.
+    pub fn is_vietnamese_enabled(&self) -> bool {
+        self.vietnamese_enabled
+    }
+
+    /// Đặt từ điển kiểm tra chính tả (cấu hình lại lúc chạy hoặc dùng cho kiểm thử).
+    pub fn set_dictionary(&mut self, dict: core::Dictionary) {
+        self.dictionary = Some(dict);
+    }
+
+    /// Danh sách mục menu thuộc tính phản ánh trạng thái hiện tại.
+    pub fn build_props(&self) -> Vec<Prop> {
+        props::build_props(&self.config.input_method, self.vietnamese_enabled)
+    }
+
+    /// Xử lý khi người dùng kích hoạt một mục trên menu thuộc tính của panel IBus.
+    pub fn on_property_activate(&mut self, key: &str, _state: u32) -> Vec<Action> {
+        let mut out = Vec::new();
+        if key == "vn_toggle" {
+            self.toggle_vietnamese(&mut out);
+        } else if let Some(im) = key.strip_prefix("im_") {
+            if props::INPUT_METHODS.contains(&im) && self.config.input_method != im {
+                self.config.input_method = im.to_string();
+                self.rebuild_preeditor();
+                self.reset_preeditor();
+            }
+        }
+        out
+    }
+
+    /// Từ tiếng Việt hiện đang gõ có được coi là hợp lệ không — gồm cả tra từ điển khi bật cờ
+    /// `IB_SPELL_CHECK_WITH_DICTS` (từ điển chỉ "giải oan", không loại bỏ từ quy tắc đã chấp nhận).
+    pub fn current_word_is_valid(&self) -> bool {
+        let vn_seq = self.get_processed_string(mode::VIETNAMESE | mode::LOWER_CASE);
+        self.dict_accepts(&vn_seq) || self.preeditor.is_valid(true)
+    }
+
+    /// Từ điển có công nhận `word` không (chỉ khi cờ dict bật và từ điển đã nạp).
+    fn dict_accepts(&self, word: &str) -> bool {
+        self.config.ib_flags & cfg::IB_SPELL_CHECK_WITH_DICTS != 0
+            && self.dictionary.as_ref().is_some_and(|d| d.contains(word))
     }
 
     /// Chế độ nhập hiện tại có phải loại "sửa lỗi bằng backspace" không.
@@ -193,8 +245,11 @@ impl EngineCore {
         if self.config.ib_flags & cfg::IB_DD_FREE_STYLE != 0 && vn_seq.contains('đ') {
             return false;
         }
-        // Kiểm tra chính tả dựa trên từ điển (IBspellCheckWithDicts) chưa được chuyển thể; quay về
-        // dùng kiểm tra tính hợp lệ theo quy tắc, khớp với tập flag mặc định.
+        // Kiểm tra chính tả dựa trên từ điển (IBspellCheckWithDicts): nếu từ điển công nhận thì
+        // không quay về tiếng Anh, dù bộ quy tắc có thể từ chối.
+        if self.dict_accepts(&vn_seq) {
+            return false;
+        }
         !self.preeditor.is_valid(true)
     }
 
@@ -451,6 +506,23 @@ impl EngineCore {
         if state & IBUS_RELEASE_MASK != 0 {
             return (false, out);
         }
+        // Phím tắt được kiểm trước mọi thứ (kể cả khi đang tắt tiếng Việt) để có thể bật lại.
+        if let Some(action) = match_shortcut(&self.config.shortcuts, state, key_val) {
+            match action {
+                ShortcutAction::ToggleVietnamese => {
+                    self.toggle_vietnamese(&mut out);
+                    return (true, out);
+                }
+                ShortcutAction::RestoreWord => {
+                    self.should_restore_key_strokes = true;
+                    return (true, out);
+                }
+            }
+        }
+        // Tắt tiếng Việt: cho mọi phím đi thẳng tới ứng dụng.
+        if !self.vietnamese_enabled {
+            return (false, out);
+        }
         // Bảng tra cứu emoji/hex chiếm quyền xử lý khi đang mở.
         if self.emoji.is_active() {
             let r = self.emoji_process_key(key_val, state, &mut out);
@@ -470,6 +542,22 @@ impl EngineCore {
         };
         self.update_last_key_with_shift(key_val, state);
         (result, out)
+    }
+
+    /// Lật trạng thái gõ tiếng Việt: chốt từ đang gõ, dọn trạng thái, rồi hiển thị nhãn VN/EN.
+    fn toggle_vietnamese(&mut self, out: &mut Vec<Action>) {
+        if self.get_raw_key_len() > 0 {
+            let s = self.get_preedit_string();
+            self.commit_preedit_and_reset(&s, out);
+        } else {
+            self.reset_preeditor();
+        }
+        self.vietnamese_enabled = !self.vietnamese_enabled;
+        let label = if self.vietnamese_enabled { "VN" } else { "EN" };
+        out.push(Action::UpdateAuxiliary {
+            text: label.to_string(),
+            visible: true,
+        });
     }
 
     // ----- chế độ tra cứu emoji / hex -----
@@ -710,6 +798,21 @@ impl EngineCore {
         self.update_preedit(&new_text, out);
         is_printable_key
     }
+}
+
+/// Nạp từ điển kiểm tra chính tả khi bật cờ `IB_SPELL_CHECK_WITH_DICTS`: bộ từ khởi đầu đóng kèm,
+/// phủ thêm từ điển người dùng (`~/.config/pinakey/dict.txt`) nếu có.
+fn load_dictionary(config: &Config) -> Option<core::Dictionary> {
+    if config.ib_flags & cfg::IB_SPELL_CHECK_WITH_DICTS == 0 {
+        return None;
+    }
+    let mut dict = core::Dictionary::bundled();
+    if let Some(path) = pinakey_config::get_dict_path().to_str() {
+        if let Ok(user) = core::Dictionary::load_file(path) {
+            dict.merge(&user);
+        }
+    }
+    Some(dict)
 }
 
 fn build_preeditor(config: &Config) -> PinaKeyEngine {
@@ -1023,5 +1126,107 @@ mod tests {
         let (handled, sp) = core.process_key_event(IBUS_ESCAPE, 0, 0);
         assert!(handled);
         assert!(commits(&sp).iter().any(|c| c == ":grin"));
+    }
+
+    // ----- phím tắt -----
+
+    #[test]
+    fn toggle_vietnamese_disables_then_enables() {
+        let cfg = default_cfg();
+        let mod_mask = crate::shortcuts::decode_modifier(cfg.shortcuts[0]);
+        let toggle_key = cfg.shortcuts[1];
+        let mut core = EngineCore::new(cfg);
+        // Đang bật: gõ tạo preedit.
+        let a = type_keys(&mut core, "viet");
+        assert!(last_preedit(&a).is_some());
+        core.reset_preeditor();
+        // Tắt tiếng Việt bằng phím tắt.
+        let (h, _) = core.process_key_event(toggle_key, 0, mod_mask);
+        assert!(h);
+        // Giờ phím thường được cho đi qua, engine không xử lý.
+        let (h2, acts) = core.process_key_event('v' as u32, 0, 0);
+        assert!(!h2);
+        assert!(acts.is_empty());
+        // Bật lại -> biến đổi hoạt động trở lại.
+        let (h3, _) = core.process_key_event(toggle_key, 0, mod_mask);
+        assert!(h3);
+        let a2 = type_keys(&mut core, "vieetj");
+        assert_eq!(last_preedit(&a2).as_deref(), Some("việt"));
+    }
+
+    #[test]
+    fn toggle_commits_in_progress_word() {
+        let cfg = default_cfg();
+        let mod_mask = crate::shortcuts::decode_modifier(cfg.shortcuts[0]);
+        let toggle_key = cfg.shortcuts[1];
+        let mut core = EngineCore::new(cfg);
+        type_keys(&mut core, "vieetj"); // "việt" đang trong preedit
+        let (_h, acts) = core.process_key_event(toggle_key, 0, mod_mask);
+        // Từ đang gõ được chốt trước khi tắt.
+        assert!(commits(&acts).iter().any(|c| c == "việt"));
+    }
+
+    #[test]
+    fn restore_word_shortcut_sets_flag() {
+        let mut cfg = default_cfg();
+        cfg.shortcuts[2] = 2; // Shift
+        cfg.shortcuts[3] = 0x72; // 'r'
+        let mut core = EngineCore::new(cfg);
+        let (h, _) = core.process_key_event(0x72, 0, IBUS_SHIFT_MASK);
+        assert!(h);
+        assert!(core.should_restore_key_strokes);
+    }
+
+    // ----- kiểm tra chính tả dựa trên từ điển -----
+
+    #[test]
+    fn dictionary_rescues_current_word() {
+        let mut cfg = default_cfg();
+        cfg.ib_flags |= cfg::IB_SPELL_CHECK_WITH_DICTS;
+        let mut core = EngineCore::new(cfg);
+        type_keys(&mut core, "loz");
+        let vn = core.get_processed_string(mode::VIETNAMESE | mode::LOWER_CASE);
+        assert!(!vn.is_empty());
+        let mut dict = core::Dictionary::new();
+        dict.add(&vn);
+        core.set_dictionary(dict);
+        // Từ điển công nhận -> hợp lệ, dù bộ quy tắc có thể từ chối.
+        assert!(core.current_word_is_valid());
+    }
+
+    #[test]
+    fn dictionary_gated_by_flag() {
+        let cfg = default_cfg(); // không bật IB_SPELL_CHECK_WITH_DICTS
+        let mut core = EngineCore::new(cfg);
+        type_keys(&mut core, "loz");
+        let vn = core.get_processed_string(mode::VIETNAMESE | mode::LOWER_CASE);
+        let mut dict = core::Dictionary::new();
+        dict.add(&vn);
+        core.set_dictionary(dict);
+        // Cờ tắt -> từ điển bị bỏ qua: tính hợp lệ theo đúng bộ quy tắc.
+        assert_eq!(core.current_word_is_valid(), core.preeditor.is_valid(true));
+    }
+
+    // ----- menu thuộc tính -----
+
+    #[test]
+    fn property_activate_toggles_vn() {
+        let mut core = EngineCore::new(default_cfg());
+        assert!(core.is_vietnamese_enabled());
+        core.on_property_activate("vn_toggle", 0);
+        assert!(!core.is_vietnamese_enabled());
+        core.on_property_activate("vn_toggle", 0);
+        assert!(core.is_vietnamese_enabled());
+    }
+
+    #[test]
+    fn property_activate_switches_input_method() {
+        let mut core = EngineCore::new(default_cfg());
+        assert_eq!(core.config.input_method, "Telex");
+        core.on_property_activate("im_VNI", 0);
+        assert_eq!(core.config.input_method, "VNI");
+        let props = core.build_props();
+        assert!(props.iter().any(|p| p.key == "im_VNI" && p.checked));
+        assert!(props.iter().any(|p| p.key == "im_Telex" && !p.checked));
     }
 }

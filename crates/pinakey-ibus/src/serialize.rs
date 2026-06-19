@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use zbus::zvariant::{OwnedValue, Type, Value};
 
 use crate::constants::{IBUS_ATTR_TYPE_UNDERLINE, IBUS_ATTR_UNDERLINE_SINGLE};
+use crate::props::{Prop, PropKind};
 
 #[derive(Type, serde::Serialize, serde::Deserialize, Value, OwnedValue)]
 pub struct IBusAttribute {
@@ -87,6 +88,95 @@ impl IBusText {
     }
 
     /// Chuyển thành giá trị D-Bus variant để phát trong một signal.
+    pub fn into_value(self) -> zbus::zvariant::Result<OwnedValue> {
+        OwnedValue::try_from(Value::from(self))
+    }
+}
+
+// PropType của IBus.
+const PROP_TYPE_TOGGLE: u32 = 1;
+const PROP_TYPE_RADIO: u32 = 2;
+// PropState của IBus.
+const PROP_STATE_UNCHECKED: u32 = 0;
+const PROP_STATE_CHECKED: u32 = 1;
+
+/// Một mục menu thuộc tính của IBus — signature `(sa{sv}suvsvbbuv)`: key, type, label(IBusText),
+/// icon, tooltip(IBusText), sensitive, visible, state, sub_props(IBusPropList).
+#[derive(Type, serde::Serialize, serde::Deserialize, Value, OwnedValue)]
+pub struct IBusProperty {
+    pub name: String,
+    pub attachments: HashMap<String, OwnedValue>,
+    pub key: String,
+    pub prop_type: u32,
+    pub label: OwnedValue,
+    pub icon: String,
+    pub tooltip: OwnedValue,
+    pub sensitive: bool,
+    pub visible: bool,
+    pub state: u32,
+    pub sub_props: OwnedValue,
+}
+
+impl IBusProperty {
+    pub fn from_prop(p: &Prop) -> zbus::zvariant::Result<Self> {
+        let prop_type = match p.kind {
+            PropKind::Toggle => PROP_TYPE_TOGGLE,
+            PropKind::Radio => PROP_TYPE_RADIO,
+        };
+        let state = if p.checked {
+            PROP_STATE_CHECKED
+        } else {
+            PROP_STATE_UNCHECKED
+        };
+        Ok(IBusProperty {
+            name: "IBusProperty".to_string(),
+            attachments: HashMap::new(),
+            key: p.key.clone(),
+            prop_type,
+            label: IBusText::new(&p.label)?.into_value()?,
+            icon: String::new(),
+            tooltip: IBusText::new("")?.into_value()?,
+            sensitive: true,
+            visible: true,
+            state,
+            sub_props: IBusPropList::empty()?.into_value()?,
+        })
+    }
+
+    pub fn into_value(self) -> zbus::zvariant::Result<OwnedValue> {
+        OwnedValue::try_from(Value::from(self))
+    }
+}
+
+/// Danh sách thuộc tính của IBus — signature `(sa{sv}av)`: mảng `IBusProperty`.
+#[derive(Type, serde::Serialize, serde::Deserialize, Value, OwnedValue)]
+pub struct IBusPropList {
+    pub name: String,
+    pub attachments: HashMap<String, OwnedValue>,
+    pub properties: Vec<OwnedValue>,
+}
+
+impl IBusPropList {
+    pub fn empty() -> zbus::zvariant::Result<Self> {
+        Ok(IBusPropList {
+            name: "IBusPropList".to_string(),
+            attachments: HashMap::new(),
+            properties: Vec::new(),
+        })
+    }
+
+    pub fn from_props(props: &[Prop]) -> zbus::zvariant::Result<Self> {
+        let mut properties = Vec::with_capacity(props.len());
+        for p in props {
+            properties.push(IBusProperty::from_prop(p)?.into_value()?);
+        }
+        Ok(IBusPropList {
+            name: "IBusPropList".to_string(),
+            attachments: HashMap::new(),
+            properties,
+        })
+    }
+
     pub fn into_value(self) -> zbus::zvariant::Result<OwnedValue> {
         OwnedValue::try_from(Value::from(self))
     }

@@ -69,6 +69,12 @@ pub fn get_config_path(engine_name: &str) -> PathBuf {
     get_config_dir().join(format!("ibus-{}.config.json", engine_name))
 }
 
+/// Đường dẫn từ điển kiểm tra chính tả của người dùng (`~/.config/pinakey/dict.txt`), phủ thêm lên
+/// bộ từ khởi đầu đóng kèm khi bật cờ `IB_SPELL_CHECK_WITH_DICTS`.
+pub fn get_dict_path() -> PathBuf {
+    get_config_dir().join("dict.txt")
+}
+
 /// Nạp cấu hình: bắt đầu từ giá trị mặc định, sau đó phủ lên bằng file JSON của người dùng (nếu có).
 pub fn load_config(engine_name: &str) -> Config {
     let mut c = default_cfg();

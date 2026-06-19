@@ -11,6 +11,7 @@ use std::thread;
 use pinakey_config::Config;
 
 use crate::core::{Action, EngineCore};
+use crate::props::Prop;
 
 enum Command {
     ProcessKey {
@@ -18,6 +19,14 @@ enum Command {
         keycode: u32,
         state: u32,
         reply: Sender<(bool, Vec<Action>)>,
+    },
+    Props {
+        reply: Sender<Vec<Prop>>,
+    },
+    PropertyActivate {
+        key: String,
+        state: u32,
+        reply: Sender<Vec<Action>>,
     },
     Reset,
     SetWmClass(String),
@@ -45,6 +54,12 @@ impl EngineHandle {
                         let result = core.process_key_event(keyval, keycode, state);
                         let _ = reply.send(result);
                     }
+                    Command::Props { reply } => {
+                        let _ = reply.send(core.build_props());
+                    }
+                    Command::PropertyActivate { key, state, reply } => {
+                        let _ = reply.send(core.on_property_activate(&key, state));
+                    }
                     Command::Reset => core.reset_preeditor(),
                     Command::SetWmClass(c) => core.set_wm_class(c),
                     Command::Shutdown => break,
@@ -69,6 +84,26 @@ impl EngineHandle {
             return (false, Vec::new());
         }
         rx.recv().unwrap_or((false, Vec::new()))
+    }
+
+    pub fn props(&self) -> Vec<Prop> {
+        let (reply, rx) = channel();
+        if self.tx.send(Command::Props { reply }).is_err() {
+            return Vec::new();
+        }
+        rx.recv().unwrap_or_default()
+    }
+
+    pub fn property_activate(&self, key: String, state: u32) -> Vec<Action> {
+        let (reply, rx) = channel();
+        if self
+            .tx
+            .send(Command::PropertyActivate { key, state, reply })
+            .is_err()
+        {
+            return Vec::new();
+        }
+        rx.recv().unwrap_or_default()
     }
 
     pub fn reset(&self) {

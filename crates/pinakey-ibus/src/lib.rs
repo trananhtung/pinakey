@@ -10,10 +10,14 @@ pub mod backspace;
 pub mod constants;
 pub mod core;
 pub mod lookup;
+pub mod props;
+pub mod shortcuts;
 
 pub use backspace::{correction_actions, diff_correction, Correction};
 pub use core::{Action, EngineCore};
 pub use lookup::{compute_candidates, hex_to_char, EmojiState};
+pub use props::{build_props, Prop, PropKind};
+pub use shortcuts::{decode_modifier, match_shortcut, ShortcutAction};
 
 #[cfg(feature = "dbus")]
 pub mod address;

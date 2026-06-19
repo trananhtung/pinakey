@@ -5,6 +5,7 @@
 
 mod charset;
 mod charset_def;
+mod dict;
 mod engine;
 mod flattener;
 mod input_method_def;
@@ -16,6 +17,7 @@ mod utils;
 
 // API công khai.
 pub use charset::{encode, get_charset_names, UNICODE};
+pub use dict::Dictionary;
 pub use engine::{new_engine, IEngine, PinaKeyEngine};
 pub use flattener::flatten;
 pub use input_method_def::{

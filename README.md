@@ -97,10 +97,13 @@ phím XTest qua x11rb nằm ở `pinakey-platform`. **Bảng tra cứu emoji + h
 gõ `:` ở đầu từ để mở (ví dụ `:grin` → 😀, `:u+2764` → ❤), dùng mũi tên/PageUp/PageDown để di
 chuyển, số `1`–`9` hoặc Space/Enter để chọn, Esc để hủy.
 
-Những tính năng sau vẫn còn lại (mỗi tính năng cần một daemon IBus đang chạy + màn hình để kiểm tra
-đầy đủ):
+**Phím tắt, menu thuộc tính và kiểm tra chính tả từ điển** cũng đã xong: phím tắt (cấu hình ở
+`Shortcuts`) bật/tắt tiếng Việt và khôi phục phím gốc; menu thuộc tính trên panel IBus đổi nhanh
+kiểu gõ / bật-tắt tiếng Việt; bật cờ `IB_SPELL_CHECK_WITH_DICTS` để dùng từ điển (bộ từ khởi đầu
+đóng kèm + `~/.config/pinakey/dict.txt` của người dùng).
 
-- Phím tắt, menu thuộc tính, kiểm tra chính tả dựa trên từ điển.
+Tính năng còn lại (cần một daemon IBus đang chạy + màn hình để kiểm tra đầy đủ):
+
 - Giao diện thiết lập đồ họa.
 
 Xem `docs/superpowers/specs/2026-06-18-pinakey-design.md` để biết toàn bộ thiết kế.
