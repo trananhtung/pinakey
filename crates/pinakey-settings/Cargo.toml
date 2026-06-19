@@ -1,0 +1,27 @@
+[package]
+name = "pinakey-settings"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Giao diện thiết lập đồ họa cho PinaKey (egui/eframe thuần Rust)"
+
+[[bin]]
+name = "pinakey-settings"
+path = "src/main.rs"
+
+[features]
+# GUI nằm sau feature `gui` để `cargo test --workspace` không phải biên dịch cả stack eframe.
+# Trình cài đặt build với `--features gui`; phần controller (logic) luôn có và được test.
+default = []
+gui = ["dep:eframe"]
+
+[dependencies]
+pinakey-config = { path = "../pinakey-config" }
+pinakey-core = { path = "../pinakey-core" }
+eframe = { version = "0.29", optional = true, default-features = false, features = [
+    "glow",
+    "default_fonts",
+] }
+
+[lints]
+workspace = true

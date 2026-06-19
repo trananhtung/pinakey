@@ -20,6 +20,8 @@ echo "Removing $SYS_COMP (needs sudo)"
 sudo rm -f "$SYS_COMP"
 echo "Removing $BIN_DIR"
 rm -rf "$BIN_DIR"
+echo "Removing settings GUI + desktop entry"
+rm -f "$HOME/.local/bin/pinakey-settings" "$HOME/.local/share/applications/pinakey-settings.desktop"
 
 if [[ -z "${IBUS_ADDRESS:-}" ]]; then
     MID="$(cat /etc/machine-id)"

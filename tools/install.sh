@@ -12,6 +12,10 @@ BIN_DIR="$HOME/.local/lib/pinakey"
 BIN_DST="$BIN_DIR/ibus-engine-pinakey"
 ICON="$BIN_DIR/vi.svg"
 SYS_COMP="/usr/share/ibus/component/pinakey.xml"
+# Giao diện thiết lập đồ họa (tùy chọn — chỉ cài nếu đã build).
+SETTINGS_SRC="$REPO_ROOT/target/release/pinakey-settings"
+SETTINGS_DST="$HOME/.local/bin/pinakey-settings"
+DESKTOP="$HOME/.local/share/applications/pinakey-settings.desktop"
 
 if [[ ! -x "$BIN_SRC" ]]; then
     echo "Release binary not found: $BIN_SRC"
@@ -65,10 +69,31 @@ fi
 ibus write-cache >/dev/null 2>&1 || true
 ibus restart      >/dev/null 2>&1 || true
 
-echo "4/4 Adding 'PinaKey' to GNOME input sources"
+echo "4/5 Adding 'PinaKey' to GNOME input sources"
 bash "$REPO_ROOT/tools/enable-input-source.sh" || true
+
+echo "5/5 Installing settings GUI (optional)"
+if [[ -x "$SETTINGS_SRC" ]]; then
+    mkdir -p "$(dirname "$SETTINGS_DST")" "$(dirname "$DESKTOP")"
+    install -m 0755 "$SETTINGS_SRC" "$SETTINGS_DST"
+    cat > "$DESKTOP" <<DESK
+[Desktop Entry]
+Type=Application
+Name=PinaKey — Thiết lập
+Comment=Thiết lập bộ gõ tiếng Việt PinaKey
+Exec=$SETTINGS_DST
+Icon=$ICON
+Terminal=false
+Categories=Utility;
+Keywords=vietnamese;input;tiếng việt;bộ gõ;
+DESK
+    echo "    -> $SETTINGS_DST (+ mục menu 'PinaKey — Thiết lập')"
+else
+    echo "    (bỏ qua: chưa build. Chạy 'cargo build --release -p pinakey-settings --features gui')"
+fi
 
 echo
 echo "Done. Verify:  ibus list-engine | grep PinaKey"
 echo "Switch with Super+Space to 'PinaKey — Bộ gõ tiếng Việt', then type 'vieetj' -> 'việt'."
+echo "Settings GUI:  pinakey-settings   (hoặc mở 'PinaKey — Thiết lập' từ menu ứng dụng)"
 echo "Uninstall:     bash tools/uninstall.sh"
