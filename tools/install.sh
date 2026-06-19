@@ -53,6 +53,7 @@ cat > "$TMP_XML" <<XML
             <longname>PinaKey — Bộ gõ tiếng Việt</longname>
             <description>Tưởng niệm Francisco de Pina (1585–1625), người đặt nền móng chữ Quốc Ngữ</description>
             <rank>1</rank>
+            <setup>$SETTINGS_DST</setup>
         </engine>
     </engines>
 </component>

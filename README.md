@@ -80,9 +80,16 @@ cargo build --release -p pinakey-settings --features gui   # giao diện thiết
                              # vào nguồn nhập GNOME, và cài GUI thiết lập + mục menu (nếu đã build)
 ```
 
-Mở giao diện thiết lập bằng `pinakey-settings`, mục **"PinaKey — Thiết lập"** trong menu ứng dụng,
-hoặc bấm **"Mở bảng thiết lập…"** ngay trong menu IBus (biểu tượng **vi** trên thanh trên cùng) khi
-đang chọn PinaKey.
+Mở giao diện thiết lập bằng một trong các cách:
+
+- Chạy lệnh `pinakey-settings`.
+- Mở mục **"PinaKey — Thiết lập"** trong menu ứng dụng (nhấn **Super**, gõ "PinaKey").
+- Qua **IBus Preferences** (`ibus-setup`) → chọn PinaKey → **Preferences** (dùng thẻ `<setup>` trong component XML).
+- Trên các môi trường dùng panel IBus riêng (XFCE, KDE…): bấm **"Mở bảng thiết lập…"** trong menu của panel.
+
+> **Lưu ý GNOME:** menu chuyển nguồn nhập trên thanh trên cùng của GNOME (biểu tượng **vi**) do
+> GNOME Shell quản lý và **chỉ liệt kê nguồn nhập** — engine IBus không thêm được mục vào đó. Hãy
+> dùng menu ứng dụng hoặc `ibus-setup` ở trên.
 
 Gỡ bằng `bash tools/uninstall.sh`. Các bài kiểm tra đầu-cuối trực tiếp (cần IBus daemon đang chạy):
 
