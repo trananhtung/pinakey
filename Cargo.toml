@@ -6,11 +6,12 @@ members = ["crates/*"]
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/tunganhtran/pinakey"
+repository = "https://github.com/trananhtung/pinakey"
 
 [profile.release]
 lto = true
 opt-level = 3
+strip = true   # loại bỏ ký hiệu debug -> binary release nhỏ hơn khi phát hành
 
 # Lints applied across every crate (each crate opts in with `[lints] workspace = true`).
 # CI runs `cargo clippy --all-targets -- -D warnings`, so these warn locally but block on CI.

@@ -35,7 +35,7 @@ cat > "$TMP_XML" <<XML
     <version>0.1.0</version>
     <author>Tung Tran &lt;tunganhtran94@gmail.com&gt;</author>
     <license>GPLv3</license>
-    <homepage>https://github.com/tunganhtran/pinakey</homepage>
+    <homepage>https://github.com/trananhtung/pinakey</homepage>
     <textdomain>pinakey</textdomain>
     <engines>
         <engine>
