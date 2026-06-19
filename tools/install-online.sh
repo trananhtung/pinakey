@@ -131,7 +131,8 @@ uninstall() {
 }
 
 install_pinakey() {
-    local arch ver tmp
+    # tmp để toàn cục (không 'local') để EXIT trap còn thấy được khi dọn dẹp.
+    local arch ver base
     arch="$(detect_arch)"
 
     ver="${PINAKEY_VERSION:-}"
@@ -139,9 +140,9 @@ install_pinakey() {
     [[ -n "$ver" ]] || die "Không tìm thấy bản release nào trong repo '$REPO'. Hãy tạo release trước (đẩy tag vX.Y.Z), hoặc đặt PINAKEY_VERSION."
     say "Cài PinaKey $ver cho $arch"
 
-    local base="https://github.com/$REPO/releases/download/$ver"
+    base="https://github.com/$REPO/releases/download/$ver"
     tmp="$(mktemp -d)"
-    trap 'rm -rf "$tmp"' EXIT
+    trap 'rm -rf "${tmp:-}"' EXIT
 
     say "Tải binary + icon..."
     download "$base/pinakey-$arch" "$tmp/ibus-engine-pinakey"
