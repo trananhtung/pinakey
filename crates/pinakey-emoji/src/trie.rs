@@ -1,4 +1,4 @@
-//! Prefix trie — ported from `trie.go`.
+//! Trie tiền tố — chuyển từ `trie.go`.
 
 use std::collections::HashMap;
 
@@ -14,8 +14,8 @@ impl TrieNode {
         TrieNode::default()
     }
 
-    /// Insert `word` mapping to `value`. Multiple values for the same word are joined with ':'
-    /// (matches Go `InsertTrie`).
+    /// Chèn `word` ánh xạ tới `value`. Nhiều value cho cùng một word được nối với nhau bằng ':'
+    /// (giống `InsertTrie` trong Go).
     pub fn insert(&mut self, word: &str, value: &str) {
         let mut node = self;
         for c in word.chars() {
@@ -41,8 +41,8 @@ impl TrieNode {
         }
     }
 
-    /// All `word -> value` pairs under `prefix`, or `None` if the prefix is absent
-    /// (matches Go `FindPrefix` returning a nil map).
+    /// Tất cả các cặp `word -> value` nằm dưới `prefix`, hoặc `None` nếu prefix không tồn tại
+    /// (giống `FindPrefix` trong Go trả về map nil).
     pub fn find_prefix(&self, prefix: &str) -> Option<HashMap<String, String>> {
         let mut node = self;
         for c in prefix.chars() {

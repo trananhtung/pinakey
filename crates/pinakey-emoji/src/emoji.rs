@@ -1,4 +1,4 @@
-//! Emoji lookup engine — ported from `emoji.go`.
+//! Engine tra cứu emoji — chuyển từ `emoji.go`.
 
 use crate::trie::TrieNode;
 use serde::Deserialize;
@@ -12,8 +12,8 @@ struct EmojiOne {
     ascii: Vec<String>,
 }
 
-/// Build the emoji trie from EmojiOne JSON text (the map key is a `-`-separated hex codepoint
-/// sequence; ascii forms and keywords become trie keys mapping to the rendered emoji).
+/// Xây dựng emoji trie từ chuỗi JSON EmojiOne (khóa của map là một dãy hex codepoint phân
+/// tách bằng `-`; các dạng ascii và keyword trở thành khóa trie ánh xạ tới emoji hiển thị).
 pub fn load_emojione_from_str(json: &str) -> Result<TrieNode, serde_json::Error> {
     let map: HashMap<String, EmojiOne> = serde_json::from_str(json)?;
     let mut trie = TrieNode::new();
@@ -42,7 +42,7 @@ pub fn load_emojione(path: &str) -> std::io::Result<TrieNode> {
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
-/// Tracks the keys typed during an emoji query (`EmojiEngine` in Go).
+/// Theo dõi các phím đã gõ trong một truy vấn emoji (`EmojiEngine` trong Go).
 pub struct EmojiEngine<'a> {
     trie: &'a TrieNode,
     keys: Vec<char>,

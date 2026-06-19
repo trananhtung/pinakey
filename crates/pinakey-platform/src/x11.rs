@@ -1,11 +1,11 @@
-//! X11 focused-window class detection — pure-Rust port of `x11GetFocusWindowClass`
-//! (`x11_introspector.c`) using x11rb instead of Xlib/cgo.
+//! Phát hiện class của cửa sổ đang focus trên X11 — bản chuyển thuần Rust của
+//! `x11GetFocusWindowClass` (`x11_introspector.c`), dùng x11rb thay cho Xlib/cgo.
 
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{AtomEnum, ConnectionExt, Window};
 
-/// Parse the `WM_CLASS` property value (two NUL-separated strings: instance then class).
-/// Returns the class (`res_class`) if present, else the instance (`res_name`).
+/// Phân tích giá trị thuộc tính `WM_CLASS` (hai chuỗi phân tách bằng NUL: instance rồi tới class).
+/// Trả về class (`res_class`) nếu có, ngược lại trả về instance (`res_name`).
 pub fn parse_wm_class(value: &[u8]) -> Option<String> {
     let parts: Vec<&[u8]> = value.split(|&b| b == 0).filter(|p| !p.is_empty()).collect();
     match parts.len() {
@@ -15,9 +15,9 @@ pub fn parse_wm_class(value: &[u8]) -> Option<String> {
     }
 }
 
-/// Return the WM_CLASS of the currently focused window, walking up the window tree until a window
-/// carrying a WM_CLASS is found (mirrors the C introspector). Returns `None` if not on X11 or no
-/// class is found.
+/// Trả về WM_CLASS của cửa sổ đang được focus, đi ngược lên cây cửa sổ cho đến khi tìm thấy một
+/// cửa sổ có mang WM_CLASS (giống introspector viết bằng C). Trả về `None` nếu không chạy trên X11
+/// hoặc không tìm thấy class nào.
 pub fn get_focus_window_class() -> Option<String> {
     let (conn, _screen) = x11rb::connect(None).ok()?;
     let focus = conn.get_input_focus().ok()?.reply().ok()?.focus;
@@ -34,7 +34,7 @@ pub fn get_focus_window_class() -> Option<String> {
         if window == root {
             break;
         }
-        // walk up to the parent
+        // đi ngược lên cửa sổ cha
         match conn.query_tree(window).ok().and_then(|c| c.reply().ok()) {
             Some(tree) => {
                 if tree.parent == window {

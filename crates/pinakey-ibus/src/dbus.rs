@@ -1,9 +1,9 @@
-//! D-Bus transport for the IBus engine — ported from goibus (`bus.go`, `factory.go`, `engine.go`)
-//! and `main.go`, implemented over zbus.
+//! Lớp transport D-Bus cho engine IBus — chuyển thể từ goibus (`bus.go`, `factory.go`, `engine.go`)
+//! và `main.go`, hiện thực trên nền zbus.
 //!
-//! Note: this layer requires a live IBus daemon + D-Bus and therefore cannot be exercised by the
-//! crate's unit tests; the pure behaviour is tested in `core`. It is a faithful, compiling port of
-//! the protocol surface goibus exposes for the Preedit input mode.
+//! Lưu ý: lớp này cần IBus daemon và D-Bus đang chạy thực sự nên không thể kiểm thử bằng unit test
+//! của crate; phần logic thuần được kiểm thử trong `core`. Đây là bản chuyển thể trung thực, biên
+//! dịch được, của bề mặt giao thức mà goibus cung cấp cho chế độ nhập Preedit.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
@@ -19,7 +19,7 @@ use crate::core::Action;
 use crate::engine_actor::EngineHandle;
 use crate::serialize::IBusText;
 
-/// The IBus engine object, exported on `org.freedesktop.IBus.Engine`.
+/// Đối tượng engine IBus, được export trên `org.freedesktop.IBus.Engine`.
 pub struct PinaKeyEngine {
     handle: EngineHandle,
 }
@@ -41,8 +41,8 @@ impl PinaKeyEngine {
     }
 
     async fn focus_in(&self) {
-        // Detect the focused window's class for per-application workarounds (X11 only; no-op
-        // elsewhere), mirroring the Go engine's FocusIn -> checkWmClass.
+        // Phát hiện class của cửa sổ đang focus để áp dụng cách khắc phục theo từng ứng dụng (chỉ
+        // X11; nơi khác không làm gì), tương ứng FocusIn -> checkWmClass của engine Go.
         if let Some(class) = pinakey_platform::get_focus_window_class() {
             self.handle.set_wm_class(class);
         }
@@ -69,7 +69,7 @@ impl PinaKeyEngine {
     async fn candidate_clicked(&self, _index: u32, _button: u32, _state: u32) {}
     async fn destroy(&self) {}
 
-    // ----- signals (org.freedesktop.IBus.Engine) -----
+    // ----- các signal (org.freedesktop.IBus.Engine) -----
 
     #[zbus(signal)]
     async fn commit_text(emitter: &SignalEmitter<'_>, text: Value<'_>) -> zbus::Result<()>;
@@ -157,7 +157,7 @@ fn make_text_value(text: &str, underline_len: Option<u32>) -> zbus::Result<Owned
     t.into_value().map_err(zbus::Error::from)
 }
 
-/// The IBus factory, exported on `org.freedesktop.IBus.Factory`. Creates engine objects on demand.
+/// Factory của IBus, được export trên `org.freedesktop.IBus.Factory`. Tạo đối tượng engine khi cần.
 pub struct Factory {
     counter: Arc<AtomicU32>,
 }
@@ -195,8 +195,8 @@ impl Factory {
     }
 }
 
-/// Run the engine as an embedded IBus component (`pinakey --ibus`): connect to the IBus bus,
-/// claim the component name, and export the factory, then serve forever.
+/// Chạy engine như một IBus component nhúng (`pinakey --ibus`): kết nối tới bus IBus, đăng ký tên
+/// component, export factory, rồi phục vụ vô thời hạn.
 pub async fn run_embedded() -> zbus::Result<()> {
     let address = crate::address::ibus_address()
         .map_err(|e| zbus::Error::Address(format!("cannot find IBus address: {e}")))?;

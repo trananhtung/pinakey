@@ -1,10 +1,10 @@
-//! IBus D-Bus serializable types — ported from goibus `text.go`.
+//! Các kiểu dữ liệu D-Bus của IBus có thể serialize — chuyển thể từ `text.go` của goibus.
 //!
-//! Every IBus serializable object is a struct starting with `(s a{sv} ...)`. `IBusText` has
-//! signature `(sa{sv}sv)`; `IBusAttrList` is `(sa{sv}av)`; `IBusAttribute` is `(sa{sv}uuuu)`.
-//! The typed structs let zvariant derive the exact signatures (which also sidesteps the
-//! empty-array signature problem), and the derived `Value`/`OwnedValue` conversions let us emit
-//! them as D-Bus variants (`v`).
+//! Mọi đối tượng IBus serialize được đều là struct bắt đầu bằng `(s a{sv} ...)`. `IBusText` có
+//! signature `(sa{sv}sv)`; `IBusAttrList` là `(sa{sv}av)`; `IBusAttribute` là `(sa{sv}uuuu)`.
+//! Các struct có kiểu rõ ràng giúp zvariant suy ra đúng signature (đồng thời tránh được vấn đề
+//! signature của mảng rỗng), và các phép chuyển đổi `Value`/`OwnedValue` được derive cho phép ta
+//! phát chúng dưới dạng D-Bus variant (`v`).
 
 use std::collections::HashMap;
 use zbus::zvariant::{OwnedValue, Type, Value};
@@ -70,7 +70,7 @@ impl IBusText {
         })
     }
 
-    /// Build text with a single underline attribute spanning `[0, len)` (matches `AppendAttr`).
+    /// Tạo văn bản với một thuộc tính gạch chân duy nhất trải dài `[0, len)` (khớp `AppendAttr`).
     pub fn with_underline(text: &str, len: u32) -> zbus::zvariant::Result<Self> {
         let attr = IBusAttribute::new(IBUS_ATTR_TYPE_UNDERLINE, IBUS_ATTR_UNDERLINE_SINGLE, 0, len);
         let attr_list = IBusAttrList {
@@ -86,7 +86,7 @@ impl IBusText {
         })
     }
 
-    /// Convert into a D-Bus variant value for emission in a signal.
+    /// Chuyển thành giá trị D-Bus variant để phát trong một signal.
     pub fn into_value(self) -> zbus::zvariant::Result<OwnedValue> {
         OwnedValue::try_from(Value::from(self))
     }

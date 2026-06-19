@@ -1,7 +1,7 @@
-//! CVC spelling validation — ported from `spelling.go`.
+//! Kiểm tra chính tả theo cấu trúc CVC — chuyển từ `spelling.go`.
 //!
-//! A Vietnamese syllable splits into first-consonant (C), vowel (V) and last-consonant (C).
-//! Each part is looked up in a sequence table; pairs are validated via the CV / VC matrices.
+//! Một âm tiết tiếng Việt được tách thành phụ âm đầu (C), nguyên âm (V) và phụ âm cuối (C).
+//! Mỗi phần được tra trong một bảng chuỗi; các cặp được kiểm tra qua ma trận CV / VC.
 
 use crate::utils::add_mark_to_toneless_char;
 
@@ -36,7 +36,7 @@ const CV_MATRIX: &[&[usize]] = &[
 
 const VC_MATRIX: &[&[usize]] = &[&[0, 2], &[0, 1, 2], &[1, 2], &[1, 2], &[], &[], &[3], &[4]];
 
-/// Returns the matching row indices (empty == no match, mirroring Go's nil).
+/// Trả về chỉ số các hàng khớp (rỗng nghĩa là không khớp, tương ứng với nil của Go).
 fn lookup(seq: &[&str], input: &str, input_is_full: bool, input_is_complete: bool) -> Vec<usize> {
     let mut ret = Vec::new();
     let input_chars: Vec<char> = input.chars().collect();
@@ -56,8 +56,8 @@ fn lookup(seq: &[&str], input: &str, input_is_full: bool, input_is_complete: boo
             }
             let mut is_match = true;
             for (k, &ic) in input_chars.iter().enumerate() {
-                // Boolean form mirrors upstream `spelling.go` verbatim so the port stays
-                // diff-comparable against the Go source; clippy's De Morgan rewrite would diverge.
+                // Giữ nguyên dạng biểu thức boolean như trong `spelling.go` gốc để bản chuyển
+                // vẫn so sánh diff được với mã Go; cách viết lại theo De Morgan của clippy sẽ làm lệch.
                 #[allow(clippy::nonminimal_bool)]
                 let mismatch = ic != canvas[k]
                     && !(!input_is_complete && add_mark_to_toneless_char(canvas[k], 0) == ic);
@@ -109,11 +109,11 @@ pub fn is_valid_cvc(fc: &str, vo: &str, lc: &str, input_is_full_complete: bool) 
         }
     }
     if vo_indexes.is_empty() {
-        // first consonant only
+        // chỉ có phụ âm đầu
         return !fc_indexes.is_empty();
     }
     if !fc_indexes.is_empty() {
-        // first consonant + vowel
+        // phụ âm đầu + nguyên âm
         let ret = is_valid_cv(&fc_indexes, &vo_indexes);
         if !ret || lc_indexes.is_empty() {
             return ret;

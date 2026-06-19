@@ -1,14 +1,14 @@
-//! Charset encoding tables — generated from `charset_def.go`.
+//! Các bảng mã ký tự — được sinh ra từ `charset_def.go`.
 //!
-//! Values are raw byte sequences (legacy encodings are not UTF-8). `\xNN` is a single
-//! byte; multi-byte values are the UTF-8 (or codepage) bytes of the original Go string.
+//! Giá trị là chuỗi byte thô (các bảng mã cũ không phải UTF-8). `\xNN` là một byte đơn;
+//! các giá trị nhiều byte là byte UTF-8 (hoặc codepage) của chuỗi Go gốc.
 //!
-//! Regenerate with `python3 tools/gen_charset.py` (see CONTRIBUTING.md). Do not edit by hand.
+//! Sinh lại bằng `python3 tools/gen_charset.py` (xem CONTRIBUTING.md). Không sửa bằng tay.
 
-/// One charset: its name paired with `(source_char, encoded_bytes)` entries.
+/// Một bảng mã: tên của nó cùng các mục `(source_char, encoded_bytes)`.
 pub type CharsetDef = (&'static str, Vec<(char, &'static [u8])>);
 
-/// Returns the encoding table for every non-Unicode charset.
+/// Trả về bảng mã hoá cho mọi bảng mã không phải Unicode.
 pub fn charset_definitions() -> Vec<CharsetDef> {
     vec![
         (

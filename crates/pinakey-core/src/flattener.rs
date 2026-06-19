@@ -1,4 +1,4 @@
-//! Composition → string rendering — ported from `flattener.go`.
+//! Kết xuất composition thành chuỗi — chuyển từ `flattener.go`.
 
 use crate::rules::{mode, EffectType, Mark, TransRef};
 use crate::utils::{add_mark_to_char, add_tone_to_char, to_lower, to_upper};
@@ -9,8 +9,8 @@ pub fn flatten(composition: &[TransRef], mode: u32) -> String {
     get_canvas(composition, mode).into_iter().collect()
 }
 
-/// Returns the rendered characters. The `appendingMap` in Go is keyed by pointer identity; we
-/// key by the `Rc`'s allocation address to reproduce that exactly.
+/// Trả về các ký tự đã được kết xuất. Trong Go, `appendingMap` dùng định danh con trỏ làm khoá;
+/// ở đây ta dùng địa chỉ cấp phát của `Rc` làm khoá để tái hiện chính xác hành vi đó.
 pub fn get_canvas(composition: &[TransRef], mode_flags: u32) -> Vec<char> {
     let english = mode_flags & mode::ENGLISH != 0;
     let mut canvas = Vec::new();
@@ -19,8 +19,8 @@ pub fn get_canvas(composition: &[TransRef], mode_flags: u32) -> Vec<char> {
 
     for trans in composition {
         let t = trans.borrow();
-        // The english / Appending branches share a body but are kept separate to mirror
-        // upstream `flattener.go`; clippy's collapse suggestion would diverge from the source.
+        // Hai nhánh english và Appending có cùng thân nhưng vẫn để tách riêng cho khớp với
+        // `flattener.go` gốc; gợi ý gộp nhánh của clippy sẽ làm lệch so với mã nguồn gốc.
         #[allow(clippy::if_same_then_else)]
         if english {
             if t.rule.key == '\0' {

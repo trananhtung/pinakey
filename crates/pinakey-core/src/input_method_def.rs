@@ -1,14 +1,15 @@
-//! Input-method definition tables — ported from `input_method_def.go`.
+//! Các bảng định nghĩa kiểu gõ — chuyển từ `input_method_def.go`.
 //!
-//! Go uses `map[string]string`; we use ordered `Vec<(&str, &str)>` so parsing is deterministic
-//! (Go map iteration is randomized, but the engine is order-independent for the matched key).
+//! Go dùng `map[string]string`; ở đây ta dùng `Vec<(&str, &str)>` có thứ tự để việc phân tích
+//! mang tính tất định (Go duyệt map theo thứ tự ngẫu nhiên, còn engine thì không phụ thuộc thứ tự
+//! đối với khoá đã khớp).
 
 use std::collections::HashMap;
 
 pub type InputMethodDefinition = Vec<(&'static str, &'static str)>;
 
-/// Owned form of all definitions, as `name -> (key -> rule line)`, for storing in config and
-/// round-tripping through JSON (mirrors Go `GetInputMethodDefinitions`).
+/// Dạng owned của tất cả định nghĩa, theo cấu trúc `name -> (key -> dòng quy tắc)`, để lưu trong
+/// config và round-trip qua JSON (tương ứng với `GetInputMethodDefinitions` của Go).
 pub fn input_method_definitions_owned() -> HashMap<String, HashMap<String, String>> {
     input_method_definitions()
         .into_iter()
@@ -23,7 +24,7 @@ pub fn input_method_definitions_owned() -> HashMap<String, HashMap<String, Strin
         .collect()
 }
 
-/// Returns the list of `(name, definition)` pairs, preserving a stable order.
+/// Trả về danh sách các cặp `(name, definition)`, giữ nguyên thứ tự ổn định.
 pub fn input_method_definitions() -> Vec<(&'static str, InputMethodDefinition)> {
     vec![
         (

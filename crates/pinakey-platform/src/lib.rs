@@ -1,9 +1,9 @@
-//! Platform integration for pinakey.
+//! Tích hợp nền tảng cho pinakey.
 //!
-//! Currently provides X11 focused-window class detection (used for per-application workarounds).
-//! Wayland window-class introspection (`wl_introspector.go`) and XTest key injection
-//! (`x11_keyboard.c`, used only by the backspace-correction input modes) are planned follow-ups;
-//! the default Preedit mode does not require them.
+//! Hiện cung cấp việc phát hiện class của cửa sổ đang focus trên X11 (dùng cho các workaround
+//! riêng theo từng ứng dụng). Việc đọc window-class trên Wayland (`wl_introspector.go`) và bơm
+//! phím qua XTest (`x11_keyboard.c`, chỉ dùng cho các chế độ nhập sửa lỗi bằng backspace) sẽ được
+//! bổ sung sau; chế độ Preedit mặc định không cần đến chúng.
 
 pub mod x11;
 

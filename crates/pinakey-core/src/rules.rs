@@ -1,12 +1,12 @@
-//! Core types and constants for the transformation engine.
+//! Các kiểu dữ liệu và hằng số cốt lõi của engine biến đổi.
 //!
-//! `rune` in Go maps to `char` in Rust. Go uses `rune(0)` for "virtual"/absent keys; we use
-//! `'\0'` for the same purpose.
+//! `rune` bên Go tương ứng với `char` trong Rust. Go dùng `rune(0)` cho các phím "ảo"/không tồn
+//! tại; ở đây ta dùng `'\0'` với cùng mục đích đó.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-/// Bit flags controlling how a composition is processed / flattened (`Mode` in Go).
+/// Các cờ bit điều khiển cách một composition được xử lý / làm phẳng (`Mode` bên Go).
 pub mod mode {
     pub const VIETNAMESE: u32 = 1 << 0;
     pub const ENGLISH: u32 = 1 << 1;
@@ -18,7 +18,7 @@ pub mod mode {
     pub const IN_REVERSE_ORDER: u32 = 1 << 7;
 }
 
-/// Engine feature flags (the `E*` constants in Go).
+/// Các cờ tính năng của engine (các hằng số `E*` bên Go).
 pub mod flag {
     pub const FREE_TONE_MARKING: u32 = 1 << 0;
     pub const STD_TONE_STYLE: u32 = 1 << 1;
@@ -26,7 +26,7 @@ pub mod flag {
     pub const STD_FLAGS: u32 = FREE_TONE_MARKING | STD_TONE_STYLE | AUTO_CORRECT_ENABLED;
 }
 
-/// What kind of effect a rule applies (`EffectType` in Go).
+/// Loại hiệu ứng mà một rule áp dụng (`EffectType` bên Go).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EffectType {
     Appending = 0,
@@ -35,7 +35,7 @@ pub enum EffectType {
     Replacing = 3,
 }
 
-/// A diacritic mark family index (`Mark` in Go). Stored numerically as `u8` in `Rule.effect`.
+/// Chỉ số nhóm dấu phụ (diacritic mark) (`Mark` bên Go). Lưu dưới dạng số `u8` trong `Rule.effect`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Mark {
@@ -47,7 +47,7 @@ pub enum Mark {
     Raw = 5,
 }
 
-/// A tone index (`Tone` in Go). Stored numerically as `u8` in `Rule.effect`.
+/// Chỉ số dấu thanh (`Tone` bên Go). Lưu dưới dạng số `u8` trong `Rule.effect`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Tone {
@@ -72,11 +72,11 @@ impl Tone {
     }
 }
 
-/// A transformation rule (`Rule` in Go).
+/// Một rule biến đổi (`Rule` bên Go).
 #[derive(Debug, Clone)]
 pub struct Rule {
     pub key: char,
-    pub effect: u8, // a Tone or Mark value depending on effect_type
+    pub effect: u8, // giá trị Tone hoặc Mark, tùy theo effect_type
     pub effect_type: EffectType,
     pub effect_on: char,
     pub result: char,
@@ -118,11 +118,11 @@ impl Rule {
     }
 }
 
-/// A single transformation in a composition (`Transformation` in Go).
+/// Một biến đổi đơn lẻ trong một composition (`Transformation` bên Go).
 ///
-/// `target` is an aliased pointer to another transformation in the same composition; we use
-/// `Rc<RefCell<..>>` so that pointer identity (`Rc::ptr_eq`) and in-place mutation behave like
-/// Go's `*Transformation`.
+/// `target` là con trỏ alias trỏ tới một transformation khác trong cùng composition; ta dùng
+/// `Rc<RefCell<..>>` để định danh con trỏ (`Rc::ptr_eq`) và việc sửa tại chỗ hoạt động giống như
+/// `*Transformation` bên Go.
 #[derive(Debug)]
 pub struct Transformation {
     pub rule: Rule,
@@ -130,7 +130,7 @@ pub struct Transformation {
     pub is_upper_case: bool,
 }
 
-/// Shared, mutable reference to a `Transformation` — the Rust analogue of Go's `*Transformation`.
+/// Tham chiếu dùng chung, có thể thay đổi tới một `Transformation` — tương đương `*Transformation` bên Go trong Rust.
 pub type TransRef = Rc<RefCell<Transformation>>;
 
 impl Transformation {

@@ -1,5 +1,5 @@
-//! Transformation-engine tests, ported verbatim from the reference Telex/VNI/VIQR test vectors
-//! These run against the public `pinakey-core` API as an external consumer.
+//! Các bài test cho engine biến đổi (transformation), chuyển nguyên vẹn từ các bộ test vector Telex/VNI/VIQR tham chiếu.
+//! Chúng chạy thông qua API công khai của `pinakey-core` như một bên sử dụng bên ngoài.
 
 use pinakey_core::{flag, mode, new_engine, parse_builtin_input_method, IEngine, PinaKeyEngine};
 

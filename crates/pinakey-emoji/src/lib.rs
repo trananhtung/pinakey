@@ -1,4 +1,4 @@
-//! Emoji trie lookup and macro table — Rust port of `emoji.go`, `trie.go`, `mactab.go`.
+//! Tra cứu emoji bằng trie và bảng macro — bản chuyển sang Rust của `emoji.go`, `trie.go`, `mactab.go`.
 
 mod emoji;
 mod mactab;
@@ -10,7 +10,7 @@ pub use trie::TrieNode;
 
 #[cfg(test)]
 mod tests {
-    //! Ported from `emoji_test.go`.
+    //! Chuyển từ `emoji_test.go`.
     use super::*;
 
     fn load() -> TrieNode {
@@ -53,14 +53,14 @@ mod tests {
 
     #[test]
     fn test_macro_table() {
-        // Write a temp macro file and load it.
+        // Ghi một file macro tạm rồi nạp nó.
         let dir = std::env::temp_dir();
         let path = dir.join("pinakey_macro_test.txt");
         std::fs::write(&path, "; comment\nVN : Việt Nam\nHELLO:xin chào\n").unwrap();
         let mut m = MacroTable::new(true);
         m.load_from_file(path.to_str().unwrap()).unwrap();
         assert!(m.has_key("vn"));
-        assert!(m.has_key("VN")); // auto-capitalize lowercases the lookup
+        assert!(m.has_key("VN")); // auto-capitalize chuyển khóa tra cứu về chữ thường
         assert_eq!(m.get_text("hello"), "xin chào");
         assert!(m.has_prefix("he"));
         assert!(!m.has_prefix("zzz"));

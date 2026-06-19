@@ -1,80 +1,80 @@
 # PinaKey
 
-**PinaKey** is a Vietnamese input method engine (IME) for Linux/IBus, written in pure Rust —
-Telex / VNI / VIQR typing with no cgo. The IBus protocol is implemented over
-[`zbus`](https://crates.io/crates/zbus) and X11 integration over
+**PinaKey** là một bộ gõ tiếng Việt (IME) cho Linux/IBus, viết hoàn toàn bằng Rust thuần —
+gõ Telex / VNI / VIQR mà không cần cgo. Giao thức IBus được hiện thực trên
+[`zbus`](https://crates.io/crates/zbus) và tích hợp X11 qua
 [`x11rb`](https://crates.io/crates/x11rb).
 
-## The name
+## Về cái tên
 
-**PinaKey** honours **Francisco de Pina** (1585–1625), the Portuguese Jesuit who first
-systematically romanised Vietnamese in Thanh Chiêm – Hội An and laid the foundations of
-**chữ Quốc Ngữ** — the script every Vietnamese keyboard types today. He taught Vietnamese to
-Alexandre de Rhodes and is too often forgotten behind him; this engine is a small tribute.
-The **"Key"** suffix marks it as a bộ gõ (keyboard / input method).
+**PinaKey** tri ân **Francisco de Pina** (1585–1625), giáo sĩ Dòng Tên người Bồ Đào Nha, người
+đầu tiên La-tinh hóa tiếng Việt một cách có hệ thống tại Thanh Chiêm – Hội An và đặt nền móng cho
+**chữ Quốc Ngữ** — thứ chữ mà mọi bàn phím tiếng Việt ngày nay đều gõ. Ông là thầy dạy tiếng Việt
+cho Alexandre de Rhodes và thường bị lãng quên sau cái bóng của học trò; bộ gõ này là một lời tri
+ân nhỏ. Hậu tố **"Key"** đánh dấu nó là một bộ gõ (keyboard / input method).
 
 > PinaKey tham khảo ý tưởng từ **Bamboo** (bộ gõ ibus-bamboo).
 
-## Workspace layout
+## Bố cục workspace
 
-| Crate | Responsibility | Status |
-|-------|----------------|--------|
-| `pinakey-core` | Telex/VNI/VIQR transformation, spelling, charset encoding. | ✅ Complete — 47 transformation tests pass. |
-| `pinakey-config` | JSON config, feature flags, config paths. | ✅ Complete. |
-| `pinakey-emoji` | Emoji trie + macro table. | ✅ Complete. |
-| `pinakey-ibus` | Preedit-mode engine logic + full IBus D-Bus transport (zbus). | ✅ Complete. |
-| `pinakey-platform` | X11 (XWayland) focused-window class detection. | ◐ Wayland-native + XTest injection are follow-ups. |
-| `pinakey` (bin) | The engine binary: `--version` and `--ibus` embedded mode. | ✅ |
+| Crate | Trách nhiệm | Trạng thái |
+|-------|-------------|------------|
+| `pinakey-core` | Biến đổi Telex/VNI/VIQR, kiểm tra chính tả, mã hóa charset. | ✅ Hoàn chỉnh — 47 test biến đổi đều pass. |
+| `pinakey-config` | Cấu hình JSON, feature flag, đường dẫn cấu hình. | ✅ Hoàn chỉnh. |
+| `pinakey-emoji` | Trie emoji + bảng macro. | ✅ Hoàn chỉnh. |
+| `pinakey-ibus` | Logic engine chế độ Preedit + lớp truyền tải D-Bus IBus đầy đủ (zbus). | ✅ Hoàn chỉnh. |
+| `pinakey-platform` | Nhận diện class của cửa sổ đang focus trên X11 (XWayland). | ◐ Wayland thuần + tiêm phím XTest là phần làm tiếp. |
+| `pinakey` (bin) | Binary của engine: chế độ `--version` và `--ibus` nhúng. | ✅ |
 
-The transformation engine (`pinakey-core`) is the heart of the project and is covered by a
-behavioural test suite mapping aliased `*Transformation` pointers to `Rc<RefCell<Transformation>>`
-(pointer identity → `Rc::ptr_eq`, mutation → `borrow_mut`).
+Engine biến đổi (`pinakey-core`) là trái tim của dự án và được bao phủ bởi một bộ test hành vi,
+ánh xạ các con trỏ `*Transformation` được alias sang `Rc<RefCell<Transformation>>`
+(định danh con trỏ → `Rc::ptr_eq`, đột biến → `borrow_mut`).
 
-## Building
+## Biên dịch
 
 ```sh
-cargo build --workspace          # all crates + binary
-cargo test --workspace           # 62 tests
-cargo fmt --all --check          # formatting gate (CI-enforced)
-cargo clippy --workspace --all-targets -- -D warnings   # lint gate
+cargo build --workspace          # tất cả crate + binary
+cargo test --workspace           # 62 test
+cargo fmt --all --check          # cổng kiểm định dạng (CI bắt buộc)
+cargo clippy --workspace --all-targets -- -D warnings   # cổng lint
 ./target/debug/pinakey --version
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the crate dependency graph and design rationale, and
-[CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and how to regenerate data tables.
+Xem [ARCHITECTURE.md](ARCHITECTURE.md) để biết đồ thị phụ thuộc giữa các crate và lý do thiết kế,
+và [CONTRIBUTING.md](CONTRIBUTING.md) để biết quy trình phát triển cũng như cách tạo lại các bảng dữ liệu.
 
-## Install & use (Linux / IBus)
+## Cài đặt & sử dụng (Linux / IBus)
 
 ```sh
 cargo build --release -p pinakey
-! bash tools/install.sh      # copies the component XML to /usr/share/ibus/component (needs sudo),
-                             # installs the binary + icon under ~/.local/lib/pinakey, refreshes
-                             # IBus, and adds PinaKey to your GNOME input sources
+! bash tools/install.sh      # chép component XML vào /usr/share/ibus/component (cần sudo),
+                             # cài binary + icon vào ~/.local/lib/pinakey, làm mới
+                             # IBus, và thêm PinaKey vào danh sách nguồn nhập của GNOME
 ```
 
-Then press **Super+Space** to switch to *PinaKey — Bộ gõ tiếng Việt* and type Telex
-(e.g. `vieetj` → `việt`). Remove it any time with `bash tools/uninstall.sh`.
+Sau đó nhấn **Super+Space** để chuyển sang *PinaKey — Bộ gõ tiếng Việt* và gõ Telex
+(ví dụ `vieetj` → `việt`). Gỡ bất cứ lúc nào bằng `bash tools/uninstall.sh`.
 
-> IBus only scans `/usr/share/ibus/component` on most setups, so the component XML needs root;
-> the engine binary itself stays in your home directory. A live end-to-end check is in
-> `cargo run -p pinakey-ibus --example smoketest`.
+> Trên hầu hết hệ thống, IBus chỉ quét `/usr/share/ibus/component`, nên component XML cần quyền
+> root; còn binary engine thì nằm luôn trong thư mục home của bạn. Một bài kiểm tra đầu-cuối trực
+> tiếp nằm ở `cargo run -p pinakey-ibus --example smoketest`.
 
-## Architecture notes
+## Ghi chú kiến trúc
 
-- `pinakey-core` is `Rc`-based (single-threaded). Because zbus interfaces must be `Send + Sync`,
-  the engine runs on a dedicated thread behind a channel-based actor (`pinakey-ibus::EngineHandle`).
-- The Preedit-mode key-handling logic (`pinakey-ibus::core`) is transport-independent: it returns
-  a list of `Action`s (commit / update-preedit / hide), so the full IME behaviour is unit-tested
-  without a live IBus daemon. The D-Bus layer translates `Action`s into IBus signals.
+- `pinakey-core` dựa trên `Rc` (đơn luồng). Vì interface zbus bắt buộc phải `Send + Sync`, engine
+  được chạy trên một thread riêng phía sau một actor giao tiếp qua channel (`pinakey-ibus::EngineHandle`).
+- Logic xử lý phím ở chế độ Preedit (`pinakey-ibus::core`) độc lập với lớp truyền tải: nó trả về
+  một danh sách `Action` (commit / cập-nhật-preedit / ẩn), nhờ vậy toàn bộ hành vi IME được
+  unit-test mà không cần một daemon IBus đang chạy. Lớp D-Bus dịch các `Action` thành tín hiệu IBus.
 
-## Not yet implemented (follow-ups)
+## Chưa hiện thực (phần làm tiếp)
 
-The default Preedit input mode works end-to-end. These features remain (each needs a live IBus
-daemon + display to test fully):
+Chế độ nhập Preedit mặc định đã hoạt động đầu-cuối. Những tính năng sau vẫn còn lại (mỗi tính năng
+cần một daemon IBus đang chạy + màn hình để kiểm tra đầy đủ):
 
-- Backspace-correction input modes and XTest / Wayland key injection.
-- Emoji and hexadecimal lookup tables.
-- Shortcut keys, property menu, dictionary-based spell check.
-- A graphical setup UI.
+- Các chế độ nhập sửa-lỗi-bằng-Backspace và tiêm phím XTest / Wayland.
+- Bảng tra cứu emoji và hexadecimal.
+- Phím tắt, menu thuộc tính, kiểm tra chính tả dựa trên từ điển.
+- Giao diện thiết lập đồ họa.
 
-See `docs/superpowers/specs/2026-06-18-pinakey-design.md` for the full design.
+Xem `docs/superpowers/specs/2026-06-18-pinakey-design.md` để biết toàn bộ thiết kế.

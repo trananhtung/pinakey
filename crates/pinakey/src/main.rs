@@ -1,7 +1,7 @@
-//! pinakey entry point — ported from `main.go`.
+//! Điểm vào của pinakey — chuyển từ `main.go`.
 //!
-//! IBus launches the engine with `--ibus` (embedded mode); the installed component XML points at
-//! this binary. `--version` prints the version.
+//! IBus khởi chạy engine với `--ibus` (chế độ embedded); file XML component đã cài đặt trỏ tới
+//! binary này. `--version` in ra phiên bản.
 
 use pinakey_ibus::dbus::run_embedded;
 
@@ -17,9 +17,9 @@ async fn main() {
         return;
     }
 
-    // Both the embedded (`--ibus`) and default invocations run the engine over the IBus bus.
-    // (The Go standalone mode additionally registers a component descriptor; in production IBus
-    // always launches the engine via the installed component XML with `--ibus`.)
+    // Cả cách gọi embedded (`--ibus`) lẫn cách gọi mặc định đều chạy engine trên bus IBus.
+    // (Chế độ standalone của bản Go còn đăng ký thêm một component descriptor; trong môi trường
+    // production, IBus luôn khởi chạy engine qua file XML component đã cài đặt với `--ibus`.)
     if let Err(e) = run_embedded().await {
         eprintln!("pinakey failed: {e}");
         std::process::exit(1);

@@ -1,4 +1,4 @@
-//! Vowel / mark / tone tables and helpers — ported from `utils.go`.
+//! Bảng nguyên âm / dấu mũ-móc / dấu thanh cùng các hàm tiện ích — chuyển từ `utils.go`.
 
 use crate::rules::{Mark, Tone};
 use once_cell::sync::Lazy;
@@ -15,8 +15,8 @@ pub const PUNCTUATION_MARKS: &[char] = &[
     '~', '`', '@', '#', '$', '%', '^', '&', '(', ')', '{', '}', '[', ']', '|',
 ];
 
-/// Mark family for each base char. Each value has exactly 5 runes; `'_'` means "no char at this
-/// mark position". Index = `Mark` value (None, Hat, Breve, Horn, Dash).
+/// Họ dấu của từng ký tự gốc. Mỗi giá trị có đúng 5 rune; `'_'` nghĩa là "không có ký tự ở vị trí
+/// dấu này". Chỉ số = giá trị `Mark` (None, Hat, Breve, Horn, Dash).
 static MARKS_MAPS: Lazy<HashMap<char, [char; 5]>> = Lazy::new(|| {
     let raw: &[(char, &str)] = &[
         ('a', "aâă__"),
@@ -59,7 +59,7 @@ pub fn is_vowel(chr: char) -> bool {
     VOWELS.contains(&chr)
 }
 
-/// Position of `chr` in `VOWELS`, or -1.
+/// Vị trí của `chr` trong `VOWELS`, hoặc -1.
 pub fn find_vowel_position(chr: char) -> isize {
     VOWELS
         .iter()
@@ -79,7 +79,7 @@ fn get_mark_family(chr: char) -> Vec<char> {
     result
 }
 
-/// Position of `chr` within its own mark family string, or -1 (matches Go `FindMarkPosition`).
+/// Vị trí của `chr` trong chuỗi họ dấu của chính nó, hoặc -1 (tương ứng `FindMarkPosition` của Go).
 pub fn find_mark_position(chr: char) -> isize {
     if let Some(arr) = MARKS_MAPS.get(&chr) {
         for (pos, &v) in arr.iter().enumerate() {
@@ -176,19 +176,19 @@ pub fn has_any_vietnamese_vowel(word: &str) -> bool {
     word.chars().any(|chr| is_vowel(to_lower(chr)))
 }
 
-/// Helper mirroring Go's `unicode.ToLower` for a single rune as used by this engine.
+/// Hàm tiện ích tương ứng `unicode.ToLower` của Go cho một rune đơn theo cách engine này sử dụng.
 pub fn to_lower(c: char) -> char {
-    // Go's unicode.ToLower returns a single rune for all chars used here.
+    // unicode.ToLower của Go trả về một rune đơn cho mọi ký tự dùng ở đây.
     let mut it = c.to_lowercase();
     let first = it.next().unwrap_or(c);
     if it.next().is_some() {
-        c // multi-char lowercasing not expected in this domain; keep original
+        c // không kỳ vọng việc chuyển chữ thường ra nhiều ký tự trong phạm vi này; giữ nguyên gốc
     } else {
         first
     }
 }
 
-/// Helper mirroring Go's `unicode.ToUpper` for a single rune.
+/// Hàm tiện ích tương ứng `unicode.ToUpper` của Go cho một rune đơn.
 pub fn to_upper(c: char) -> char {
     let mut it = c.to_uppercase();
     let first = it.next().unwrap_or(c);
@@ -199,12 +199,12 @@ pub fn to_upper(c: char) -> char {
     }
 }
 
-/// Helper mirroring Go's `unicode.IsUpper`.
+/// Hàm tiện ích tương ứng `unicode.IsUpper` của Go.
 pub fn is_upper(c: char) -> bool {
     c.is_uppercase()
 }
 
-// Re-export so the parser can reference the mark family without duplicating the table.
+// Export lại để bộ phân tích có thể tham chiếu họ dấu mà không cần lặp lại bảng.
 pub(crate) fn mark_family(chr: char) -> Vec<char> {
     get_mark_family(chr)
 }

@@ -1,7 +1,7 @@
-//! Charset encoding — ported from `encoder.go` (data in `charset_def.rs`).
+//! Mã hoá bảng ký tự (charset) — chuyển từ `encoder.go` (dữ liệu nằm trong `charset_def.rs`).
 //!
-//! Legacy Vietnamese charsets are byte encodings, so `encode` returns `Vec<u8>` (a Go `string`
-//! is a byte sequence). For `UNICODE`, the input is returned unchanged.
+//! Các bảng mã tiếng Việt cũ là bảng mã theo byte, nên `encode` trả về `Vec<u8>` (một `string`
+//! trong Go vốn là chuỗi byte). Riêng `UNICODE` thì đầu vào được trả về nguyên vẹn.
 
 use crate::charset_def::charset_definitions;
 use once_cell::sync::Lazy;
@@ -23,7 +23,7 @@ static CHARSETS: Lazy<HashMap<&'static str, Charset>> = Lazy::new(|| {
     m
 });
 
-/// Encode `input` into the named charset, returning raw bytes.
+/// Mã hoá `input` theo bảng mã có tên cho trước, trả về chuỗi byte thô.
 pub fn encode(charset_name: &str, input: &str) -> Vec<u8> {
     if charset_name == UNICODE {
         return input.as_bytes().to_vec();
@@ -46,7 +46,7 @@ pub fn encode(charset_name: &str, input: &str) -> Vec<u8> {
     }
 }
 
-/// All available charset names, with `UNICODE` first.
+/// Danh sách tên tất cả bảng mã hiện có, với `UNICODE` đứng đầu.
 pub fn get_charset_names() -> Vec<String> {
     let mut names = vec![UNICODE.to_string()];
     for name in CHARSETS.keys() {

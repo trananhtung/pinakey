@@ -1,10 +1,10 @@
-//! Live end-to-end smoke test on the real IBus bus, without disturbing any installed engine.
+//! Smoke test end-to-end trên bus IBus thật, không làm ảnh hưởng tới engine nào đã cài.
 //!
-//! It exports this crate's actual `Factory` (and the `PinaKeyEngine` it creates) under a private
-//! test bus name, then drives `ProcessKeyEvent` from a client connection and checks the resulting
-//! commit / preedit text. This exercises the full transport: zbus connection + name + object
-//! server, the factory, the engine actor thread, the transformation core, and IBusText
-//! serialization — everything except IBus routing real keystrokes from the compositor.
+//! Nó export `Factory` thật của crate này (và `PinaKeyEngine` mà factory tạo ra) dưới một tên bus
+//! test riêng, sau đó gọi `ProcessKeyEvent` từ một kết nối client và kiểm tra văn bản commit /
+//! preedit thu được. Cách này chạy thử toàn bộ transport: kết nối zbus + tên + object server,
+//! factory, thread của engine actor, lõi biến đổi, và serialize IBusText — tất cả trừ việc IBus
+//! định tuyến phím gõ thật từ compositor.
 //!
 //!     cargo run -p pinakey-ibus --example smoketest
 
@@ -18,7 +18,7 @@ use pinakey_ibus::dbus::Factory;
 const TEST_NAME: &str = "org.freedesktop.IBus.pinakey.smoketest";
 const FACTORY_PATH: &str = "/org/freedesktop/IBus/Factory";
 
-/// Both IBusText-carrying signals use `(sa{sv}sv)`; field index 2 is the visible text.
+/// Cả hai signal mang IBusText đều dùng `(sa{sv}sv)`; trường ở chỉ số 2 là văn bản hiển thị.
 fn ibustext(v: &Value<'_>) -> Option<String> {
     match v {
         Value::Structure(s) => {
@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = pinakey_ibus::address::ibus_address()?;
     println!("IBus address: {addr}");
 
-    // Server connection: claim a private test name and export the real Factory.
+    // Kết nối server: đăng ký một tên test riêng và export Factory thật.
     let _server = zbus::connection::Builder::address(addr.as_str())?
         .name(TEST_NAME)?
         .serve_at(FACTORY_PATH, Factory::new())?
@@ -66,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     println!("serving Factory as {TEST_NAME}");
 
-    // Client connection on the same bus.
+    // Kết nối client trên cùng bus.
     let conn = zbus::connection::Builder::address(addr.as_str())?
         .build()
         .await?;
@@ -89,8 +89,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
 
-    // Exercise FocusIn — on this Wayland session it triggers the X11 (XWayland) window-class
-    // lookup; it must not crash the engine.
+    // Thử FocusIn — trên phiên Wayland này nó kích hoạt việc tra cứu window-class qua X11
+    // (XWayland); thao tác này không được làm engine crash.
     match engine.call::<_, _, ()>("FocusIn", &()).await {
         Ok(()) => println!("FocusIn: OK (engine survived window-class lookup)"),
         Err(e) => println!("FocusIn: ERROR {e}"),
@@ -99,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut commit = engine.receive_signal("CommitText").await?;
     let mut preedit = engine.receive_signal("UpdatePreeditText").await?;
 
-    // (typed keys, expected Vietnamese substring) — Telex.
+    // (các phím gõ, chuỗi con tiếng Việt mong đợi) — Telex.
     let cases = [
         ("vieetj ", "việt"),
         ("tieengs ", "tiếng"),
@@ -111,7 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut all_ok = true;
     for (keys, expect) in cases {
         engine.call::<_, _, ()>("Reset", &()).await.ok();
-        let _ = drain(&mut commit).await; // clear residue from Reset/prev word
+        let _ = drain(&mut commit).await; // xóa phần dư từ Reset/từ trước
         let _ = drain(&mut preedit).await;
         for ch in keys.chars() {
             let keyval = ch as u32;

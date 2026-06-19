@@ -1,4 +1,4 @@
-//! Configuration load/save — ported from `config/config.go`.
+//! Nạp/lưu cấu hình — chuyển từ `config/config.go`.
 
 pub mod flags;
 
@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-/// The persisted engine configuration (`Config` in Go). JSON field names match the Go struct
-/// field names exactly, so existing config files remain compatible.
+/// Cấu hình engine được lưu trữ (`Config` trong Go). Tên các trường JSON khớp chính xác với tên
+/// trường của struct Go, nên các file cấu hình cũ vẫn tương thích.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -36,7 +36,7 @@ impl Default for Config {
     }
 }
 
-/// Equivalent of Go `DefaultCfg()`.
+/// Tương đương `DefaultCfg()` trong Go.
 pub fn default_cfg() -> Config {
     Config {
         input_method: "Telex".to_string(),
@@ -56,7 +56,7 @@ fn home_dir() -> String {
         .unwrap_or_else(|| "~".to_string())
 }
 
-/// `~/.config/pinakey` — PinaKey's per-user configuration directory.
+/// `~/.config/pinakey` — thư mục cấu hình riêng cho từng người dùng của PinaKey.
 pub fn get_config_dir() -> PathBuf {
     PathBuf::from(format!("{}/.config/pinakey", home_dir()))
 }
@@ -69,7 +69,7 @@ pub fn get_config_path(engine_name: &str) -> PathBuf {
     get_config_dir().join(format!("ibus-{}.config.json", engine_name))
 }
 
-/// Load config: starts from defaults, then overlays the user's JSON file (if any).
+/// Nạp cấu hình: bắt đầu từ giá trị mặc định, sau đó phủ lên bằng file JSON của người dùng (nếu có).
 pub fn load_config(engine_name: &str) -> Config {
     let mut c = default_cfg();
     if let Ok(data) = std::fs::read_to_string(get_config_path(engine_name)) {
@@ -80,7 +80,7 @@ pub fn load_config(engine_name: &str) -> Config {
     c
 }
 
-/// Equivalent of Go `SaveConfig`.
+/// Tương đương `SaveConfig` trong Go.
 pub fn save_config(c: &Config, engine_name: &str) -> std::io::Result<()> {
     let data = serde_json::to_string_pretty(c).map_err(std::io::Error::other)?;
     let dir = get_config_dir();
@@ -105,7 +105,7 @@ mod tests {
 
     #[test]
     fn partial_json_overlays_defaults() {
-        // Only InputMethod present: everything else must fall back to defaults.
+        // Chỉ có InputMethod: mọi thứ còn lại phải quay về giá trị mặc định.
         let json = r#"{"InputMethod":"VNI"}"#;
         let c: Config = serde_json::from_str(json).unwrap();
         assert_eq!(c.input_method, "VNI");

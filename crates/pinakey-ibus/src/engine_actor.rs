@@ -1,9 +1,9 @@
-//! Actor that owns the (non-`Send`) [`EngineCore`] on a dedicated thread.
+//! Actor sở hữu [`EngineCore`] (vốn không `Send`) trên một thread riêng.
 //!
-//! `pinakey-core` uses `Rc<RefCell<..>>` internally, so the engine cannot be shared across threads
-//! or held by an async zbus interface (which requires `Send + Sync`). We run the engine on its own
-//! thread and talk to it over channels; the returned [`EngineHandle`] is a cheap `Send + Sync`
-//! sender.
+//! `pinakey-core` dùng `Rc<RefCell<..>>` ở bên trong nên engine không thể chia sẻ giữa các thread
+//! hay được giữ bởi một interface zbus bất đồng bộ (vốn đòi hỏi `Send + Sync`). Ta chạy engine
+//! trên thread riêng của nó và giao tiếp qua channel; [`EngineHandle`] trả về là một sender
+//! `Send + Sync` nhẹ.
 
 use std::sync::mpsc::{channel, Sender};
 use std::thread;

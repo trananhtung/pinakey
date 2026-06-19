@@ -1,10 +1,11 @@
-//! Pure Preedit-mode engine logic — ported from `engine_preedit.go` and the relevant helpers in
-//! `engine_utils.go`.
+//! Logic engine thuần cho chế độ Preedit — chuyển thể từ `engine_preedit.go` và các hàm hỗ trợ
+//! liên quan trong `engine_utils.go`.
 //!
-//! This is deliberately decoupled from D-Bus: `process_key_event` returns the list of [`Action`]s
-//! the transport layer should perform, so the full IME behaviour is unit-testable without an IBus
-//! daemon. The default (Preedit) input mode is implemented; the backspace-correction modes, emoji
-//! and hexadecimal tables, shortcuts and lookup tables are layered on top in higher modules.
+//! Phần này được tách hoàn toàn khỏi D-Bus: `process_key_event` trả về danh sách các [`Action`]
+//! mà lớp transport cần thực hiện, nhờ vậy toàn bộ hành vi của bộ gõ có thể kiểm thử bằng unit
+//! test mà không cần IBus daemon. Chế độ nhập mặc định (Preedit) đã được hiện thực; các chế độ sửa
+//! lỗi bằng backspace, bảng emoji và hexa, phím tắt cùng lookup table được xây thêm ở các module
+//! cấp cao hơn.
 
 use pinakey_config::{flags as cfg, Config};
 use pinakey_core::{
@@ -15,8 +16,8 @@ use pinakey_emoji::MacroTable;
 
 use crate::constants::*;
 
-/// A side effect the transport layer must perform (mirrors the goibus engine signals used by the
-/// preedit path).
+/// Một tác động phụ (side effect) mà lớp transport phải thực hiện (tương ứng với các signal của
+/// engine goibus dùng trong luồng preedit).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     CommitText(String),
@@ -65,17 +66,17 @@ impl EngineCore {
         self.wm_class = wm_class;
     }
 
-    /// Reset the underlying composition (IBus `Reset`).
+    /// Đặt lại trạng thái soạn thảo bên dưới (tương ứng `Reset` của IBus).
     pub fn reset_preeditor(&mut self) {
         self.preeditor.reset();
     }
 
-    /// Rebuild the transformation engine after a config change (input method / flags).
+    /// Dựng lại engine biến đổi sau khi cấu hình thay đổi (input method / flags).
     pub fn rebuild_preeditor(&mut self) {
         self.preeditor = build_preeditor(&self.config);
     }
 
-    // ----- read helpers (no side effects) -----
+    // ----- các hàm đọc (không có side effect) -----
 
     fn get_processed_string(&self, mode_flags: u32) -> String {
         self.preeditor.get_processed_string(mode_flags)
@@ -129,7 +130,7 @@ impl EngineCore {
         if self.get_macro_text().is_some() {
             return false;
         }
-        // allow dd even in non-vn sequence (dd is common in abbreviations)
+        // Cho phép dd ngay cả trong chuỗi không phải tiếng Việt (dd hay gặp trong từ viết tắt)
         if self.config.ib_flags & cfg::IB_DD_FREE_STYLE != 0
             && !has_any_vietnamese_vowel(&vn_seq)
             && (*vn_runes.last().unwrap() == 'd' || vn_seq.contains('đ'))
@@ -153,8 +154,8 @@ impl EngineCore {
         if self.config.ib_flags & cfg::IB_DD_FREE_STYLE != 0 && vn_seq.contains('đ') {
             return false;
         }
-        // Dictionary-based spell check (IBspellCheckWithDicts) is not yet ported; fall back to the
-        // rule-based validity check, matching the default flag set.
+        // Kiểm tra chính tả dựa trên từ điển (IBspellCheckWithDicts) chưa được chuyển thể; quay về
+        // dùng kiểm tra tính hợp lệ theo quy tắc, khớp với tập flag mặc định.
         !self.preeditor.is_valid(true)
     }
 
@@ -211,7 +212,7 @@ impl EngineCore {
         key_rune
     }
 
-    // ----- side-effecting helpers (push Actions) -----
+    // ----- các hàm có side effect (đẩy Action vào danh sách) -----
 
     fn update_preedit(&self, processed_str: &str, out: &mut Vec<Action>) {
         let encoded = self.encode_text(processed_str);
@@ -222,8 +223,8 @@ impl EngineCore {
             out.push(Action::CommitText(String::new()));
             return;
         }
-        // WPS workaround (auxiliary text) is keyed off a hardcoded WM_CLASS list in Go; skipped
-        // here since the WM_CLASS list lives in the platform layer.
+        // Cách khắc phục cho WPS (auxiliary text) trong Go dựa vào danh sách WM_CLASS cố định; bỏ
+        // qua ở đây vì danh sách WM_CLASS nằm ở lớp platform.
         let underline = self.config.ib_flags & cfg::IB_NO_UNDERLINE == 0;
         out.push(Action::UpdatePreedit {
             text: encoded,
@@ -260,7 +261,7 @@ impl EngineCore {
         self.preeditor.reset();
     }
 
-    // ----- key handling -----
+    // ----- xử lý phím -----
 
     fn is_printable_key(&self, state: u32, key_val: u32) -> bool {
         is_valid_state(state) && self.is_valid_key_val(key_val)
@@ -286,7 +287,7 @@ impl EngineCore {
         }
     }
 
-    /// Returns `(commit_text, is_word_break)`.
+    /// Trả về `(commit_text, is_word_break)`.
     fn get_commit_text(&mut self, key_val: u32, _key_code: u32, state: u32) -> (String, bool) {
         let mut key_rune = char::from_u32(key_val).unwrap_or('\0');
         let is_printable = self.is_printable_key(state, key_val);
@@ -400,7 +401,7 @@ impl EngineCore {
         format!("{}{}", old_text, key_s)
     }
 
-    /// Main entry — returns `(handled, actions)`.
+    /// Điểm vào chính — trả về `(handled, actions)`.
     pub fn process_key_event(
         &mut self,
         key_val: u32,
@@ -432,7 +433,7 @@ impl EngineCore {
             && raw_key_len == 0
             && !self.macro_enabled()
         {
-            // don't process special characters when buffer is empty (Chrome address bar etc.)
+            // Không xử lý ký tự đặc biệt khi buffer rỗng (thanh địa chỉ Chrome, v.v.)
             return false;
         }
 
@@ -516,8 +517,8 @@ mod tests {
     use super::*;
     use pinakey_config::default_cfg;
 
-    /// Type a string (each char as a printable key) and return the actions produced by the final
-    /// key, plus the running list of every commit emitted.
+    /// Gõ một chuỗi (mỗi ký tự là một phím in được) và trả về các action sinh ra bởi phím cuối
+    /// cùng, cùng với danh sách tích lũy mọi commit đã phát ra.
     fn type_keys(core: &mut EngineCore, s: &str) -> Vec<Action> {
         let mut all = Vec::new();
         for c in s.chars() {
@@ -546,7 +547,7 @@ mod tests {
 
     #[test]
     fn telex_preedit_builds_vietnamese() {
-        let mut core = EngineCore::new(default_cfg()); // default = Telex
+        let mut core = EngineCore::new(default_cfg()); // mặc định = Telex
         let actions = type_keys(&mut core, "vieetj");
         assert_eq!(last_preedit(&actions).as_deref(), Some("việt"));
     }
@@ -554,19 +555,19 @@ mod tests {
     #[test]
     fn word_break_commits_word() {
         let mut core = EngineCore::new(default_cfg());
-        // type "tieengs" -> "tiếng", then space commits it
+        // gõ "tieengs" -> "tiếng", rồi phím space commit nó
         let mut actions = type_keys(&mut core, "tieengs");
         assert_eq!(last_preedit(&actions).as_deref(), Some("tiếng"));
         let (_h, sp) = core.process_key_event(' ' as u32, 0, 0);
         actions.extend(sp);
-        // The breaking key (space) is committed together with the word.
+        // Phím ngắt từ (space) được commit cùng với từ.
         assert!(commits(&actions).iter().any(|c| c.trim() == "tiếng"));
     }
 
     #[test]
     fn backspace_removes_char() {
         let mut core = EngineCore::new(default_cfg());
-        type_keys(&mut core, "vieetj"); // việt
+        type_keys(&mut core, "vieetj"); // ra "việt"
         let (handled, actions) = core.process_key_event(IBUS_BACKSPACE, 0, 0);
         assert!(handled);
         assert_eq!(last_preedit(&actions).as_deref(), Some("việ"));
@@ -574,9 +575,10 @@ mod tests {
 
     #[test]
     fn non_vietnamese_falls_back() {
-        // "xin" is valid, but a clearly invalid sequence should restore raw keystrokes on commit.
+        // "xin" hợp lệ, nhưng một chuỗi rõ ràng không hợp lệ thì khi commit phải khôi phục lại các
+        // phím gốc đã gõ.
         let mut core = EngineCore::new(default_cfg());
-        let mut actions = type_keys(&mut core, "loz"); // invalid VN -> stays "loz"
+        let mut actions = type_keys(&mut core, "loz"); // không phải tiếng Việt -> giữ nguyên "loz"
         let (_h, sp) = core.process_key_event(' ' as u32, 0, 0);
         actions.extend(sp);
         assert!(commits(&actions).iter().any(|c| c.trim() == "loz"));
@@ -585,7 +587,7 @@ mod tests {
     #[test]
     fn empty_buffer_passes_through_punctuation() {
         let mut core = EngineCore::new(default_cfg());
-        // '.' with empty buffer is not processable and buffer empty -> not handled (passthrough)
+        // '.' với buffer rỗng không xử lý được, buffer lại rỗng -> không handle (cho đi qua)
         let (handled, _actions) = core.process_key_event('.' as u32, 0, 0);
         assert!(!handled);
     }

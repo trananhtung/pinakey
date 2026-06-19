@@ -1,4 +1,4 @@
-//! `PinaKeyEngine` and the public `IEngine` API.
+//! `PinaKeyEngine` và API công khai `IEngine`.
 
 use crate::flattener::flatten;
 use crate::rules::{flag, mode, Rule, TransRef, Transformation};
@@ -12,7 +12,7 @@ use crate::transform_utils::{
 use crate::utils::{can_process_key, is_upper, to_lower};
 use std::rc::Rc;
 
-/// Public engine API, mirroring Go's `IEngine` interface.
+/// API công khai của engine, tương ứng với interface `IEngine` bên Go.
 pub trait IEngine {
     fn set_flag(&mut self, flag: u32);
     fn get_input_method(&self) -> &InputMethod;

@@ -1,4 +1,4 @@
-//! Rule / input-method parsing — ported from `rules_parser.go`.
+//! Phân tích (parse) rule / input method — chuyển từ `rules_parser.go`.
 
 use crate::input_method_def::{input_method_definitions, InputMethodDefinition};
 use crate::rules::{EffectType, Mark, Rule, Tone};
@@ -18,7 +18,7 @@ fn tone_from_name(line: &str) -> Option<Tone> {
     }
 }
 
-/// Parsed input method (`InputMethod` in Go).
+/// Input method đã được parse (`InputMethod` bên Go).
 #[derive(Debug, Clone, Default)]
 pub struct InputMethod {
     pub name: String,
@@ -41,7 +41,7 @@ pub fn parse_input_method(
     InputMethod::default()
 }
 
-/// Convenience: parse from the built-in definition tables.
+/// Tiện ích: parse từ các bảng định nghĩa có sẵn (built-in).
 pub fn parse_builtin_input_method(im_name: &str) -> InputMethod {
     parse_input_method(&input_method_definitions(), im_name)
 }
@@ -50,7 +50,7 @@ fn build_input_method(name: &str, def: &InputMethodDefinition) -> InputMethod {
     build_input_method_from_iter(name, def.iter().map(|(k, l)| (*k, *l)))
 }
 
-/// Parse an input method from owned `(key, line)` pairs (e.g. user-defined config definitions).
+/// Parse một input method từ các cặp `(key, line)` sở hữu sẵn (ví dụ: định nghĩa config do người dùng tự đặt).
 pub fn build_input_method_from_pairs(name: &str, pairs: &[(String, String)]) -> InputMethod {
     build_input_method_from_iter(name, pairs.iter().map(|(k, l)| (k.as_str(), l.as_str())))
 }
@@ -104,7 +104,7 @@ static REG_DSL_APPENDING: Lazy<Regex> = Lazy::new(|| Regex::new(r"(_?)_(\p{L}+)"
 
 pub fn parse_toneless_rules(key: char, line: &str) -> Vec<Rule> {
     let mut rules = Vec::new();
-    // MatchString tests the original line; submatch is taken on the lowercased line.
+    // MatchString kiểm tra trên dòng gốc; còn submatch lấy trên dòng đã viết thường.
     if REG_DSL.is_match(line) {
         let lower = line.to_lowercase();
         if let Some(caps) = REG_DSL.captures(&lower) {
@@ -134,8 +134,8 @@ pub fn parse_toneless_rules(key: char, line: &str) -> Vec<Rule> {
 
 pub fn parse_toneless_rule(key: char, effective_on: char, result: char, effect: Mark) -> Vec<Rule> {
     let mut rules = Vec::new();
-    // NOTE: Go's `for tone := range tones` iterates the *index* 0..6 (the slice values are
-    // unused); we replicate that exactly.
+    // LƯU Ý: vòng `for tone := range tones` bên Go duyệt theo *chỉ số* 0..6 (giá trị trong slice
+    // không được dùng đến); ở đây ta tái hiện y hệt như vậy.
     for chr in mark_family(effective_on) {
         if chr == result {
             rules.push(Rule {

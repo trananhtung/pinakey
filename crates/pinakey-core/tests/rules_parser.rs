@@ -1,4 +1,4 @@
-//! Rule-parser tests, ported verbatim from the upstream Go suite `rules_parser_test.go`.
+//! Các bài test cho bộ phân tích luật (rule-parser), chuyển nguyên vẹn từ bộ test Go gốc `rules_parser_test.go`.
 
 use pinakey_core::{parse_rules, parse_toneless_rules, EffectType, Mark, Tone};
 

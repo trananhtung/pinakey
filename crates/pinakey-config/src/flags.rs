@@ -1,6 +1,6 @@
-//! Input-mode and feature-flag constants — ported from `config/flags.go`.
+//! Các hằng số cho chế độ nhập (input mode) và feature flag — chuyển từ `config/flags.go`.
 
-// Input modes (Go `iota + 1`).
+// Các chế độ nhập (tương ứng `iota + 1` trong Go).
 pub const PREEDIT_IM: i32 = 1;
 pub const SURROUNDING_TEXT_IM: i32 = 2;
 pub const BACKSPACE_FORWARDING_IM: i32 = 3;
@@ -9,7 +9,7 @@ pub const FORWARD_AS_COMMIT_IM: i32 = 5;
 pub const XTEST_FAKE_KEY_EVENT_IM: i32 = 6;
 pub const US_IM: i32 = 7;
 
-/// Human-readable (Vietnamese) labels for each input mode.
+/// Nhãn tiếng Việt dễ đọc cho từng chế độ nhập.
 pub fn im_lookup_table() -> Vec<(i32, &'static str)> {
     vec![
         (PREEDIT_IM, "Cấu hình mặc định (Pre-edit)"),
@@ -42,11 +42,11 @@ pub const IM_BACKSPACE_LIST: &[i32] = &[
     XTEST_FAKE_KEY_EVENT_IM,
 ];
 
-// IBus engine feature flags (Go `uint`, `1 << iota`). `_`-prefixed bits are deprecated/unused but
-// kept positionally so the numeric values match the original.
+// Feature flag của engine IBus (kiểu `uint`, `1 << iota` trong Go). Các bit ở giữa đã lỗi thời/không
+// dùng nhưng vẫn được giữ đúng vị trí để giá trị số khớp với bản gốc.
 pub const IB_AUTO_COMMIT_WITH_VN_NOT_MATCH: u32 = 1 << 0;
 pub const IB_MACRO_ENABLED: u32 = 1 << 1;
-// 1<<2, 1<<3 deprecated
+// 1<<2, 1<<3 đã lỗi thời
 pub const IB_SPELL_CHECK_ENABLED: u32 = 1 << 4;
 pub const IB_AUTO_NON_VN_RESTORE: u32 = 1 << 5;
 pub const IB_DD_FREE_STYLE: u32 = 1 << 6;
@@ -54,11 +54,11 @@ pub const IB_NO_UNDERLINE: u32 = 1 << 7;
 pub const IB_SPELL_CHECK_WITH_RULES: u32 = 1 << 8;
 pub const IB_SPELL_CHECK_WITH_DICTS: u32 = 1 << 9;
 pub const IB_AUTO_COMMIT_WITH_DELAY: u32 = 1 << 10;
-// 1<<11, 1<<12 deprecated
+// 1<<11, 1<<12 đã lỗi thời
 pub const IB_PREEDIT_ELIMINATION: u32 = 1 << 13;
-// 1<<14 deprecated
+// 1<<14 đã lỗi thời
 pub const IB_AUTO_CAPITALIZE_MACRO: u32 = 1 << 15;
-// 1<<16, 1<<17, 1<<18 deprecated
+// 1<<16, 1<<17, 1<<18 đã lỗi thời
 pub const IB_WORKAROUND_FOR_FB_MESSENGER: u32 = 1 << 19;
 pub const IB_WORKAROUND_FOR_WPS: u32 = 1 << 20;
 

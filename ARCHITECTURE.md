@@ -1,93 +1,93 @@
-# Architecture
+# Kiến trúc
 
-PinaKey is a Cargo workspace of six crates. Dependencies flow strictly bottom-up; no crate depends
-on one above it, so each layer can be understood and tested in isolation.
+PinaKey là một Cargo workspace gồm sáu crate. Phụ thuộc chảy nghiêm ngặt từ dưới lên; không crate
+nào phụ thuộc vào crate phía trên nó, nhờ vậy mỗi tầng có thể được hiểu và kiểm thử một cách độc lập.
 
 ```
                  ┌─────────────────────┐
-                 │       pinakey       │  binary: arg parsing, tokio runtime
+                 │       pinakey       │  binary: phân tích tham số, runtime tokio
                  │    (src/main.rs)    │
                  └──────────┬──────────┘
                             │
                  ┌──────────▼──────────┐
-                 │    pinakey-ibus     │  IBus engine: D-Bus transport + key-handling logic
+                 │    pinakey-ibus     │  engine IBus: truyền tải D-Bus + logic xử lý phím
                  └───┬──────────┬────┬─┘
           ┌─────────┘           │    └──────────────┐
           │                     │                   │
 ┌─────────▼────────┐ ┌──────────▼─────┐ ┌───────────▼───────┐
-│  pinakey-config  │ │  pinakey-emoji │ │  pinakey-platform │  X11/Wayland integration
+│  pinakey-config  │ │  pinakey-emoji │ │  pinakey-platform │  tích hợp X11/Wayland
 └─────────┬────────┘ └──────────┬─────┘ └───────────────────┘
           │                     │
           └──────────┬──────────┘
                      │
           ┌──────────▼──────────┐
-          │    pinakey-core     │  transformation engine (no I/O, no deps on siblings)
+          │    pinakey-core     │  engine biến đổi (không I/O, không phụ thuộc crate anh em)
           └─────────────────────┘
 ```
 
-## Crates
+## Các crate
 
-| Crate | Responsibility | Key dependencies |
-|-------|----------------|------------------|
-| `pinakey-core` | Telex/VNI/VIQR transformation, spelling validation, charset encoding. Pure logic, single-threaded, no I/O. | `once_cell`, `regex` |
-| `pinakey-config` | Load/save JSON config, feature flags, config paths. | `pinakey-core`, `serde`, `dirs` |
-| `pinakey-emoji` | Emoji trie lookup and macro table. | `serde` |
-| `pinakey-ibus` | The IBus engine: transport-independent key-handling (`core`) plus the D-Bus protocol surface (`dbus`, behind the `dbus` feature). | the three crates above, `pinakey-platform`, `zbus` |
-| `pinakey-platform` | Focused-window class detection (X11). Wayland introspection and XTest key injection are follow-ups. | `x11rb` |
-| `pinakey` | The binary. Parses args (`--version`, `--ibus`) and starts the embedded engine. | `pinakey-ibus`, `tokio` |
+| Crate | Trách nhiệm | Phụ thuộc chính |
+|-------|-------------|-----------------|
+| `pinakey-core` | Biến đổi Telex/VNI/VIQR, kiểm tra chính tả, mã hóa charset. Logic thuần túy, đơn luồng, không I/O. | `once_cell`, `regex` |
+| `pinakey-config` | Đọc/ghi cấu hình JSON, feature flag, đường dẫn cấu hình. | `pinakey-core`, `serde`, `dirs` |
+| `pinakey-emoji` | Tra cứu trie emoji và bảng macro. | `serde` |
+| `pinakey-ibus` | Engine IBus: phần xử lý phím độc lập với lớp truyền tải (`core`) cộng với bề mặt giao thức D-Bus (`dbus`, nằm sau feature `dbus`). | ba crate phía trên, `pinakey-platform`, `zbus` |
+| `pinakey-platform` | Nhận diện class của cửa sổ đang focus (X11). Phần introspection Wayland và tiêm phím XTest là phần làm tiếp. | `x11rb` |
+| `pinakey` | Binary. Phân tích tham số (`--version`, `--ibus`) và khởi động engine nhúng. | `pinakey-ibus`, `tokio` |
 
-## Two design decisions worth knowing
+## Hai quyết định thiết kế đáng biết
 
-### 1. Pointer aliasing → `Rc<RefCell<Transformation>>`
+### 1. Alias con trỏ → `Rc<RefCell<Transformation>>`
 
-The transformation algorithm keeps a list of `Transformation`s where each element's `target` is an
-aliased pointer to another element in the same list, relying on **pointer identity** and
-**in-place mutation**. PinaKey models this with:
+Thuật toán biến đổi giữ một danh sách các `Transformation`, trong đó `target` của mỗi phần tử là
+một con trỏ alias trỏ tới một phần tử khác trong cùng danh sách, dựa vào **định danh con trỏ** và
+**đột biến tại chỗ**. PinaKey mô hình hóa điều này bằng:
 
-- `Rc<RefCell<Transformation>>` (aliased: `TransRef`) — shared, mutable nodes.
-- `Rc::ptr_eq` — pointer identity comparison.
-- `Rc::as_ptr(..) as usize` — a stable key for the appending map.
-- `borrow_mut()` — in-place mutation.
+- `Rc<RefCell<Transformation>>` (được alias là: `TransRef`) — các node chia sẻ, khả biến.
+- `Rc::ptr_eq` — so sánh định danh con trỏ.
+- `Rc::as_ptr(..) as usize` — một khóa ổn định cho map nối thêm.
+- `borrow_mut()` — đột biến tại chỗ.
 
-This is why `pinakey-core` is single-threaded: `Rc`/`RefCell` are not `Send`/`Sync`.
+Đây là lý do `pinakey-core` đơn luồng: `Rc`/`RefCell` không phải `Send`/`Sync`.
 
-### 2. Non-`Send` engine vs. `Send + Sync` D-Bus → actor thread
+### 2. Engine không `Send` đối đầu D-Bus `Send + Sync` → thread actor
 
-`zbus` requires interface objects to be `Send + Sync`, but `pinakey-core` is `Rc`-based and cannot
-cross threads. The engine therefore runs on its **own dedicated thread** behind a channel-based
-actor, `pinakey-ibus::EngineHandle`. The handle is `Send + Sync` and forwards key events / reset /
-window-class updates over an `mpsc` channel; the engine thread owns the non-`Send` state.
+`zbus` đòi hỏi các đối tượng interface phải `Send + Sync`, nhưng `pinakey-core` dựa trên `Rc` và
+không thể vượt qua ranh giới thread. Vì vậy engine chạy trên **thread riêng của nó** phía sau một
+actor giao tiếp qua channel, `pinakey-ibus::EngineHandle`. Handle này `Send + Sync` và chuyển tiếp
+sự kiện phím / reset / cập nhật window-class qua một channel `mpsc`; thread engine sở hữu phần
+trạng thái không `Send`.
 
-## Data flow for a keystroke
+## Luồng dữ liệu cho một lần gõ phím
 
 ```
 IBus daemon ──ProcessKeyEvent──▶ dbus::PinaKeyEngine
                                       │ EngineHandle.process_key(keyval, keycode, state)
                                       ▼
-                              engine thread: core::EngineCore.process_key_event
-                                      │ returns (handled: bool, Vec<Action>)
+                              thread engine: core::EngineCore.process_key_event
+                                      │ trả về (handled: bool, Vec<Action>)
                                       ▼
-                              dbus::apply_actions  ──emits IBus signals──▶ IBus daemon
+                              dbus::apply_actions  ──phát tín hiệu IBus──▶ IBus daemon
 ```
 
-`core::Action` (`CommitText`, `UpdatePreedit`, `HidePreedit`, …) is transport-independent, so the
-full Preedit-mode behaviour is unit-tested in `pinakey-ibus` **without** a live IBus daemon. The
-D-Bus layer's only job is to translate `Action`s into IBus signals.
+`core::Action` (`CommitText`, `UpdatePreedit`, `HidePreedit`, …) độc lập với lớp truyền tải, nhờ
+vậy toàn bộ hành vi chế độ Preedit được unit-test trong `pinakey-ibus` **mà không cần** một daemon
+IBus đang chạy. Việc duy nhất của lớp D-Bus là dịch các `Action` thành tín hiệu IBus.
 
-## Testing strategy
+## Chiến lược kiểm thử
 
-- `pinakey-core` is covered by a behavioural test suite in `crates/pinakey-core/tests/`
-  (`transformation.rs`, `utils.rs`, `rules_parser.rs`), run against the public API as an external
-  consumer.
-- `pinakey-ibus::core`, `pinakey-config`, `pinakey-emoji`, and `pinakey-platform::parse_wm_class`
-  have unit tests for their pure logic.
-- The D-Bus and live-display paths cannot be exercised in CI (no IBus daemon / display); they are
-  compile-checked and kept thin so the tested `core` carries the behaviour.
+- `pinakey-core` được bao phủ bởi một bộ test hành vi trong `crates/pinakey-core/tests/`
+  (`transformation.rs`, `utils.rs`, `rules_parser.rs`), chạy trên public API như một consumer bên ngoài.
+- `pinakey-ibus::core`, `pinakey-config`, `pinakey-emoji`, và `pinakey-platform::parse_wm_class`
+  đều có unit test cho phần logic thuần túy của chúng.
+- Các đường D-Bus và màn hình trực tiếp không thể chạy trong CI (không có daemon IBus / màn hình);
+  chúng chỉ được kiểm tra biên dịch và giữ mỏng để phần `core` đã được test gánh hành vi.
 
-## Generated data
+## Dữ liệu được sinh tự động
 
-`crates/pinakey-core/src/charset_def.rs` (~2,100 charset entries) is **generated** by
-`tools/gen_charset.py`. Do not edit it by hand. See
-[CONTRIBUTING.md](CONTRIBUTING.md#regenerating-charset-tables).
+`crates/pinakey-core/src/charset_def.rs` (~2.100 mục charset) là file **được sinh tự động** bởi
+`tools/gen_charset.py`. Đừng sửa tay. Xem
+[CONTRIBUTING.md](CONTRIBUTING.md#tạo-lại-các-bảng-charset).
 
-See [README.md](README.md) for build instructions and the list of not-yet-implemented features.
+Xem [README.md](README.md) để biết hướng dẫn biên dịch và danh sách các tính năng chưa hiện thực.

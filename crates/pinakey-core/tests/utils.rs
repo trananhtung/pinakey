@@ -1,4 +1,4 @@
-//! Character-utility tests, ported verbatim from the upstream Go suite `utils_test.go`.
+//! Các bài test cho tiện ích xử lý ký tự, chuyển nguyên vẹn từ bộ test Go gốc `utils_test.go`.
 
 use pinakey_core::{add_mark_to_char, add_tone_to_char, find_tone_from_char, is_vowel, Mark, Tone};
 

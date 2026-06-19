@@ -1,8 +1,8 @@
-//! The transformation algorithm — ported from `transform_utils.go`.
+//! Thuật toán biến đổi (transformation) — chuyển từ `transform_utils.go`.
 //!
-//! Go uses `[]*Transformation` with aliased `Target` pointers, pointer-identity comparisons and
-//! in-place target mutation. We mirror that with `Rc<RefCell<Transformation>>`: identity via
-//! `Rc::ptr_eq`, mutation via `borrow_mut`.
+//! Bên Go dùng `[]*Transformation` với các con trỏ `Target` được alias, so sánh theo định danh con
+//! trỏ và sửa target trực tiếp tại chỗ. Ở đây ta tái hiện bằng `Rc<RefCell<Transformation>>`: so
+//! sánh định danh qua `Rc::ptr_eq`, sửa giá trị qua `borrow_mut`.
 
 use crate::flattener::{flatten, get_canvas};
 use crate::rules::{mode, EffectType, Mark, Rule, Tone, TransRef, Transformation};
@@ -15,7 +15,7 @@ use std::rc::Rc;
 static REG_UO_H_TAIL: Lazy<Regex> = Lazy::new(|| Regex::new(r"(uơ|ưo)\p{L}+").unwrap());
 static REG_UH_O: Lazy<Regex> = Lazy::new(|| Regex::new(r"(ưo|ươ)").unwrap());
 
-/// Build a new composition = `composition` ++ [extra], preserving Rc identities.
+/// Tạo composition mới = `composition` ++ [extra], giữ nguyên định danh Rc của các phần tử.
 fn with_appended(composition: &[TransRef], extra: TransRef) -> Vec<TransRef> {
     let mut v = composition.to_vec();
     v.push(extra);
@@ -86,7 +86,7 @@ pub fn is_valid(composition: &[TransRef], input_is_full_complete: bool) -> bool 
     if composition.len() <= 1 {
         return true;
     }
-    // last tone checking
+    // Kiểm tra dấu thanh cuối cùng
     for trans in composition.iter().rev() {
         if trans.borrow().rule.effect_type == EffectType::ToneTransformation {
             let last_tone = Tone::from_u8(trans.borrow().rule.effect);
@@ -96,7 +96,7 @@ pub fn is_valid(composition: &[TransRef], input_is_full_complete: bool) -> bool 
             break;
         }
     }
-    // spell checking
+    // Kiểm tra chính tả
     let (fc, vo, lc) = extract_cvc_trans(composition);
     let m = mode::VIETNAMESE | mode::LOWER_CASE | mode::TONE_LESS;
     is_valid_cvc(
@@ -173,7 +173,7 @@ fn has_valid_tone(composition: &[TransRef], tone: Tone) -> bool {
         return true;
     }
     let last_consonants = flatten(&lc, mode::ENGLISH | mode::LOWER_CASE);
-    // These consonants have to go with ACUTE, DOT accents.
+    // Những phụ âm cuối này chỉ đi được với dấu sắc (ACUTE) và dấu nặng (DOT).
     for s in ["c", "k", "p", "t", "ch"] {
         if s == last_consonants {
             return false;
@@ -242,14 +242,14 @@ fn extract_cvc_appending_trans(
         last_consonant = Vec::new();
     }
 
-    // 'gi' and 'qu' are considered qualified consonants:
+    // 'gi' và 'qu' được coi là phụ âm đầu hợp lệ:
     //   ['g', 'ia', ''] -> ['gi', 'a', '']    ['q', 'ua', ''] -> ['qu', 'a', '']
-    //   except ['g', 'ie', 'ng'] -> ['g', 'ie', 'ng']
+    //   ngoại trừ ['g', 'ie', 'ng'] -> ['g', 'ie', 'ng']
     if first_consonant.len() == 1 && !vowel.is_empty() {
         let fc0 = first_consonant[0].borrow().rule.result;
         let v0 = vowel[0].borrow().rule.result;
-        // The `!(… && …)` form mirrors upstream `transform_utils.go` so the port stays
-        // diff-comparable against the Go source; clippy's De Morgan rewrite would diverge.
+        // Giữ nguyên dạng `!(… && …)` giống bản gốc `transform_utils.go` để bản chuyển đổi vẫn
+        // dễ so (diff) với mã Go; nếu để clippy viết lại theo luật De Morgan thì sẽ lệch đi.
         #[allow(clippy::nonminimal_bool)]
         let gi_case = fc0 == 'g'
             && v0 == 'i'
@@ -278,7 +278,7 @@ pub fn extract_cvc_trans(
         }
     }
     let (fc, vo, lc) = extract_cvc_appending_trans(&appending_list);
-    // Go ranges over the original slice length, appending grouped effects afterwards.
+    // Bên Go duyệt theo độ dài slice gốc rồi gắn thêm các effect đã gom nhóm vào sau.
     let extend_with_effects = |base: &[TransRef]| -> Vec<TransRef> {
         let mut out = base.to_vec();
         for t in base {
@@ -497,7 +497,7 @@ pub fn generate_transformations(
     is_upper_case: bool,
 ) -> Vec<TransRef> {
     let mut transformations: Vec<TransRef> = Vec::new();
-    // Double typing an effect key undoes it, e.g. w + w -> w (Telex 2)
+    // Gõ phím hiệu ứng hai lần sẽ hoàn tác nó, ví dụ w + w -> w (Telex 2)
     if !composition.is_empty() {
         let last = composition[composition.len() - 1].clone();
         let (etype, key, result) = {
@@ -533,7 +533,7 @@ pub fn generate_transformations(
         if is_valid(&new_comp, true) {
             return transformations;
         }
-        // uow typing shortcut: virtual Mark::Horn targeting 'u' or 'o'.
+        // Lối tắt khi gõ "uow": tạo Mark::Horn ảo tác động lên 'u' hoặc 'o'.
         let (target2, mut virtual_rule) = find_target(&new_comp, applicable_rules, flags);
         if let Some(target2) = target2 {
             virtual_rule.key = '\0';
@@ -656,7 +656,7 @@ pub fn refresh_last_tone_target(composition: &[TransRef], std_style: bool) -> Ve
     transformations
 }
 
-/// Used by the engine (`regUOhTail` match against the toneless lowercase syllable).
+/// Engine dùng hàm này (so khớp `regUOhTail` với âm tiết viết thường, không dấu thanh).
 pub fn matches_uoh_tail(s: &str) -> bool {
     REG_UO_H_TAIL.is_match(s)
 }

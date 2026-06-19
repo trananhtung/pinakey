@@ -1,7 +1,7 @@
-//! Macro table — ported from `mactab.go`.
+//! Bảng macro — chuyển từ `mactab.go`.
 //!
-//! The Go version spawns a goroutine that polls the macro file's mtime; here `load_from_file`
-//! is explicit and the (re)load policy is left to the caller (the IBus engine layer).
+//! Bản Go khởi tạo một goroutine để liên tục kiểm tra mtime của file macro; ở đây `load_from_file`
+//! được gọi tường minh và chính sách nạp (lại) do bên gọi quyết định (lớp engine IBus).
 
 use std::collections::HashMap;
 

@@ -1,7 +1,7 @@
-//! PinaKey — Vietnamese input method transformation engine (Telex / VNI / VIQR).
+//! PinaKey — engine biến đổi cho bộ gõ tiếng Việt (Telex / VNI / VIQR).
 //!
-//! The behavioural test suite lives in `tests/` and exercises this public API as an external
-//! consumer would.
+//! Bộ kiểm thử hành vi nằm trong `tests/` và sử dụng API công khai này giống như một bên tiêu thụ
+//! bên ngoài.
 
 mod charset;
 mod charset_def;
@@ -14,7 +14,7 @@ mod spelling;
 mod transform_utils;
 mod utils;
 
-// Public API.
+// API công khai.
 pub use charset::{encode, get_charset_names, UNICODE};
 pub use engine::{new_engine, IEngine, PinaKeyEngine};
 pub use flattener::flatten;

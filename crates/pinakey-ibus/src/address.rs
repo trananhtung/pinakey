@@ -1,4 +1,4 @@
-//! IBus D-Bus address discovery — ported from goibus `common.go`.
+//! Dò tìm địa chỉ D-Bus của IBus — chuyển thể từ `common.go` của goibus.
 
 use std::env;
 use std::fs;
@@ -46,7 +46,7 @@ fn socket_path() -> std::io::Result<String> {
     if is_wayland {
         display_number = display;
     } else {
-        // format is {hostname}:{displaynumber}.{screennumber}
+        // Định dạng là {hostname}:{displaynumber}.{screennumber}
         let hds: Vec<&str> = display.splitn(2, ':').collect();
         let tail = hds.get(1).copied().unwrap_or("");
         let ds: Vec<&str> = tail.splitn(2, '.').collect();

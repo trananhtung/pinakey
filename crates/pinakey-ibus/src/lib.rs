@@ -1,9 +1,10 @@
-//! IBus engine layer for pinakey.
+//! Lớp engine IBus cho pinakey.
 //!
-//! - [`core`] holds the transport-independent Preedit-mode engine logic (fully unit-tested).
-//! - [`engine_actor`] runs the non-`Send` engine on its own thread behind a `Send + Sync` handle.
-//! - The `dbus` transport (zbus) drives a live IBus daemon. It is behind the default `dbus`
-//!   feature; disable it (`--no-default-features`) to build/test just the pure logic.
+//! - [`core`] chứa logic engine chế độ Preedit độc lập với transport (được unit test đầy đủ).
+//! - [`engine_actor`] chạy engine (vốn không `Send`) trên thread riêng, ẩn sau một handle
+//!   `Send + Sync`.
+//! - Lớp transport `dbus` (zbus) điều khiển IBus daemon đang chạy. Nó nằm sau feature `dbus` mặc
+//!   định; tắt nó (`--no-default-features`) để chỉ build/test phần logic thuần.
 
 pub mod constants;
 pub mod core;
