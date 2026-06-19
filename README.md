@@ -93,10 +93,13 @@ Gỡ bằng `bash tools/uninstall.sh`. Một bài kiểm tra đầu-cuối trự
 
 Chế độ nhập Preedit mặc định **và** các chế độ sửa-lỗi-bằng-Backspace (Surrounding Text,
 ForwardKeyEvent, XTest) đã hoạt động đầu-cuối — chọn bằng `DefaultInputMode` trong cấu hình; tiêm
-phím XTest qua x11rb nằm ở `pinakey-platform`. Những tính năng sau vẫn còn lại (mỗi tính năng cần
-một daemon IBus đang chạy + màn hình để kiểm tra đầy đủ):
+phím XTest qua x11rb nằm ở `pinakey-platform`. **Bảng tra cứu emoji + hexadecimal** cũng đã xong:
+gõ `:` ở đầu từ để mở (ví dụ `:grin` → 😀, `:u+2764` → ❤), dùng mũi tên/PageUp/PageDown để di
+chuyển, số `1`–`9` hoặc Space/Enter để chọn, Esc để hủy.
 
-- Bảng tra cứu emoji và hexadecimal.
+Những tính năng sau vẫn còn lại (mỗi tính năng cần một daemon IBus đang chạy + màn hình để kiểm tra
+đầy đủ):
+
 - Phím tắt, menu thuộc tính, kiểm tra chính tả dựa trên từ điển.
 - Giao diện thiết lập đồ họa.
 

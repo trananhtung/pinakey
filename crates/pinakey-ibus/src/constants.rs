@@ -23,6 +23,14 @@ pub const IBUS_SPACE: u32 = 0x020;
 pub const IBUS_COLON: u32 = 0x03a;
 pub const IBUS_TILDE: u32 = 0x007e;
 
+// Phím điều hướng (dùng cho bảng tra cứu emoji/hex).
+pub const IBUS_LEFT: u32 = 0xff51;
+pub const IBUS_UP: u32 = 0xff52;
+pub const IBUS_RIGHT: u32 = 0xff53;
+pub const IBUS_DOWN: u32 = 0xff54;
+pub const IBUS_PAGE_UP: u32 = 0xff55;
+pub const IBUS_PAGE_DOWN: u32 = 0xff56;
+
 // Keycode phần cứng của phím BackSpace (KEY_BACKSPACE của evdev = 14) dùng khi forward key event,
 // khớp với giá trị bản gốc ibus-bamboo dùng cho chế độ sửa lỗi bằng backspace.
 pub const BACKSPACE_KEYCODE: u32 = 14;

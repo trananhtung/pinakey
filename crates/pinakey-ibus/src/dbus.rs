@@ -17,7 +17,7 @@ use pinakey_config::load_config;
 use crate::constants::*;
 use crate::core::Action;
 use crate::engine_actor::EngineHandle;
-use crate::serialize::IBusText;
+use crate::serialize::{IBusLookupTable, IBusText};
 
 /// Đối tượng engine IBus, được export trên `org.freedesktop.IBus.Engine`.
 pub struct PinaKeyEngine {
@@ -103,6 +103,16 @@ impl PinaKeyEngine {
     async fn hide_lookup_table(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 
     #[zbus(signal)]
+    async fn update_lookup_table(
+        emitter: &SignalEmitter<'_>,
+        table: Value<'_>,
+        visible: bool,
+    ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn show_lookup_table(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    #[zbus(signal)]
     async fn forward_key_event(
         emitter: &SignalEmitter<'_>,
         keyval: u32,
@@ -173,6 +183,22 @@ async fn apply_actions(emitter: &SignalEmitter<'_>, actions: &[Action]) -> zbus:
                 let n = *n;
                 let _ =
                     tokio::task::spawn_blocking(move || pinakey_platform::fake_backspaces(n)).await;
+            }
+            Action::UpdateLookupTable {
+                candidates,
+                cursor,
+                page_size,
+                visible,
+            } => {
+                let table = IBusLookupTable::new(candidates, *cursor, *page_size)
+                    .and_then(|t| t.into_value())
+                    .map_err(zbus::Error::from)?;
+                PinaKeyEngine::update_lookup_table(emitter, table.into(), *visible).await?;
+                if *visible {
+                    PinaKeyEngine::show_lookup_table(emitter).await?;
+                } else {
+                    PinaKeyEngine::hide_lookup_table(emitter).await?;
+                }
             }
         }
     }
