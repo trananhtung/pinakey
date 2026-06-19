@@ -4,7 +4,7 @@ mod emoji;
 mod mactab;
 mod trie;
 
-pub use emoji::{load_emojione, load_emojione_from_str, EmojiEngine};
+pub use emoji::{load_bundled, load_emojione, load_emojione_from_str, EmojiEngine};
 pub use mactab::MacroTable;
 pub use trie::TrieNode;
 
@@ -25,6 +25,15 @@ mod tests {
         assert!(be.match_string(":')"));
         assert!(be.match_string("gri"));
         assert!(be.match_string("grin"));
+    }
+
+    #[test]
+    fn test_load_bundled() {
+        let trie = load_bundled();
+        let be = EmojiEngine::new(&trie);
+        // Bộ dữ liệu nhúng phải tra được emoji quen thuộc.
+        assert!(be.match_string("grin"));
+        assert!(be.filter("grin").contains(&"😀".to_string()));
     }
 
     #[test]

@@ -12,10 +12,11 @@ use pinakey_core::{
     self as core, build_input_method_from_pairs, has_any_vietnamese_rune, has_any_vietnamese_vowel,
     is_word_break_symbol, mode, IEngine, PinaKeyEngine,
 };
-use pinakey_emoji::MacroTable;
+use pinakey_emoji::{load_bundled, MacroTable, TrieNode};
 
 use crate::backspace::{correction_actions, diff_correction};
 use crate::constants::*;
+use crate::lookup::{EmojiState, EMOJI_PAGE_SIZE};
 
 /// Một tác động phụ (side effect) mà lớp transport phải thực hiện (tương ứng với các signal của
 /// engine goibus dùng trong luồng preedit).
@@ -43,6 +44,13 @@ pub enum Action {
     ForwardBackspaces(u32),
     /// Tiêm `n` phím BackSpace qua XTest ở lớp platform (chỉ X11/XWayland).
     FakeBackspaces(u32),
+    /// Cập nhật bảng tra cứu (lookup table) emoji/hex; `visible=false` thì ẩn bảng.
+    UpdateLookupTable {
+        candidates: Vec<String>,
+        cursor: u32,
+        page_size: u32,
+        visible: bool,
+    },
 }
 
 pub struct EngineCore {
@@ -57,6 +65,10 @@ pub struct EngineCore {
     /// Văn bản (đã mã hóa) hiện đang hiển thị trên màn hình cho từ đang gõ — chỉ dùng ở chế độ
     /// sửa lỗi bằng backspace để tính phần cần xóa lùi giữa hai lần gõ.
     previous_text: String,
+    /// Trạng thái bảng tra cứu emoji/hex đang mở (nếu có).
+    emoji: EmojiState,
+    /// Trie emoji được nạp lười (chỉ khi lần đầu vào chế độ emoji).
+    emoji_trie: Option<TrieNode>,
 }
 
 const VN_CASE_ALL_SMALL: u8 = 1;
@@ -77,6 +89,8 @@ impl EngineCore {
             wm_class: String::new(),
             input_mode,
             previous_text: String::new(),
+            emoji: EmojiState::new(),
+            emoji_trie: None,
         }
     }
 
@@ -93,6 +107,7 @@ impl EngineCore {
     pub fn reset_preeditor(&mut self) {
         self.preeditor.reset();
         self.previous_text.clear();
+        self.emoji.close();
     }
 
     /// Dựng lại engine biến đổi sau khi cấu hình thay đổi (input method / flags).
@@ -436,6 +451,18 @@ impl EngineCore {
         if state & IBUS_RELEASE_MASK != 0 {
             return (false, out);
         }
+        // Bảng tra cứu emoji/hex chiếm quyền xử lý khi đang mở.
+        if self.emoji.is_active() {
+            let r = self.emoji_process_key(key_val, state, &mut out);
+            return (r, out);
+        }
+        // Kích hoạt chế độ emoji bằng ':' khi buffer rỗng (không phá việc gõ tiếng Việt).
+        if key_val == IBUS_COLON && self.get_raw_key_len() == 0 && !self.should_restore_key_strokes
+        {
+            self.emoji.start();
+            self.emit_emoji_ui(&mut out);
+            return (true, out);
+        }
         let result = if self.is_backspace_mode() {
             self.backspace_process_key_event(key_val, key_code, state, &mut out)
         } else {
@@ -443,6 +470,131 @@ impl EngineCore {
         };
         self.update_last_key_with_shift(key_val, state);
         (result, out)
+    }
+
+    // ----- chế độ tra cứu emoji / hex -----
+
+    fn ensure_emoji_trie(&mut self) {
+        if self.emoji_trie.is_none() {
+            self.emoji_trie = Some(load_bundled());
+        }
+    }
+
+    fn emoji_push(&mut self, c: char) {
+        self.ensure_emoji_trie();
+        let trie = self.emoji_trie.as_ref().unwrap();
+        self.emoji.push(c, trie);
+    }
+
+    fn emoji_backspace(&mut self) -> bool {
+        self.ensure_emoji_trie();
+        let trie = self.emoji_trie.as_ref().unwrap();
+        self.emoji.backspace(trie)
+    }
+
+    fn emoji_raw(&self) -> String {
+        format!(":{}", self.emoji.query())
+    }
+
+    /// Truy vấn đang ở dạng mã hex (có tiền tố) -> chữ số là một phần mã, không phải nhãn chọn.
+    fn query_is_hex(&self) -> bool {
+        let q = self.emoji.query();
+        q.starts_with("u+") || q.starts_with("U+") || q.starts_with("\\u")
+    }
+
+    fn emit_emoji_ui(&self, out: &mut Vec<Action>) {
+        out.push(Action::UpdateAuxiliary {
+            text: self.emoji_raw(),
+            visible: true,
+        });
+        let candidates = self.emoji.candidates().to_vec();
+        let visible = !candidates.is_empty();
+        out.push(Action::UpdateLookupTable {
+            candidates,
+            cursor: self.emoji.cursor() as u32,
+            page_size: EMOJI_PAGE_SIZE as u32,
+            visible,
+        });
+    }
+
+    fn finish_emoji(&mut self, commit: &str, out: &mut Vec<Action>) {
+        self.emoji.close();
+        out.push(Action::HideLookupTable);
+        out.push(Action::HideAuxiliary);
+        out.push(Action::HidePreedit);
+        if !commit.is_empty() {
+            out.push(Action::CommitText(self.encode_text(commit)));
+        }
+    }
+
+    fn emoji_process_key(&mut self, key_val: u32, state: u32, out: &mut Vec<Action>) -> bool {
+        let key_rune = char::from_u32(key_val).unwrap_or('\0');
+        match key_val {
+            IBUS_ESCAPE => {
+                let raw = self.emoji_raw();
+                self.finish_emoji(&raw, out);
+                return true;
+            }
+            IBUS_RETURN | IBUS_SPACE | IBUS_TAB => {
+                if let Some(sel) = self.emoji.selected().map(|s| s.to_string()) {
+                    self.finish_emoji(&sel, out);
+                    return true;
+                }
+                // Không có ứng viên: commit nguyên văn ":query". Nếu truy vấn rỗng (chỉ ":"), để
+                // phím space/enter đi qua để không nuốt mất ký tự của người dùng.
+                let was_empty = self.emoji.query().is_empty();
+                let raw = self.emoji_raw();
+                self.finish_emoji(&raw, out);
+                return !was_empty;
+            }
+            IBUS_BACKSPACE => {
+                if self.emoji_backspace() {
+                    self.emit_emoji_ui(out);
+                } else {
+                    self.finish_emoji("", out);
+                }
+                return true;
+            }
+            IBUS_UP | IBUS_LEFT => {
+                self.emoji.move_cursor(-1);
+                self.emit_emoji_ui(out);
+                return true;
+            }
+            IBUS_DOWN | IBUS_RIGHT => {
+                self.emoji.move_cursor(1);
+                self.emit_emoji_ui(out);
+                return true;
+            }
+            IBUS_PAGE_UP => {
+                self.emoji.page(-1);
+                self.emit_emoji_ui(out);
+                return true;
+            }
+            IBUS_PAGE_DOWN => {
+                self.emoji.page(1);
+                self.emit_emoji_ui(out);
+                return true;
+            }
+            _ => {}
+        }
+        // Chọn theo nhãn số (1-9) khi không đang gõ mã hex.
+        if key_rune.is_ascii_digit() && !self.query_is_hex() {
+            let d = (key_rune as u8 - b'0') as usize;
+            if let Some(sel) = self.emoji.select_digit(d) {
+                self.finish_emoji(&sel, out);
+            }
+            return true; // nuốt phím số dù có chọn được hay không
+        }
+        // Ký tự truy vấn: chữ cái, chữ số (khi gõ hex), '+', '\'.
+        if is_valid_state(state) && is_emoji_query_char(key_rune) {
+            self.emoji_push(key_rune);
+            self.emit_emoji_ui(out);
+            return true;
+        }
+        // Phím khác: thoát, commit nguyên văn ":query", để IBus tự chuyển tiếp phím gốc.
+        let raw = self.emoji_raw();
+        self.finish_emoji(&raw, out);
+        false
     }
 
     /// Vẽ lại văn bản trên màn hình ở chế độ sửa lỗi: tính phần khác biệt so với lần hiển thị
@@ -587,6 +739,11 @@ fn determine_macro_case(s: &str) -> u8 {
         }
     }
     VN_CASE_ALL_CAPITAL
+}
+
+/// Ký tự được phép trong truy vấn emoji/hex: chữ cái, chữ số, và `+` `\` cho mã hex (`u+`, `\u`).
+fn is_emoji_query_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '+' || c == '\\'
 }
 
 fn is_valid_state(state: u32) -> bool {
@@ -774,5 +931,97 @@ mod tests {
         // Sau ngắt từ, gõ từ mới bắt đầu lại từ chuỗi rỗng.
         let actions = type_keys(&mut core, "as"); // "á"
         assert_eq!(apply_corrections(&actions), "á");
+    }
+
+    // ----- bảng tra cứu emoji / hex -----
+
+    fn last_lookup(actions: &[Action]) -> Option<(Vec<String>, bool)> {
+        actions.iter().rev().find_map(|a| match a {
+            Action::UpdateLookupTable {
+                candidates,
+                visible,
+                ..
+            } => Some((candidates.clone(), *visible)),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn colon_enters_emoji_mode() {
+        let mut core = EngineCore::new(default_cfg());
+        let (handled, actions) = core.process_key_event(IBUS_COLON, 0, 0);
+        assert!(handled);
+        // Hiển thị auxiliary ":" báo đang ở chế độ emoji.
+        assert!(actions
+            .iter()
+            .any(|a| matches!(a, Action::UpdateAuxiliary { text, .. } if text == ":")));
+    }
+
+    #[test]
+    fn emoji_keyword_lists_candidates() {
+        let mut core = EngineCore::new(default_cfg());
+        let actions = type_keys(&mut core, ":grin");
+        let (cands, visible) = last_lookup(&actions).expect("phải có lookup table");
+        assert!(visible);
+        assert!(cands.contains(&"😀".to_string()));
+    }
+
+    #[test]
+    fn emoji_space_commits_selected() {
+        let mut core = EngineCore::new(default_cfg());
+        let actions = type_keys(&mut core, ":grin");
+        let (cands, _v) = last_lookup(&actions).unwrap();
+        let first = cands[0].clone();
+        let (handled, sp) = core.process_key_event(IBUS_SPACE, 0, 0);
+        assert!(handled);
+        assert!(commits(&sp).contains(&first));
+        // Bảng tra cứu được ẩn sau khi chọn.
+        assert!(sp.iter().any(|a| matches!(a, Action::HideLookupTable)));
+    }
+
+    #[test]
+    fn hex_commits_decoded_char() {
+        let mut core = EngineCore::new(default_cfg());
+        type_keys(&mut core, ":u+2764");
+        let (handled, sp) = core.process_key_event(IBUS_SPACE, 0, 0);
+        assert!(handled);
+        assert!(commits(&sp).iter().any(|c| c == "❤"));
+    }
+
+    #[test]
+    fn emoji_digit_selects_candidate() {
+        let mut core = EngineCore::new(default_cfg());
+        let actions = type_keys(&mut core, ":grin");
+        let (cands, _v) = last_lookup(&actions).unwrap();
+        if cands.len() < 2 {
+            return; // bộ dữ liệu chỉ có 1 ứng viên: bỏ qua nhánh chọn theo số
+        }
+        let second = cands[1].clone();
+        let (handled, sp) = core.process_key_event('2' as u32, 0, 0);
+        assert!(handled);
+        assert!(commits(&sp).contains(&second));
+    }
+
+    #[test]
+    fn emoji_backspace_to_empty_exits() {
+        let mut core = EngineCore::new(default_cfg());
+        type_keys(&mut core, ":g");
+        let (handled, sp) = core.process_key_event(IBUS_BACKSPACE, 0, 0);
+        assert!(handled);
+        assert!(sp.iter().any(|a| matches!(a, Action::HideLookupTable)));
+        // Đã thoát chế độ emoji: ':' tiếp theo lại mở mới (không tích lũy).
+        let (_h, a2) = core.process_key_event(IBUS_COLON, 0, 0);
+        assert!(a2
+            .iter()
+            .any(|x| matches!(x, Action::UpdateAuxiliary { text, .. } if text == ":")));
+    }
+
+    #[test]
+    fn emoji_escape_commits_raw() {
+        let mut core = EngineCore::new(default_cfg());
+        type_keys(&mut core, ":grin");
+        let (handled, sp) = core.process_key_event(IBUS_ESCAPE, 0, 0);
+        assert!(handled);
+        assert!(commits(&sp).iter().any(|c| c == ":grin"));
     }
 }

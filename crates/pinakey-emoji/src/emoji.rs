@@ -42,6 +42,13 @@ pub fn load_emojione(path: &str) -> std::io::Result<TrieNode> {
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
+/// Nạp trie emoji từ bộ dữ liệu EmojiOne đóng kèm trong binary (không cần file ngoài).
+pub fn load_bundled() -> TrieNode {
+    // `expect` an toàn: dữ liệu được nhúng lúc biên dịch và đã được test khác kiểm tra parse được.
+    load_emojione_from_str(include_str!("../data/emojione.json"))
+        .expect("dữ liệu emojione.json nhúng phải parse được")
+}
+
 /// Theo dõi các phím đã gõ trong một truy vấn emoji (`EmojiEngine` trong Go).
 pub struct EmojiEngine<'a> {
     trie: &'a TrieNode,

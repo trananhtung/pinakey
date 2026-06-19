@@ -91,3 +91,51 @@ impl IBusText {
         OwnedValue::try_from(Value::from(self))
     }
 }
+
+/// Bảng tra cứu IBus — signature `(sa{sv}uubbiavav)`: page_size, cursor_pos, cursor_visible,
+/// round, orientation, mảng ứng viên (av) và mảng nhãn (av), mỗi phần tử là một `IBusText`.
+#[derive(Type, serde::Serialize, serde::Deserialize, Value, OwnedValue)]
+pub struct IBusLookupTable {
+    pub name: String,
+    pub attachments: HashMap<String, OwnedValue>,
+    pub page_size: u32,
+    pub cursor_pos: u32,
+    pub cursor_visible: bool,
+    pub round: bool,
+    pub orientation: i32,
+    pub candidates: Vec<OwnedValue>,
+    pub labels: Vec<OwnedValue>,
+}
+
+impl IBusLookupTable {
+    /// Dựng bảng tra cứu từ danh sách ứng viên, với nhãn số `1.`…`9.` cho mỗi trang.
+    pub fn new(
+        candidates: &[String],
+        cursor_pos: u32,
+        page_size: u32,
+    ) -> zbus::zvariant::Result<Self> {
+        let mut cand_vals = Vec::with_capacity(candidates.len());
+        for c in candidates {
+            cand_vals.push(IBusText::new(c)?.into_value()?);
+        }
+        let mut labels = Vec::with_capacity(page_size as usize);
+        for i in 0..page_size {
+            labels.push(IBusText::new(&format!("{}.", i + 1))?.into_value()?);
+        }
+        Ok(IBusLookupTable {
+            name: "IBusLookupTable".to_string(),
+            attachments: HashMap::new(),
+            page_size,
+            cursor_pos,
+            cursor_visible: true,
+            round: true,
+            orientation: 1, // dọc (vertical)
+            candidates: cand_vals,
+            labels,
+        })
+    }
+
+    pub fn into_value(self) -> zbus::zvariant::Result<OwnedValue> {
+        OwnedValue::try_from(Value::from(self))
+    }
+}

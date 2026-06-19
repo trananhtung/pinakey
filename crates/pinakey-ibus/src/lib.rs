@@ -9,9 +9,11 @@
 pub mod backspace;
 pub mod constants;
 pub mod core;
+pub mod lookup;
 
 pub use backspace::{correction_actions, diff_correction, Correction};
 pub use core::{Action, EngineCore};
+pub use lookup::{compute_candidates, hex_to_char, EmojiState};
 
 #[cfg(feature = "dbus")]
 pub mod address;
