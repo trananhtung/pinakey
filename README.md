@@ -21,11 +21,12 @@ cho Alexandre de Rhodes và thường bị lãng quên sau cái bóng của họ
 
 | Crate | Trách nhiệm | Trạng thái |
 |-------|-------------|------------|
-| `pinakey-core` | Biến đổi Telex/VNI/VIQR, kiểm tra chính tả, mã hóa charset. | ✅ Hoàn chỉnh — 47 test biến đổi đều pass. |
+| `pinakey-core` | Biến đổi Telex/VNI/VIQR, kiểm tra chính tả (quy tắc + từ điển), mã hóa charset. | ✅ Hoàn chỉnh. |
 | `pinakey-config` | Cấu hình JSON, feature flag, đường dẫn cấu hình. | ✅ Hoàn chỉnh. |
 | `pinakey-emoji` | Trie emoji + bảng macro. | ✅ Hoàn chỉnh. |
-| `pinakey-ibus` | Logic engine chế độ Preedit + lớp truyền tải D-Bus IBus đầy đủ (zbus). | ✅ Hoàn chỉnh. |
+| `pinakey-ibus` | Engine: Preedit + sửa-lỗi-Backspace, emoji/hex, phím tắt, menu thuộc tính, lớp D-Bus (zbus). | ✅ Hoàn chỉnh. |
 | `pinakey-platform` | Nhận diện class của cửa sổ focus trên X11 (XWayland) + tiêm phím XTest. | ◐ Tiêm phím XTest ✅; đọc window-class trên Wayland thuần là phần làm tiếp. |
+| `pinakey-settings` | Giao diện thiết lập đồ họa (egui/eframe thuần Rust) + controller logic. | ✅ Hoàn chỉnh. |
 | `pinakey` (bin) | Binary của engine: chế độ `--version` và `--ibus` nhúng. | ✅ |
 
 Engine biến đổi (`pinakey-core`) là trái tim của dự án và được bao phủ bởi một bộ test hành vi,
@@ -73,13 +74,22 @@ curl -fsSL https://raw.githubusercontent.com/trananhtung/pinakey/main/tools/inst
 
 ```sh
 cargo build --release -p pinakey
-! bash tools/install.sh      # cài binary + icon vào ~/.local/lib/pinakey, chép component XML
-                             # vào /usr/share/ibus/component (cần sudo), làm mới IBus, và thêm
-                             # PinaKey vào danh sách nguồn nhập GNOME
+cargo build --release -p pinakey-settings --features gui   # giao diện thiết lập (tùy chọn)
+! bash tools/install.sh      # cài engine + icon vào ~/.local/lib/pinakey, chép component XML
+                             # vào /usr/share/ibus/component (cần sudo), làm mới IBus, thêm PinaKey
+                             # vào nguồn nhập GNOME, và cài GUI thiết lập + mục menu (nếu đã build)
 ```
 
-Gỡ bằng `bash tools/uninstall.sh`. Một bài kiểm tra đầu-cuối trực tiếp nằm ở
-`cargo run -p pinakey-ibus --example smoketest`.
+Mở giao diện thiết lập bằng `pinakey-settings` hoặc mục **"PinaKey — Thiết lập"** trong menu ứng dụng.
+
+Gỡ bằng `bash tools/uninstall.sh`. Các bài kiểm tra đầu-cuối trực tiếp (cần IBus daemon đang chạy):
+
+```sh
+cargo run -p pinakey-ibus --example smoketest             # chế độ Preedit
+cargo run -p pinakey-ibus --example backspace_smoketest   # chế độ sửa lỗi bằng backspace
+cargo run -p pinakey-ibus --example emoji_smoketest       # bảng tra cứu emoji + hex
+cargo run -p pinakey-ibus --example shortcut_props_smoketest  # phím tắt + menu thuộc tính
+```
 
 ## Ghi chú kiến trúc
 
@@ -89,21 +99,21 @@ Gỡ bằng `bash tools/uninstall.sh`. Một bài kiểm tra đầu-cuối trự
   một danh sách `Action` (commit / cập-nhật-preedit / ẩn), nhờ vậy toàn bộ hành vi IME được
   unit-test mà không cần một daemon IBus đang chạy. Lớp D-Bus dịch các `Action` thành tín hiệu IBus.
 
-## Chưa hiện thực (phần làm tiếp)
+## Tính năng
 
-Chế độ nhập Preedit mặc định **và** các chế độ sửa-lỗi-bằng-Backspace (Surrounding Text,
-ForwardKeyEvent, XTest) đã hoạt động đầu-cuối — chọn bằng `DefaultInputMode` trong cấu hình; tiêm
-phím XTest qua x11rb nằm ở `pinakey-platform`. **Bảng tra cứu emoji + hexadecimal** cũng đã xong:
-gõ `:` ở đầu từ để mở (ví dụ `:grin` → 😀, `:u+2764` → ❤), dùng mũi tên/PageUp/PageDown để di
-chuyển, số `1`–`9` hoặc Space/Enter để chọn, Esc để hủy.
+- **Chế độ nhập**: Preedit (mặc định) và các chế độ **sửa-lỗi-bằng-Backspace** (Surrounding Text,
+  ForwardKeyEvent — chạy cả Wayland, XTest — X11/XWayland), chọn bằng `DefaultInputMode`.
+- **Bảng tra cứu emoji + hexadecimal**: gõ `:` ở đầu từ để mở (`:grin` → 😀, `:u+2764` → ❤);
+  mũi tên/PageUp/PageDown để di chuyển, số `1`–`9` hoặc Space/Enter để chọn, Esc để hủy.
+- **Phím tắt** (`Shortcuts` trong cấu hình): bật/tắt tiếng Việt, khôi phục phím gốc.
+- **Menu thuộc tính** trên panel IBus: đổi nhanh kiểu gõ, bật/tắt tiếng Việt.
+- **Kiểm tra chính tả**: theo quy tắc (mặc định) và theo **từ điển** (`IB_SPELL_CHECK_WITH_DICTS`;
+  bộ từ khởi đầu đóng kèm + `~/.config/pinakey/dict.txt`).
+- **Giao diện thiết lập đồ họa** (`pinakey-settings`, egui/eframe thuần Rust).
 
-**Phím tắt, menu thuộc tính và kiểm tra chính tả từ điển** cũng đã xong: phím tắt (cấu hình ở
-`Shortcuts`) bật/tắt tiếng Việt và khôi phục phím gốc; menu thuộc tính trên panel IBus đổi nhanh
-kiểu gõ / bật-tắt tiếng Việt; bật cờ `IB_SPELL_CHECK_WITH_DICTS` để dùng từ điển (bộ từ khởi đầu
-đóng kèm + `~/.config/pinakey/dict.txt` của người dùng).
+### Phần làm tiếp
 
-Tính năng còn lại (cần một daemon IBus đang chạy + màn hình để kiểm tra đầy đủ):
-
-- Giao diện thiết lập đồ họa.
+- Đọc window-class trên **Wayland thuần** (hiện chỉ qua X11/XWayland); chế độ ForwardKeyEvent đã phủ
+  phần lớn nhu cầu xóa lùi trên Wayland.
 
 Xem `docs/superpowers/specs/2026-06-18-pinakey-design.md` để biết toàn bộ thiết kế.
