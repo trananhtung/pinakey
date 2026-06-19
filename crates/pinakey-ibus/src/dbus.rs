@@ -17,7 +17,7 @@ use pinakey_config::load_config;
 use crate::constants::*;
 use crate::core::Action;
 use crate::engine_actor::EngineHandle;
-use crate::serialize::{IBusLookupTable, IBusText};
+use crate::serialize::{IBusLookupTable, IBusPropList, IBusText};
 
 /// Đối tượng engine IBus, được export trên `org.freedesktop.IBus.Engine`.
 pub struct PinaKeyEngine {
@@ -40,11 +40,15 @@ impl PinaKeyEngine {
         handled
     }
 
-    async fn focus_in(&self) {
+    async fn focus_in(&self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) {
         // Phát hiện class của cửa sổ đang focus để áp dụng cách khắc phục theo từng ứng dụng (chỉ
         // X11; nơi khác không làm gì), tương ứng FocusIn -> checkWmClass của engine Go.
         if let Some(class) = pinakey_platform::get_focus_window_class() {
             self.handle.set_wm_class(class);
+        }
+        // Đăng ký menu thuộc tính lên panel IBus.
+        if let Err(e) = self.register_props(&emitter).await {
+            eprintln!("failed to register properties: {e}");
         }
     }
     async fn focus_out(&self) {}
@@ -59,7 +63,21 @@ impl PinaKeyEngine {
     async fn set_cursor_location(&self, _x: i32, _y: i32, _w: i32, _h: i32) {}
     async fn set_content_type(&self, _purpose: u32, _hints: u32) {}
     async fn set_surrounding_text(&self, _text: Value<'_>, _cursor: u32, _anchor: u32) {}
-    async fn property_activate(&self, _name: String, _state: u32) {}
+    async fn property_activate(
+        &self,
+        name: String,
+        state: u32,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) {
+        let actions = self.handle.property_activate(name, state);
+        if let Err(e) = apply_actions(&emitter, &actions).await {
+            eprintln!("failed to emit signal: {e}");
+        }
+        // Trạng thái có thể đổi (bật/tắt VN, đổi kiểu gõ) -> cập nhật lại menu.
+        if let Err(e) = self.register_props(&emitter).await {
+            eprintln!("failed to refresh properties: {e}");
+        }
+    }
     async fn property_show(&self, _name: String) {}
     async fn property_hide(&self, _name: String) {}
     async fn page_up(&self) {}
@@ -129,6 +147,24 @@ impl PinaKeyEngine {
         offset: i32,
         nchars: u32,
     ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn register_properties(emitter: &SignalEmitter<'_>, props: Value<'_>)
+        -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn update_property(emitter: &SignalEmitter<'_>, prop: Value<'_>) -> zbus::Result<()>;
+}
+
+impl PinaKeyEngine {
+    /// Dựng menu thuộc tính hiện tại và phát `register_properties` lên panel.
+    async fn register_props(&self, emitter: &SignalEmitter<'_>) -> zbus::Result<()> {
+        let props = self.handle.props();
+        let list = IBusPropList::from_props(&props)
+            .and_then(|l| l.into_value())
+            .map_err(zbus::Error::from)?;
+        PinaKeyEngine::register_properties(emitter, list.into()).await
+    }
 }
 
 async fn apply_actions(emitter: &SignalEmitter<'_>, actions: &[Action]) -> zbus::Result<()> {
