@@ -6,9 +6,11 @@
 //! - Lớp transport `dbus` (zbus) điều khiển IBus daemon đang chạy. Nó nằm sau feature `dbus` mặc
 //!   định; tắt nó (`--no-default-features`) để chỉ build/test phần logic thuần.
 
+pub mod backspace;
 pub mod constants;
 pub mod core;
 
+pub use backspace::{correction_actions, diff_correction, Correction};
 pub use core::{Action, EngineCore};
 
 #[cfg(feature = "dbus")]

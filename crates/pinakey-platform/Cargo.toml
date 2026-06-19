@@ -6,7 +6,8 @@ license.workspace = true
 description = "Platform integration (X11/Wayland) for PinaKey: window-class detection and key injection"
 
 [dependencies]
-x11rb = "0.13"
+# Bật extension `xtest` để tiêm phím giả lập (XTestFakeKeyEvent) cho các chế độ sửa lỗi bằng backspace.
+x11rb = { version = "0.13", features = ["xtest"] }
 
 [lints]
 workspace = true

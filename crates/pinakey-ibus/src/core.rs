@@ -14,6 +14,7 @@ use pinakey_core::{
 };
 use pinakey_emoji::MacroTable;
 
+use crate::backspace::{correction_actions, diff_correction};
 use crate::constants::*;
 
 /// Một tác động phụ (side effect) mà lớp transport phải thực hiện (tương ứng với các signal của
@@ -33,6 +34,15 @@ pub enum Action {
     HidePreedit,
     HideAuxiliary,
     HideLookupTable,
+    /// Xóa `nchars` ký tự quanh con trỏ (chế độ Surrounding Text). `offset` âm = lùi về trước con trỏ.
+    DeleteSurroundingText {
+        offset: i32,
+        nchars: u32,
+    },
+    /// Phát `n` phím BackSpace qua `forward_key_event` (chế độ forwarding, chạy được cả Wayland).
+    ForwardBackspaces(u32),
+    /// Tiêm `n` phím BackSpace qua XTest ở lớp platform (chỉ X11/XWayland).
+    FakeBackspaces(u32),
 }
 
 pub struct EngineCore {
@@ -42,6 +52,11 @@ pub struct EngineCore {
     pub should_restore_key_strokes: bool,
     pub last_key_with_shift: bool,
     wm_class: String,
+    /// Chế độ nhập hiện tại (`PREEDIT_IM`, các chế độ sửa lỗi bằng backspace, ...).
+    input_mode: i32,
+    /// Văn bản (đã mã hóa) hiện đang hiển thị trên màn hình cho từ đang gõ — chỉ dùng ở chế độ
+    /// sửa lỗi bằng backspace để tính phần cần xóa lùi giữa hai lần gõ.
+    previous_text: String,
 }
 
 const VN_CASE_ALL_SMALL: u8 = 1;
@@ -52,6 +67,7 @@ impl EngineCore {
     pub fn new(config: Config) -> EngineCore {
         let preeditor = build_preeditor(&config);
         let macro_table = MacroTable::new(config.ib_flags & cfg::IB_AUTO_CAPITALIZE_MACRO != 0);
+        let input_mode = config.default_input_mode;
         EngineCore {
             preeditor,
             config,
@@ -59,7 +75,14 @@ impl EngineCore {
             should_restore_key_strokes: false,
             last_key_with_shift: false,
             wm_class: String::new(),
+            input_mode,
+            previous_text: String::new(),
         }
+    }
+
+    /// Chế độ nhập hiện tại có phải loại "sửa lỗi bằng backspace" không.
+    fn is_backspace_mode(&self) -> bool {
+        cfg::IM_BACKSPACE_LIST.contains(&self.input_mode)
     }
 
     pub fn set_wm_class(&mut self, wm_class: String) {
@@ -69,6 +92,7 @@ impl EngineCore {
     /// Đặt lại trạng thái soạn thảo bên dưới (tương ứng `Reset` của IBus).
     pub fn reset_preeditor(&mut self) {
         self.preeditor.reset();
+        self.previous_text.clear();
     }
 
     /// Dựng lại engine biến đổi sau khi cấu hình thay đổi (input method / flags).
@@ -412,9 +436,72 @@ impl EngineCore {
         if state & IBUS_RELEASE_MASK != 0 {
             return (false, out);
         }
-        let result = self.preedit_process_key_event(key_val, key_code, state, &mut out);
+        let result = if self.is_backspace_mode() {
+            self.backspace_process_key_event(key_val, key_code, state, &mut out)
+        } else {
+            self.preedit_process_key_event(key_val, key_code, state, &mut out)
+        };
         self.update_last_key_with_shift(key_val, state);
         (result, out)
+    }
+
+    /// Vẽ lại văn bản trên màn hình ở chế độ sửa lỗi: tính phần khác biệt so với lần hiển thị
+    /// trước rồi phát các action xóa lùi + commit phần đuôi.
+    fn redraw_corrected(&mut self, out: &mut Vec<Action>) {
+        let new_text = self.encode_text(&self.get_preedit_string());
+        let corr = diff_correction(&self.previous_text, &new_text);
+        out.extend(correction_actions(self.input_mode, &corr));
+        self.previous_text = new_text;
+    }
+
+    /// Đường xử lý phím cho các chế độ sửa lỗi bằng backspace (chuyển thể `engine_backspace.go`).
+    /// Văn bản được commit thẳng ra ứng dụng; mỗi lần biến đổi thay đổi, ta xóa lùi phần đã sai và
+    /// gõ lại phần đuôi thay vì cập nhật vùng preedit.
+    fn backspace_process_key_event(
+        &mut self,
+        key_val: u32,
+        _key_code: u32,
+        state: u32,
+        out: &mut Vec<Action>,
+    ) -> bool {
+        let key_rune = char::from_u32(key_val).unwrap_or('\0');
+        let raw_key_len = self.get_raw_key_len();
+
+        // Phím không xử lý được khi buffer rỗng -> cho đi qua (thanh địa chỉ, phím tắt, ...).
+        if !self.preeditor.can_process_key(key_rune)
+            && raw_key_len == 0
+            && key_val != IBUS_BACKSPACE
+        {
+            return false;
+        }
+
+        if key_val == IBUS_BACKSPACE {
+            if raw_key_len > 0 {
+                self.preeditor.remove_last_char(true);
+                self.redraw_corrected(out);
+                return true;
+            }
+            self.previous_text.clear();
+            return false;
+        }
+
+        let is_printable = self.is_printable_key(state, key_val);
+        if is_printable && self.preeditor.can_process_key(key_rune) {
+            let mut kr = key_rune;
+            if state & IBUS_LOCK_MASK != 0 {
+                kr = self.to_upper(kr);
+            }
+            let input_mode = self.get_input_mode();
+            self.preeditor.process_key(kr, input_mode);
+            self.redraw_corrected(out);
+            return true;
+        }
+
+        // Ký tự ngắt từ / không xử lý được: từ hiện tại đã nằm trên màn hình rồi, chỉ cần reset
+        // trạng thái và để IBus tự chuyển tiếp phím (space, dấu câu, ...).
+        self.preeditor.reset();
+        self.previous_text.clear();
+        false
     }
 
     fn preedit_process_key_event(
@@ -590,5 +677,102 @@ mod tests {
         // '.' với buffer rỗng không xử lý được, buffer lại rỗng -> không handle (cho đi qua)
         let (handled, _actions) = core.process_key_event('.' as u32, 0, 0);
         assert!(!handled);
+    }
+
+    // ----- chế độ sửa lỗi bằng backspace -----
+
+    /// Mô phỏng nội dung trên màn hình ứng dụng: `CommitText` nối thêm, mọi dạng xóa lùi đều bỏ N
+    /// ký tự cuối. Nhờ vậy ta kiểm tra được kết quả cuối cùng của một chuỗi correction.
+    fn apply_corrections(actions: &[Action]) -> String {
+        let mut screen: Vec<char> = Vec::new();
+        for a in actions {
+            match a {
+                Action::CommitText(t) => screen.extend(t.chars()),
+                Action::ForwardBackspaces(n) | Action::FakeBackspaces(n) => {
+                    for _ in 0..*n {
+                        screen.pop();
+                    }
+                }
+                Action::DeleteSurroundingText { nchars, .. } => {
+                    for _ in 0..*nchars {
+                        screen.pop();
+                    }
+                }
+                _ => {}
+            }
+        }
+        screen.into_iter().collect()
+    }
+
+    fn backspace_cfg(mode: i32) -> Config {
+        let mut c = default_cfg();
+        c.default_input_mode = mode;
+        c
+    }
+
+    #[test]
+    fn backspace_mode_commits_with_corrections() {
+        let mut core = EngineCore::new(backspace_cfg(cfg::BACKSPACE_FORWARDING_IM));
+        let actions = type_keys(&mut core, "vieetj");
+        assert_eq!(apply_corrections(&actions), "việt");
+        // Chế độ này không dùng vùng preedit.
+        assert!(!actions
+            .iter()
+            .any(|a| matches!(a, Action::UpdatePreedit { .. })));
+    }
+
+    #[test]
+    fn backspace_mode_uses_forward_key_events() {
+        let mut core = EngineCore::new(backspace_cfg(cfg::BACKSPACE_FORWARDING_IM));
+        let actions = type_keys(&mut core, "vieetj");
+        // Phải có ít nhất một lần phát phím BackSpace (sửa ee->ê và thêm dấu).
+        assert!(actions
+            .iter()
+            .any(|a| matches!(a, Action::ForwardBackspaces(_))));
+        assert!(!actions
+            .iter()
+            .any(|a| matches!(a, Action::FakeBackspaces(_))));
+    }
+
+    #[test]
+    fn backspace_mode_xtest_uses_fake_backspaces() {
+        let mut core = EngineCore::new(backspace_cfg(cfg::XTEST_FAKE_KEY_EVENT_IM));
+        let actions = type_keys(&mut core, "vieetj");
+        assert_eq!(apply_corrections(&actions), "việt");
+        assert!(actions
+            .iter()
+            .any(|a| matches!(a, Action::FakeBackspaces(_))));
+    }
+
+    #[test]
+    fn backspace_mode_surrounding_uses_delete_surrounding() {
+        let mut core = EngineCore::new(backspace_cfg(cfg::SURROUNDING_TEXT_IM));
+        let actions = type_keys(&mut core, "vieetj");
+        assert_eq!(apply_corrections(&actions), "việt");
+        assert!(actions
+            .iter()
+            .any(|a| matches!(a, Action::DeleteSurroundingText { .. })));
+    }
+
+    #[test]
+    fn backspace_mode_backspace_key_deletes_char() {
+        let mut core = EngineCore::new(backspace_cfg(cfg::BACKSPACE_FORWARDING_IM));
+        let mut actions = type_keys(&mut core, "vieetj"); // -> việt
+        let (handled, bs) = core.process_key_event(IBUS_BACKSPACE, 0, 0);
+        assert!(handled);
+        actions.extend(bs);
+        assert_eq!(apply_corrections(&actions), "việ");
+    }
+
+    #[test]
+    fn backspace_mode_word_break_passes_through() {
+        let mut core = EngineCore::new(backspace_cfg(cfg::BACKSPACE_FORWARDING_IM));
+        type_keys(&mut core, "vieetj");
+        // space hoàn tất từ; IBus tự chuyển tiếp nên engine không "handle".
+        let (handled, _sp) = core.process_key_event(' ' as u32, 0, 0);
+        assert!(!handled);
+        // Sau ngắt từ, gõ từ mới bắt đầu lại từ chuỗi rỗng.
+        let actions = type_keys(&mut core, "as"); // "á"
+        assert_eq!(apply_corrections(&actions), "á");
     }
 }

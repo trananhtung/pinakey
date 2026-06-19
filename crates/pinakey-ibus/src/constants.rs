@@ -23,6 +23,10 @@ pub const IBUS_SPACE: u32 = 0x020;
 pub const IBUS_COLON: u32 = 0x03a;
 pub const IBUS_TILDE: u32 = 0x007e;
 
+// Keycode phần cứng của phím BackSpace (KEY_BACKSPACE của evdev = 14) dùng khi forward key event,
+// khớp với giá trị bản gốc ibus-bamboo dùng cho chế độ sửa lỗi bằng backspace.
+pub const BACKSPACE_KEYCODE: u32 = 14;
+
 // Khả năng (capability).
 pub const IBUS_CAP_PREEDIT_TEXT: u32 = 1 << 0;
 pub const IBUS_CAP_SURROUNDING_TEXT: u32 = 1 << 5;

@@ -25,7 +25,7 @@ cho Alexandre de Rhodes và thường bị lãng quên sau cái bóng của họ
 | `pinakey-config` | Cấu hình JSON, feature flag, đường dẫn cấu hình. | ✅ Hoàn chỉnh. |
 | `pinakey-emoji` | Trie emoji + bảng macro. | ✅ Hoàn chỉnh. |
 | `pinakey-ibus` | Logic engine chế độ Preedit + lớp truyền tải D-Bus IBus đầy đủ (zbus). | ✅ Hoàn chỉnh. |
-| `pinakey-platform` | Nhận diện class của cửa sổ đang focus trên X11 (XWayland). | ◐ Wayland thuần + tiêm phím XTest là phần làm tiếp. |
+| `pinakey-platform` | Nhận diện class của cửa sổ focus trên X11 (XWayland) + tiêm phím XTest. | ◐ Tiêm phím XTest ✅; đọc window-class trên Wayland thuần là phần làm tiếp. |
 | `pinakey` (bin) | Binary của engine: chế độ `--version` và `--ibus` nhúng. | ✅ |
 
 Engine biến đổi (`pinakey-core`) là trái tim của dự án và được bao phủ bởi một bộ test hành vi,
@@ -91,10 +91,11 @@ Gỡ bằng `bash tools/uninstall.sh`. Một bài kiểm tra đầu-cuối trự
 
 ## Chưa hiện thực (phần làm tiếp)
 
-Chế độ nhập Preedit mặc định đã hoạt động đầu-cuối. Những tính năng sau vẫn còn lại (mỗi tính năng
-cần một daemon IBus đang chạy + màn hình để kiểm tra đầy đủ):
+Chế độ nhập Preedit mặc định **và** các chế độ sửa-lỗi-bằng-Backspace (Surrounding Text,
+ForwardKeyEvent, XTest) đã hoạt động đầu-cuối — chọn bằng `DefaultInputMode` trong cấu hình; tiêm
+phím XTest qua x11rb nằm ở `pinakey-platform`. Những tính năng sau vẫn còn lại (mỗi tính năng cần
+một daemon IBus đang chạy + màn hình để kiểm tra đầy đủ):
 
-- Các chế độ nhập sửa-lỗi-bằng-Backspace và tiêm phím XTest / Wayland.
 - Bảng tra cứu emoji và hexadecimal.
 - Phím tắt, menu thuộc tính, kiểm tra chính tả dựa trên từ điển.
 - Giao diện thiết lập đồ họa.

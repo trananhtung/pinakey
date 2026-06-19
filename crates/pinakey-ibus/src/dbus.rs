@@ -112,6 +112,13 @@ impl PinaKeyEngine {
 
     #[zbus(signal)]
     async fn require_surrounding_text(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn delete_surrounding_text(
+        emitter: &SignalEmitter<'_>,
+        offset: i32,
+        nchars: u32,
+    ) -> zbus::Result<()>;
 }
 
 async fn apply_actions(emitter: &SignalEmitter<'_>, actions: &[Action]) -> zbus::Result<()> {
@@ -143,6 +150,30 @@ async fn apply_actions(emitter: &SignalEmitter<'_>, actions: &[Action]) -> zbus:
             Action::HidePreedit => PinaKeyEngine::hide_preedit_text(emitter).await?,
             Action::HideAuxiliary => PinaKeyEngine::hide_auxiliary_text(emitter).await?,
             Action::HideLookupTable => PinaKeyEngine::hide_lookup_table(emitter).await?,
+            Action::DeleteSurroundingText { offset, nchars } => {
+                PinaKeyEngine::delete_surrounding_text(emitter, *offset, *nchars).await?;
+            }
+            Action::ForwardBackspaces(n) => {
+                // Phát từng cặp press + release phím BackSpace; chạy được cả trên Wayland.
+                for _ in 0..*n {
+                    PinaKeyEngine::forward_key_event(emitter, IBUS_BACKSPACE, BACKSPACE_KEYCODE, 0)
+                        .await?;
+                    PinaKeyEngine::forward_key_event(
+                        emitter,
+                        IBUS_BACKSPACE,
+                        BACKSPACE_KEYCODE,
+                        IBUS_RELEASE_MASK,
+                    )
+                    .await?;
+                }
+            }
+            Action::FakeBackspaces(n) => {
+                // Tiêm phím qua XTest là một lệnh X11 đồng bộ — chạy trên blocking pool để không
+                // chặn reactor async, đồng thời giữ đúng thứ tự (xóa xong mới commit phần đuôi).
+                let n = *n;
+                let _ =
+                    tokio::task::spawn_blocking(move || pinakey_platform::fake_backspaces(n)).await;
+            }
         }
     }
     Ok(())
