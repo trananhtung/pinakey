@@ -5,6 +5,7 @@
 //! - `gui` (sau feature `gui`) là lớp vẽ bằng eframe/egui, mỏng, chỉ điều khiển controller.
 
 pub mod controller;
+pub mod fonts;
 
 pub use controller::{settings_flags, SettingsController};
 
