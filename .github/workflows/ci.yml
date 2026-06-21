@@ -41,3 +41,37 @@ jobs:
 
       - name: Test
         run: cargo test --workspace
+
+  fcitx5:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      # fcitx5 dev + module testfrontend (cho test tích hợp) + công cụ build C++.
+      - name: Install fcitx5 build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake g++ extra-cmake-modules pkg-config \
+            fcitx5 fcitx5-modules fcitx5-modules-dev \
+            libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-fcitx5-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Configure & build addon (cargo builds the Rust core)
+        run: |
+          cmake -S fcitx5 -B fcitx5/build -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build fcitx5/build
+
+      - name: Integration tests (run via real fcitx5 test harness)
+        run: ctest --test-dir fcitx5/build --output-on-failure

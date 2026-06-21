@@ -24,9 +24,12 @@ cho Alexandre de Rhodes và thường bị lãng quên sau cái bóng của họ
 | `pinakey-core` | Biến đổi Telex/VNI/VIQR, kiểm tra chính tả, mã hóa charset. | ✅ Hoàn chỉnh — 47 test biến đổi đều pass. |
 | `pinakey-config` | Cấu hình JSON, feature flag, đường dẫn cấu hình. | ✅ Hoàn chỉnh. |
 | `pinakey-emoji` | Trie emoji + bảng macro. | ✅ Hoàn chỉnh. |
-| `pinakey-ibus` | Logic engine chế độ Preedit + lớp truyền tải D-Bus IBus đầy đủ (zbus). | ✅ Hoàn chỉnh. |
+| `pinakey-engine` | **Lõi engine trung lập transport**: `process_key → (handled, Vec<Action>)`, không I/O. Dùng chung cho IBus và fcitx5. | ✅ Hoàn chỉnh. |
+| `pinakey-ibus` | Lớp truyền tải D-Bus IBus đầy đủ (zbus). | ✅ Hoàn chỉnh. |
+| `pinakey-ffi` | **C-ABI** bọc `pinakey-engine` (cbindgen) để addon fcitx5 C++ dùng lại lõi Rust. | ✅ Hoàn chỉnh. |
 | `pinakey-platform` | Nhận diện class của cửa sổ đang focus trên X11 (XWayland). | ◐ Wayland thuần + tiêm phím XTest là phần làm tiếp. |
 | `pinakey` (bin) | Binary của engine: chế độ `--version` và `--ibus` nhúng. | ✅ |
+| `fcitx5/` | **Addon fcitx5** (C++ mỏng) — frontend mới, hỗ trợ **gõ không gạch chân**. | ✅ MVP + SurroundingText. |
 
 Engine biến đổi (`pinakey-core`) là trái tim của dự án và được bao phủ bởi một bộ test hành vi,
 ánh xạ các con trỏ `*Transformation` được alias sang `Rc<RefCell<Transformation>>`
@@ -81,13 +84,49 @@ cargo build --release -p pinakey
 Gỡ bằng `bash tools/uninstall.sh`. Một bài kiểm tra đầu-cuối trực tiếp nằm ở
 `cargo run -p pinakey-ibus --example smoketest`.
 
+## Frontend fcitx5 (gõ không gạch chân) — mới
+
+PinaKey nay có thêm frontend **fcitx5** bên cạnh IBus. Lõi tiếng Việt (Rust) được dùng lại nguyên
+vẹn qua một **C-ABI** (`pinakey-ffi`, sinh header bằng cbindgen) và một **addon C++ mỏng**
+(`fcitx5/`) — đúng mô hình của [fcitx5-cskk](https://github.com/fcitx/fcitx5-cskk). Logic tiếng
+Việt KHÔNG bị viết lại; addon chỉ là lớp tích hợp.
+
+**Gõ không gạch chân (mặc định):** với ứng dụng hỗ trợ *Surrounding Text* (đa số app GTK/Qt), addon
+commit thẳng văn bản và sửa tại chỗ bằng `deleteSurroundingText` — không hiện preedit gạch chân.
+Ứng dụng không hỗ trợ thì tự lùi về chế độ preedit. (Bơm Backspace qua uinput cho mọi app — issue
+[#28] — là phần làm tiếp.)
+
+### Yêu cầu build
+
+```sh
+sudo apt install fcitx5 libfcitx5core-dev libfcitx5utils-dev fcitx5-modules-dev \
+                 extra-cmake-modules cmake g++          # Debian/Ubuntu
+```
+
+### Build & cài
+
+```sh
+cmake -S fcitx5 -B fcitx5/build -DCMAKE_INSTALL_PREFIX=/usr   # cargo tự build lõi Rust (staticlib)
+cmake --build fcitx5/build
+ctest --test-dir fcitx5/build --output-on-failure            # test tích hợp qua fcitx5 thật
+sudo cmake --install fcitx5/build                            # cài pinakey.so + .conf vào /usr
+fcitx5 -r -d                                                 # khởi động lại fcitx5
+```
+
+Sau đó mở **fcitx5-configtool**, thêm input method **PinaKey** (ngôn ngữ: Tiếng Việt), rồi nhấn
+phím chuyển input method (mặc định Ctrl+Space) và gõ Telex — ví dụ `vieetj` → `việt`.
+
 ## Ghi chú kiến trúc
 
 - `pinakey-core` dựa trên `Rc` (đơn luồng). Vì interface zbus bắt buộc phải `Send + Sync`, engine
   được chạy trên một thread riêng phía sau một actor giao tiếp qua channel (`pinakey-ibus::EngineHandle`).
-- Logic xử lý phím ở chế độ Preedit (`pinakey-ibus::core`) độc lập với lớp truyền tải: nó trả về
-  một danh sách `Action` (commit / cập-nhật-preedit / ẩn), nhờ vậy toàn bộ hành vi IME được
-  unit-test mà không cần một daemon IBus đang chạy. Lớp D-Bus dịch các `Action` thành tín hiệu IBus.
+- Logic xử lý phím ở chế độ Preedit nằm ở **`pinakey-engine`** (lõi trung lập transport), độc lập
+  với mọi frontend: nó trả về một danh sách `Action` (commit / cập-nhật-preedit / ẩn), nhờ vậy
+  toàn bộ hành vi IME được unit-test mà không cần daemon. Keysym/modifier dùng giá trị X11 trung
+  lập (`pinakey-engine::keysym`) — trùng cho cả IBus lẫn fcitx5.
+- **Hai frontend dùng chung một lõi:** lớp D-Bus (`pinakey-ibus`) dịch `Action` thành tín hiệu IBus;
+  addon fcitx5 (`fcitx5/`) gọi `pinakey-ffi` (C-ABI) rồi dịch `Action` thành lệnh fcitx5
+  (`commitString` / preedit / `deleteSurroundingText`).
 
 ## Chưa hiện thực (phần làm tiếp)
 

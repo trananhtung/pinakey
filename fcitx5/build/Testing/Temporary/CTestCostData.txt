@@ -1,3 +1,3 @@
-testpinakey 3 0.00362874
-testpinakey_nounderline 1 0.0107642
+testpinakey 1 0.0105045
+testpinakey_nounderline 1 0.0106117
 ---
