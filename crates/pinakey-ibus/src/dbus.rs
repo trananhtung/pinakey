@@ -15,9 +15,9 @@ use zbus::{connection, interface};
 use pinakey_config::load_config;
 
 use crate::constants::*;
-use crate::core::Action;
 use crate::engine_actor::EngineHandle;
 use crate::serialize::IBusText;
+use pinakey_engine::Action;
 
 /// Đối tượng engine IBus, được export trên `org.freedesktop.IBus.Engine`.
 pub struct PinaKeyEngine {

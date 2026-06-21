@@ -10,7 +10,7 @@ use std::thread;
 
 use pinakey_config::Config;
 
-use crate::core::{Action, EngineCore};
+use pinakey_engine::{Action, EngineCore};
 
 enum Command {
     ProcessKey {

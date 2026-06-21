@@ -7,9 +7,10 @@
 //!   định; tắt nó (`--no-default-features`) để chỉ build/test phần logic thuần.
 
 pub mod constants;
-pub mod core;
 
-pub use core::{Action, EngineCore};
+// Lõi engine nay nằm ở crate trung lập `pinakey-engine`; tái xuất để các bên dùng IBus
+// (và transport zbus bên dưới) vẫn import từ `pinakey_ibus` như trước.
+pub use pinakey_engine::{Action, EngineCore};
 
 #[cfg(feature = "dbus")]
 pub mod address;

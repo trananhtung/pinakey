@@ -14,7 +14,7 @@ use pinakey_core::{
 };
 use pinakey_emoji::MacroTable;
 
-use crate::constants::*;
+use crate::keysym::*;
 
 /// Một tác động phụ (side effect) mà lớp transport phải thực hiện (tương ứng với các signal của
 /// engine goibus dùng trong luồng preedit).
@@ -269,10 +269,10 @@ impl EngineCore {
 
     fn is_valid_key_val(&self, key_val: u32) -> bool {
         let key_rune = char::from_u32(key_val).unwrap_or('\0');
-        if key_val == IBUS_BACKSPACE || is_word_break_symbol(key_rune) {
+        if key_val == KEY_BACKSPACE || is_word_break_symbol(key_rune) {
             return true;
         }
-        if self.get_macro_text().is_some() && key_val == IBUS_TAB {
+        if self.get_macro_text().is_some() && key_val == KEY_TAB {
             return true;
         }
         self.preeditor.can_process_key(key_rune)
@@ -281,7 +281,7 @@ impl EngineCore {
     fn update_last_key_with_shift(&mut self, key_val: u32, state: u32) {
         let key_rune = char::from_u32(key_val).unwrap_or('\0');
         if self.preeditor.can_process_key(key_rune) {
-            self.last_key_with_shift = state & IBUS_SHIFT_MASK != 0;
+            self.last_key_with_shift = state & MOD_SHIFT != 0;
         } else {
             self.last_key_with_shift = false;
         }
@@ -307,7 +307,7 @@ impl EngineCore {
         };
 
         if is_printable && self.preeditor.can_process_key(key_rune) {
-            if state & IBUS_LOCK_MASK != 0 {
+            if state & MOD_LOCK != 0 {
                 key_rune = self.to_upper(key_rune);
             }
             let input_mode = self.get_input_mode();
@@ -409,7 +409,7 @@ impl EngineCore {
         state: u32,
     ) -> (bool, Vec<Action>) {
         let mut out = Vec::new();
-        if state & IBUS_RELEASE_MASK != 0 {
+        if state & MOD_RELEASE != 0 {
             return (false, out);
         }
         let result = self.preedit_process_key_event(key_val, key_code, state, &mut out);
@@ -437,7 +437,7 @@ impl EngineCore {
             return false;
         }
 
-        if key_val == IBUS_BACKSPACE {
+        if key_val == KEY_BACKSPACE {
             if self.rune_count() == 1 {
                 self.commit_preedit_and_reset("", out);
                 return true;
@@ -451,7 +451,7 @@ impl EngineCore {
             return false;
         }
 
-        if key_val == IBUS_TAB {
+        if key_val == KEY_TAB {
             if let Some(mac_text) = self.get_macro_text() {
                 self.commit_preedit_and_reset(&mac_text, out);
             } else {
@@ -503,13 +503,13 @@ fn determine_macro_case(s: &str) -> u8 {
 }
 
 fn is_valid_state(state: u32) -> bool {
-    state & IBUS_CONTROL_MASK == 0
-        && state & IBUS_MOD1_MASK == 0
-        && state & IBUS_MOD4_MASK == 0
-        && state & IBUS_IGNORED_MASK == 0
-        && state & IBUS_SUPER_MASK == 0
-        && state & IBUS_HYPER_MASK == 0
-        && state & IBUS_META_MASK == 0
+    state & MOD_CONTROL == 0
+        && state & MOD_MOD1 == 0
+        && state & MOD_MOD4 == 0
+        && state & MOD_IGNORED == 0
+        && state & MOD_SUPER == 0
+        && state & MOD_HYPER == 0
+        && state & MOD_META == 0
 }
 
 #[cfg(test)]
@@ -568,7 +568,7 @@ mod tests {
     fn backspace_removes_char() {
         let mut core = EngineCore::new(default_cfg());
         type_keys(&mut core, "vieetj"); // ra "việt"
-        let (handled, actions) = core.process_key_event(IBUS_BACKSPACE, 0, 0);
+        let (handled, actions) = core.process_key_event(KEY_BACKSPACE, 0, 0);
         assert!(handled);
         assert_eq!(last_preedit(&actions).as_deref(), Some("việ"));
     }

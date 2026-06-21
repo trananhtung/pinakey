@@ -10,6 +10,7 @@ default = ["dbus"]
 dbus = ["dep:zbus", "dep:serde", "dep:tokio", "dep:pinakey-platform"]
 
 [dependencies]
+pinakey-engine = { path = "../pinakey-engine" }
 pinakey-core = { path = "../pinakey-core" }
 pinakey-config = { path = "../pinakey-config" }
 pinakey-emoji = { path = "../pinakey-emoji" }
