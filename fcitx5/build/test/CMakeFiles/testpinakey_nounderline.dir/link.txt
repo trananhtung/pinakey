@@ -1,1 +1,0 @@
-/usr/bin/c++ -Wall -Wextra  CMakeFiles/testpinakey_nounderline.dir/testpinakey_nounderline.cpp.o -o testpinakey_nounderline  /usr/lib/x86_64-linux-gnu/libFcitx5Core.so.5.1.7 /usr/lib/x86_64-linux-gnu/libFcitx5Config.so.5.1.7 /usr/lib/x86_64-linux-gnu/libFcitx5Utils.so.5.1.7 
