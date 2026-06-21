@@ -64,15 +64,26 @@ và [CONTRIBUTING.md](CONTRIBUTING.md) để biết quy trình phát triển.
 
 ## Cài đặt (fcitx5)
 
-### Phụ thuộc build (Debian/Ubuntu)
+### Cách dễ nhất — gói `.deb` dựng sẵn (Ubuntu/Debian, khuyến nghị)
 
 ```sh
-sudo apt install fcitx5 libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev \
-                 fcitx5-modules-dev extra-cmake-modules cmake g++
+curl -fsSL https://raw.githubusercontent.com/trananhtung/pinakey/main/tools/install-deb.sh | bash
+```
+
+hoặc tải `.deb` mới nhất tại [Releases](https://github.com/trananhtung/pinakey/releases/latest) rồi
+`sudo apt install ./fcitx5-pinakey_*.deb`. Sau đó xem **[3 bước bắt đầu gõ](USAGE.md#1-cài-đặt)**.
+
+### Build từ nguồn
+
+#### Phụ thuộc build (Debian/Ubuntu)
+
+```sh
+sudo apt install fcitx5 fcitx5-configtool libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev \
+                 fcitx5-modules-dev extra-cmake-modules cmake g++ pkg-config
 # + Rust (rustup) >= 1.85
 ```
 
-### Build & cài
+#### Build & cài
 
 ```sh
 bash tools/install-fcitx5.sh     # build + ctest + sudo cmake --install + restart fcitx5
@@ -88,10 +99,11 @@ sudo cmake --install fcitx5/build
 fcitx5 -r -d
 ```
 
-Sau đó mở **fcitx5-configtool** → thêm input method **PinaKey** (Tiếng Việt) → Ctrl+Space để chuyển
-→ gõ Telex, ví dụ `vieetj` → `việt`.
+Sau đó: nếu fcitx5 chưa bật ở mức phiên, chạy `im-config -n fcitx5` rồi **đăng nhập lại** (tránh lỗi
+“Not available”); mở **fcitx5-configtool** → thêm input method **PinaKey** (Tiếng Việt) → Ctrl+Space
+để chuyển → gõ Telex, ví dụ `vieetj` → `việt`. Chi tiết: [USAGE.md](USAGE.md#1-cài-đặt).
 
-> **Đóng gói sẵn** (deb/rpm/AUR/Nix): xem [packaging/](packaging/).
+> **Tự đóng gói** (deb/rpm/AUR/Nix) cho người phân phối: xem [packaging/](packaging/).
 
 ### Giao diện thiết lập (tùy chọn)
 

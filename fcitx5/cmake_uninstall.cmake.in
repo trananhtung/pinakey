@@ -1,0 +1,18 @@
+# Gỡ cài đặt dựa trên install_manifest.txt do CMake sinh khi `cmake --install`.
+if(NOT EXISTS "@CMAKE_CURRENT_BINARY_DIR@/install_manifest.txt")
+  message(FATAL_ERROR "Không có install_manifest.txt — bạn chưa cài qua `cmake --install`? "
+                      "Nếu cài bằng .deb, hãy gỡ bằng: sudo apt remove fcitx5-pinakey")
+endif()
+
+file(READ "@CMAKE_CURRENT_BINARY_DIR@/install_manifest.txt" _files)
+string(STRIP "${_files}" _files)
+string(REGEX REPLACE "\n" ";" _files "${_files}")
+foreach(_f ${_files})
+  set(_path "$ENV{DESTDIR}${_f}")
+  if(EXISTS "${_path}" OR IS_SYMLINK "${_path}")
+    message(STATUS "Gỡ: ${_path}")
+    file(REMOVE "${_path}")
+  else()
+    message(STATUS "Bỏ qua (không tồn tại): ${_path}")
+  endif()
+endforeach()

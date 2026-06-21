@@ -75,11 +75,31 @@ endif()
 # ---------------------------------------------------------------------------
 set(CPACK_PACKAGE_NAME "fcitx5-pinakey")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
-set(CPACK_PACKAGE_CONTACT "trananhtung <https://github.com/trananhtung/pinakey>")
+set(CPACK_PACKAGE_CONTACT "Tran Anh Tung <trananhtung@users.noreply.github.com>")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "PinaKey — bộ gõ tiếng Việt cho fcitx5 (lõi Rust)")
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/trananhtung/pinakey")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "fcitx5")
+
+# --- DEB ---
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)              # tên gồm kiến trúc: fcitx5-pinakey_0.2.0_amd64.deb
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "fcitx5 (>= 5.0.0)")
+# Recommends: công cụ cấu hình (gói riêng trên Ubuntu/Debian) + im-config để bật fcitx5 ở mức phiên.
+set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "fcitx5-config-qt | fcitx5-configtool, im-config")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)              # tự dò phụ thuộc thư viện động (libfcitx5*, libstdc++…)
 set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
-set(CPACK_RPM_PACKAGE_REQUIRES "fcitx5")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+    "${CMAKE_CURRENT_SOURCE_DIR}/../packaging/deb/postinst;${CMAKE_CURRENT_SOURCE_DIR}/../packaging/deb/postrm")
+
+# --- RPM ---
+set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
+set(CPACK_RPM_PACKAGE_REQUIRES "fcitx5 >= 5.0.0")
 set(CPACK_RPM_PACKAGE_LICENSE "GPL-3.0-or-later")
 include(CPack)
+
+# ---------------------------------------------------------------------------
+# Mục tiêu gỡ cài: `sudo cmake --build fcitx5/build --target uninstall`
+# (đọc install_manifest.txt do `cmake --install` sinh).
+# ---------------------------------------------------------------------------
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake" @ONLY)
+add_custom_target(uninstall
+    COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake")
