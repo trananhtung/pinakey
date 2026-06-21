@@ -1,6 +1,6 @@
 # Maintainer: trananhtung <https://github.com/trananhtung/pinakey>
 pkgname=fcitx5-pinakey
-pkgver=0.2.1
+pkgver=1.0.0
 pkgrel=1
 pkgdesc="PinaKey — bộ gõ tiếng Việt cho fcitx5 (lõi Rust, gõ không gạch chân)"
 arch=('x86_64' 'aarch64')

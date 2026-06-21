@@ -9,7 +9,7 @@
       packages = forAll (pkgs: {
         default = pkgs.stdenv.mkDerivation {
           pname = "fcitx5-pinakey";
-          version = "0.2.1";
+          version = "1.0.0";
           src = ../.;
           nativeBuildInputs = with pkgs; [ cmake extra-cmake-modules cargo rustc pkg-config ];
           buildInputs = with pkgs; [ fcitx5 ];
