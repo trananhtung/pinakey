@@ -603,20 +603,22 @@ bool PinaKeyState::handleEmojiKey(KeyEvent &keyEvent) {
     if (sym == FcitxKey_Return || sym == FcitxKey_KP_Enter) {
         if (!emojiCandidates_.empty()) {
             emojiSelect(0);
-        } else {
-            cancelEmoji(true);
+            keyEvent.filterAndAccept();
+            return true;
         }
-        keyEvent.filterAndAccept();
-        return true;
+        // Không có ứng viên: chốt ":query" như văn bản thường, để Enter đi tiếp (xuống dòng).
+        cancelEmoji(true);
+        return false;
     }
     if (sym == FcitxKey_space) {
         if (!emojiCandidates_.empty()) {
             emojiSelect(0);
-        } else {
-            cancelEmoji(true);
+            keyEvent.filterAndAccept();
+            return true;
         }
-        keyEvent.filterAndAccept();
-        return true;
+        // Không có ứng viên: chốt ":query", để DẤU CÁCH đi tiếp (không nuốt mất).
+        cancelEmoji(true);
+        return false;
     }
     if (sym == FcitxKey_Escape) {
         cancelEmoji(true);

@@ -108,6 +108,14 @@ int main() {
         sendKey(testfrontend, uuid, "colon");
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Control+c"), false);
 
+        // 10) ':' (mở emoji) + SPACE khi không có ứng viên → chốt literal ":" và KHÔNG nuốt dấu
+        //     cách (bug fix: Space được forward, không bị mất).
+        testfrontend->call<ITestFrontend::pushCommitExpectation>(":");
+        sendKey(testfrontend, uuid, "colon");
+        bool spaceHandled =
+            testfrontend->call<ITestFrontend::sendKeyEvent>(uuid, Key("space"), false);
+        FCITX_ASSERT(!spaceHandled) << "dấu cách sau ':' phải được forward (không bị nuốt)";
+
         instance.exit();
     });
 
