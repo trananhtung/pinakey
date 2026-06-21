@@ -5,7 +5,7 @@ pub mod flags;
 use pinakey_core::{flag as core_flag, input_method_definitions_owned};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Cấu hình engine được lưu trữ (`Config` trong Go). Tên các trường JSON khớp chính xác với tên
 /// trường của struct Go, nên các file cấu hình cũ vẫn tương thích.
@@ -90,21 +90,67 @@ pub fn get_config_path(engine_name: &str) -> PathBuf {
 
 /// Nạp cấu hình: bắt đầu từ giá trị mặc định, sau đó phủ lên bằng file JSON của người dùng (nếu có).
 pub fn load_config(engine_name: &str) -> Config {
-    let mut c = default_cfg();
-    if let Ok(data) = std::fs::read_to_string(get_config_path(engine_name)) {
-        if let Ok(parsed) = serde_json::from_str::<Config>(&data) {
-            c = parsed;
-        }
-    }
-    c
+    load_config_from(&get_config_path(engine_name))
 }
 
-/// Tương đương `SaveConfig` trong Go.
+/// Nạp config từ một đường dẫn cụ thể. Phân biệt rõ:
+/// - file không tồn tại → trả mặc định (bình thường, lần chạy đầu);
+/// - file tồn tại nhưng JSON hỏng → **backup sang `*.corrupt`** (không để `save_config` sau ghi đè
+///   mất dữ liệu người dùng) rồi mới trả mặc định, kèm cảnh báo ra stderr.
+fn load_config_from(path: &Path) -> Config {
+    let data = match std::fs::read_to_string(path) {
+        Ok(d) => d,
+        Err(e) => {
+            // NotFound = bình thường (lần chạy đầu). Lỗi đọc thật (quyền, I/O...) thì cảnh báo —
+            // nếu nuốt im lặng, save_config sau sẽ ghi đè mất config mà người dùng không hay.
+            if e.kind() != std::io::ErrorKind::NotFound {
+                eprintln!("pinakey: không đọc được config ({e}); dùng mặc định");
+            }
+            return default_cfg();
+        }
+    };
+    match serde_json::from_str::<Config>(&data) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            let backup = path.with_extension("json.corrupt");
+            if let Err(re) = std::fs::rename(path, &backup) {
+                eprintln!(
+                    "pinakey: config hỏng ({e}) nhưng không backup được ({re}); giữ nguyên file, dùng mặc định"
+                );
+            } else {
+                eprintln!(
+                    "pinakey: config hỏng ({e}); đã backup sang {} và dùng mặc định",
+                    backup.display()
+                );
+            }
+            default_cfg()
+        }
+    }
+}
+
+/// Tương đương `SaveConfig` trong Go. Ghi **atomic** để mất điện / bị kill giữa chừng không làm
+/// hỏng file config: ghi ra file tạm cùng thư mục rồi `rename` (đổi tên là thao tác atomic trên
+/// cùng filesystem).
 pub fn save_config(c: &Config, engine_name: &str) -> std::io::Result<()> {
+    save_config_to(c, &get_config_path(engine_name))
+}
+
+fn save_config_to(c: &Config, path: &Path) -> std::io::Result<()> {
     let data = serde_json::to_string_pretty(c).map_err(std::io::Error::other)?;
-    let dir = get_config_dir();
-    std::fs::create_dir_all(&dir)?;
-    std::fs::write(get_config_path(engine_name), data)
+    if let Some(dir) = path.parent() {
+        // parent() của đường dẫn tương đối không có thư mục cha trả về Some("") → create_dir_all("")
+        // lỗi trên một số OS; bỏ qua khi rỗng.
+        if !dir.as_os_str().is_empty() {
+            std::fs::create_dir_all(dir)?;
+        }
+    }
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, data)?;
+    if let Err(e) = std::fs::rename(&tmp, path) {
+        let _ = std::fs::remove_file(&tmp); // không để lại file .tmp rác khi rename lỗi
+        return Err(e);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -150,6 +196,76 @@ mod tests {
             config_dir_in(None, "/home/u"),
             PathBuf::from("/home/u/.config/pinakey")
         );
+    }
+
+    fn unique_tmp(tag: &str) -> PathBuf {
+        // Thư mục tạm riêng cho mỗi test (tránh đụng nhau khi chạy song song).
+        let dir = std::env::temp_dir().join(format!("pk_cfg_test_{}_{}", tag, std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join("ibus-Telex.config.json")
+    }
+
+    #[test]
+    fn load_from_missing_file_returns_default() {
+        let path = unique_tmp("missing");
+        let _ = std::fs::remove_file(&path);
+        let c = load_config_from(&path);
+        assert_eq!(c.input_method, "Telex");
+    }
+
+    #[test]
+    fn load_from_corrupt_backs_up_and_does_not_lose_data() {
+        let path = unique_tmp("corrupt");
+        std::fs::write(&path, "{ this is not valid json ]").unwrap();
+        let c = load_config_from(&path);
+        // Trả mặc định để engine vẫn chạy...
+        assert_eq!(c.input_method, "Telex");
+        // ...nhưng KHÔNG được mất dữ liệu người dùng: file hỏng phải được backup.
+        let backup = path.with_extension("json.corrupt");
+        assert!(
+            backup.exists(),
+            "file config hỏng phải được backup sang .corrupt thay vì mất"
+        );
+        assert!(
+            !path.exists(),
+            "file hỏng phải được dời đi để save sau không ghi đè lên nó"
+        );
+        std::fs::remove_file(&backup).ok();
+    }
+
+    #[test]
+    fn save_to_is_atomic_no_tmp_left_and_roundtrips() {
+        let path = unique_tmp("atomic");
+        let _ = std::fs::remove_file(&path);
+        let mut cfg = default_cfg();
+        cfg.input_method = "VNI".to_string();
+        save_config_to(&cfg, &path).unwrap();
+        // Không để lại file .tmp rác.
+        assert!(
+            !path.with_extension("json.tmp").exists(),
+            "không được để lại file .tmp sau khi ghi atomic"
+        );
+        // Đọc lại đúng nội dung.
+        let back = load_config_from(&path);
+        assert_eq!(back.input_method, "VNI");
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn save_to_cleans_up_tmp_when_rename_fails() {
+        let dir = std::env::temp_dir().join(format!("pk_renfail_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("ibus-Telex.config.json");
+        // Tạo một THƯ MỤC ngay tại path để rename(file -> dir-không-rỗng) thất bại.
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::write(path.join("keep"), b"x").unwrap();
+        let r = save_config_to(&default_cfg(), &path);
+        assert!(r.is_err(), "rename đè lên thư mục phải lỗi");
+        assert!(
+            !path.with_extension("json.tmp").exists(),
+            "phải dọn file .tmp khi rename lỗi, không để lại rác"
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
