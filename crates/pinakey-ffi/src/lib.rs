@@ -80,6 +80,18 @@ impl PkEngine {
         // else: giữ nguyên preedit (phím không xử lý / không đổi preedit).
     }
 
+    /// Xoá sạch trạng thái hiển thị (commit/preedit + bộ theo dõi segment không-gạch-chân). Gọi khi
+    /// reset, hoặc khi đổi cấu hình (kiểu gõ/bảng mã) để lần gõ sau không diff nhầm với chuỗi cũ.
+    fn clear_display(&mut self) {
+        self.commit = CString::default();
+        self.preedit = CString::default();
+        self.preedit_cursor = 0;
+        self.preedit_visible = false;
+        self.prev_displayed.clear();
+        self.replace_delete = 0;
+        self.replace_insert = CString::default();
+    }
+
     /// Chế độ "gõ không gạch chân": tính lệnh thay thế (xoá N ký tự cuối + chèn chuỗi mới) bằng
     /// cách so phần tiền tố chung giữa chuỗi đang hiển thị và chuỗi mong muốn mới. Đây chính là cốt
     /// lõi của việc commit trực tiếp thay vì hiện preedit (đối chiếu fcitx5-lotus `compareAndSplit`).
@@ -376,15 +388,9 @@ pub unsafe extern "C" fn pk_engine_reload(e: *mut PkEngine) {
 pub unsafe extern "C" fn pk_engine_reset(e: *mut PkEngine) {
     if let Some(engine) = e.as_mut() {
         engine.core.reset_preeditor();
-        engine.commit = CString::default();
-        engine.preedit = CString::default();
-        engine.preedit_cursor = 0;
-        engine.preedit_visible = false;
         // Quên segment đang theo dõi: sau reset (đổi focus, click chuột…) tài liệu không còn liên
         // quan tới buffer cũ, nên chế độ không-gạch-chân phải bắt đầu lại từ rỗng.
-        engine.prev_displayed.clear();
-        engine.replace_delete = 0;
-        engine.replace_insert = CString::default();
+        engine.clear_display();
     }
 }
 
@@ -448,6 +454,8 @@ pub unsafe extern "C" fn pk_engine_set_input_method(e: *mut PkEngine, name: *con
         engine.im_name = to_cstring(n);
         engine.core.rebuild_preeditor();
         engine.core.reset_preeditor();
+        // Đổi kiểu gõ giữa chừng: quên segment đang theo dõi để không diff nhầm (chế độ không-gạch-chân).
+        engine.clear_display();
     }
 }
 
@@ -460,6 +468,9 @@ pub unsafe extern "C" fn pk_engine_set_charset(e: *mut PkEngine, name: *const c_
     if let (Some(engine), Some(n)) = (e.as_mut(), opt_str(name)) {
         engine.core.config.output_charset = n.to_string();
         engine.charset_name = to_cstring(n);
+        engine.core.reset_preeditor();
+        // Đổi bảng mã giữa chừng: quên segment đang theo dõi (mã hoá khác → diff cũ vô nghĩa).
+        engine.clear_display();
     }
 }
 
@@ -776,6 +787,26 @@ mod tests {
                                          // sau flush, preedit trống (đã reset)
             assert!(!pk_engine_preedit_visible(e));
             assert_eq!(CStr::from_ptr(pk_engine_preedit(e)).to_bytes(), b"");
+            pk_engine_free(e);
+        }
+    }
+
+    #[test]
+    fn no_underline_forgets_segment_on_im_switch() {
+        unsafe {
+            let e = pk_engine_new();
+            type_replace(e, "vieet"); // đang soạn dở → prev_displayed != ""
+            let vni = CString::new("VNI").unwrap();
+            pk_engine_set_input_method(e, vni.as_ptr());
+            // Sau khi đổi kiểu gõ giữa chừng, gõ tiếp phải bắt đầu từ rỗng (không xoá nhầm chữ cũ).
+            pk_engine_process_key_replace(e, 'a' as u32, 0);
+            assert_eq!(pk_engine_replace_delete(e), 0);
+            // Đổi bảng mã cũng vậy.
+            type_replace(e, "vieet");
+            let cs = CString::new("TCVN3").unwrap();
+            pk_engine_set_charset(e, cs.as_ptr());
+            pk_engine_process_key_replace(e, 'a' as u32, 0);
+            assert_eq!(pk_engine_replace_delete(e), 0);
             pk_engine_free(e);
         }
     }
