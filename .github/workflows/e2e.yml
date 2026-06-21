@@ -1,0 +1,56 @@
+name: E2E
+
+# Kiểm thử đầu-cuối THẬT: đóng gói .deb, cài vào Ubuntu, chạy fcitx5 thật + dbusfrontend,
+# bơm phím qua D-Bus và kiểm chuỗi tiếng Việt ra. Chạy mỗi pull request.
+on:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cài Rust toolchain
+        run: rustup show
+
+      - name: Cài phụ thuộc (fcitx5 + build + D-Bus + Python)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake g++ extra-cmake-modules pkg-config \
+            fcitx5 fcitx5-modules fcitx5-modules-dev \
+            libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev \
+            dbus-daemon python3-dbus python3-gi
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-e2e-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build addon + đóng gói .deb
+        run: |
+          cmake -S fcitx5 -B fcitx5/build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr -DPINAKEY_BUILD_TESTS=OFF
+          cmake --build fcitx5/build
+          ( cd fcitx5/build && cpack -G DEB )
+
+      - name: Cài THẬT gói .deb vào hệ thống
+        run: |
+          sudo apt-get install -y ./fcitx5/build/*.deb
+          # xác nhận file đã vào /usr
+          test -f /usr/lib/x86_64-linux-gnu/fcitx5/pinakey.so
+          test -f /usr/share/fcitx5/inputmethod/pinakey.conf
+          test -f /usr/share/fcitx5/addon/pinakey.conf
+          echo "PinaKey đã cài vào hệ thống ✅"
+
+      - name: Chạy E2E (fcitx5 thật, headless)
+        run: bash tools/run-e2e.sh
