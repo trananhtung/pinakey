@@ -15,10 +15,16 @@
 #include <fcitx/text.h>
 #include <fcitx/userinterfacemanager.h>
 
+#include <pwd.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/un.h>
+#include <unistd.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -33,6 +39,73 @@ constexpr uint32_t kPkModRelease = 1u << 30;
 /// Tên engine để lõi Rust nạp cấu hình `~/.config/pinakey/ibus-PinaKey.config.json` — dùng chung
 /// file cấu hình với frontend IBus trong giai đoạn chạy song song.
 constexpr char kConfigName[] = "PinaKey";
+
+/// Client tới daemon uinput (issue #28) — một kết nối dùng chung cho cả tiến trình addon. Gửi số
+/// lượng Backspace cần bơm cho các app không hỗ trợ SurroundingText. Nếu không kết nối được
+/// (daemon chưa cài/chạy), `available()` trả false và addon lùi về chế độ preedit.
+class UinputClient {
+public:
+    bool available() {
+        if (fd_ >= 0) {
+            return true;
+        }
+        if (triedAndFailed_) {
+            return false;
+        }
+        connectOnce();
+        return fd_ >= 0;
+    }
+    void sendBackspaces(int n) {
+        if (n <= 0 || !available()) {
+            return;
+        }
+        if (send(fd_, &n, sizeof(n), MSG_NOSIGNAL) <= 0) {
+            ::close(fd_);
+            fd_ = -1; // sẽ thử kết nối lại lần sau
+        }
+    }
+
+private:
+    void connectOnce() {
+        const char *user = std::getenv("USER");
+        std::string name;
+        if (user && *user) {
+            name = user;
+        } else {
+            struct passwd *pw = getpwuid(getuid());
+            name = (pw && pw->pw_name) ? pw->pw_name : "unknown";
+        }
+        std::string sockName = "pinakeysocket-" + name + "-kb";
+        int fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+        if (fd < 0) {
+            triedAndFailed_ = true;
+            return;
+        }
+        struct sockaddr_un addr {};
+        addr.sun_family = AF_UNIX;
+        addr.sun_path[0] = '\0';
+        const size_t maxLen = sizeof(addr.sun_path) - 2;
+        if (sockName.size() > maxLen) {
+            sockName.resize(maxLen);
+        }
+        std::memcpy(&addr.sun_path[1], sockName.c_str(), sockName.size());
+        socklen_t len =
+            static_cast<socklen_t>(offsetof(struct sockaddr_un, sun_path) + 1 + sockName.size());
+        if (connect(fd, reinterpret_cast<struct sockaddr *>(&addr), len) != 0) {
+            ::close(fd);
+            triedAndFailed_ = true;
+            return;
+        }
+        fd_ = fd;
+    }
+    int fd_ = -1;
+    bool triedAndFailed_ = false;
+};
+
+UinputClient &uinputClient() {
+    static UinputClient client;
+    return client;
+}
 } // namespace
 
 // ----------------------------------- PinaKeyState -----------------------------------
@@ -78,8 +151,9 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
         return;
     }
 
-    if (wantReplaceMode()) {
-        // Gõ không gạch chân: commit thẳng + xoá-chèn qua surrounding text.
+    // Gõ không gạch chân #1: app hỗ trợ SurroundingText → xoá-chèn tại chỗ.
+    if (pk_engine_no_underline(core_) &&
+        ic_->capabilityFlags().test(CapabilityFlag::SurroundingText)) {
         const bool handled = pk_engine_process_key_replace(core_, sym, state);
         applyReplaceResult();
         if (handled) {
@@ -88,6 +162,18 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
         return;
     }
 
+    // Gõ không gạch chân #2 (#28): app KHÔNG có SurroundingText nhưng có daemon uinput → bơm
+    // Backspace + commit.
+    if (useUinput()) {
+        const bool handled = pk_engine_process_key_replace(core_, sym, state);
+        applyReplaceViaUinput();
+        if (handled) {
+            keyEvent.filterAndAccept();
+        }
+        return;
+    }
+
+    // Mặc định: chế độ preedit (không gạch chân về mặt kiểu dáng do cờ IB_NO_UNDERLINE).
     const bool handled = pk_engine_process_key(core_, sym, state);
     applyResult();
     if (handled) {
@@ -95,11 +181,36 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
     }
 }
 
-/// Dùng chế độ "gõ không gạch chân" khi người dùng bật cờ và ứng dụng hỗ trợ SurroundingText
-/// (để có thể xoá ký tự đã chèn). Nếu không, lùi về chế độ preedit cổ điển.
+/// Có dùng diff-and-replace (gõ không gạch chân) không — qua SurroundingText hoặc qua uinput.
 bool PinaKeyState::wantReplaceMode() const {
+    if (!pk_engine_no_underline(core_)) {
+        return false;
+    }
+    return ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) || useUinput();
+}
+
+/// Không có SurroundingText nhưng bật gõ-không-gạch-chân và có daemon uinput → dùng bơm Backspace.
+bool PinaKeyState::useUinput() const {
     return pk_engine_no_underline(core_) &&
-           ic_->capabilityFlags().test(CapabilityFlag::SurroundingText);
+           !ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
+           uinputClient().available();
+}
+
+/// Áp lệnh thay thế bằng cách bơm Backspace qua daemon uinput rồi commit chuỗi mới (#28).
+void PinaKeyState::applyReplaceViaUinput() {
+    const uint32_t del = pk_engine_replace_delete(core_);
+    if (del > 0) {
+        uinputClient().sendBackspaces(static_cast<int>(del));
+    }
+    if (const char *ins = pk_engine_replace_insert(core_); ins && ins[0] != '\0') {
+        ic_->commitString(ins);
+    }
+    auto &panel = ic_->inputPanel();
+    if (!panel.empty()) {
+        panel.reset();
+        ic_->updatePreedit();
+        ic_->updateUserInterface(UserInterfaceComponent::InputPanel);
+    }
 }
 
 /// Có nên để phím đi thẳng (không gõ tiếng Việt) không: app trong danh sách loại trừ (#9) hoặc

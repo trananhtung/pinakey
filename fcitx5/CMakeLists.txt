@@ -48,6 +48,12 @@ set_target_properties(PinaKey::Ffi PROPERTIES
 
 add_subdirectory(src)
 
+# Daemon uinput bơm Backspace cho gõ không gạch chân ở app không hỗ trợ SurroundingText (#28).
+option(PINAKEY_BUILD_UINPUT_SERVER "Build the privileged uinput backspace server" ON)
+if(PINAKEY_BUILD_UINPUT_SERVER)
+    add_subdirectory(server)
+endif()
+
 # Test tích hợp (chỉ build nếu module testfrontend của fcitx5 có sẵn — gói -dev/-modules).
 option(PINAKEY_BUILD_TESTS "Build fcitx5 integration tests" ON)
 if(PINAKEY_BUILD_TESTS)

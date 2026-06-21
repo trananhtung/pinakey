@@ -1,0 +1,18 @@
+[Unit]
+Description=PinaKey uinput backspace server (gõ không gạch chân cho app không hỗ trợ SurroundingText)
+Documentation=https://github.com/trananhtung/pinakey
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pinakey-uinput-server
+Restart=on-failure
+RestartSec=2
+# Tăng cường an toàn: daemon chỉ cần mở /dev/uinput + một abstract socket.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

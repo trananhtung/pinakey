@@ -53,7 +53,9 @@ public:
 private:
     void applyResult();
     void applyReplaceResult();
-    bool wantReplaceMode() const;
+    void applyReplaceViaUinput(); // #28: gõ không gạch chân cho app không có SurroundingText
+    bool wantReplaceMode() const; // có dùng diff-and-replace (SurroundingText hoặc uinput) không
+    bool useUinput() const;       // không có SurroundingText nhưng có server uinput
     bool shouldPassThrough() const;
 
     // ----- tra cứu emoji / hex (issue #11/#26) -----
