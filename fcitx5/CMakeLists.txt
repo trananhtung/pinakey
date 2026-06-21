@@ -48,6 +48,10 @@ set_target_properties(PinaKey::Ffi PROPERTIES
 
 add_subdirectory(src)
 
+# Icon của input method (đồng nhất với logo trang pinakey-web). fcitx5 tra theo Icon=pinakey.
+install(FILES icons/pinakey.svg
+        DESTINATION "${FCITX_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
+
 # Daemon uinput bơm Backspace cho gõ không gạch chân ở app không hỗ trợ SurroundingText (#28).
 option(PINAKEY_BUILD_UINPUT_SERVER "Build the privileged uinput backspace server" ON)
 if(PINAKEY_BUILD_UINPUT_SERVER)
