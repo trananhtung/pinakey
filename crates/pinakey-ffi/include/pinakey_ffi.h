@@ -66,6 +66,43 @@ bool pk_engine_process_key(PkEngine *e,
                            uint32_t state);
 
 /**
+ * Xử lý phím cho chế độ **gõ không gạch chân**: thay vì preedit, trả về một lệnh thay thế. Sau khi
+ * gọi, C++ đọc `pk_engine_replace_delete` (số ký tự cuối cần xoá) và `pk_engine_replace_insert`
+ * (chuỗi cần chèn) rồi áp bằng `deleteSurroundingText(-n, n)` + `commitString`. Trả về `handled`.
+ *
+ * # Safety
+ * `e` phải là con trỏ engine hợp lệ.
+ */
+bool pk_engine_process_key_replace(PkEngine *e,
+                                   uint32_t keyval,
+                                   uint32_t state);
+
+/**
+ * Số ký tự (Unicode) ở cuối cần xoá khỏi tài liệu cho lần `process_key_replace` gần nhất.
+ *
+ * # Safety
+ * `e` hợp lệ.
+ */
+uint32_t pk_engine_replace_delete(const PkEngine *e);
+
+/**
+ * Chuỗi cần chèn (commit) cho lần `process_key_replace` gần nhất.
+ *
+ * # Safety
+ * `e` hợp lệ; con trỏ trả về dùng được tới lần gọi kế tiếp.
+ */
+const char *pk_engine_replace_insert(const PkEngine *e);
+
+/**
+ * Người dùng có bật chế độ "gõ không gạch chân" không (cờ IB_NO_UNDERLINE). C++ dùng cờ này (cùng
+ * với khả năng SurroundingText của ứng dụng) để chọn giữa chế độ replace và preedit.
+ *
+ * # Safety
+ * `e` hợp lệ.
+ */
+bool pk_engine_no_underline(const PkEngine *e);
+
+/**
  * Chuỗi cần commit từ lần `process_key` gần nhất (rỗng nếu không có gì để commit).
  *
  * # Safety

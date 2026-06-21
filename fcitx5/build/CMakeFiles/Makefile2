@@ -101,6 +101,7 @@ src/clean: src/CMakeFiles/pinakey.dir/clean
 
 # Recursive "all" directory target.
 test/all: test/CMakeFiles/testpinakey.dir/all
+test/all: test/CMakeFiles/testpinakey_nounderline.dir/all
 .PHONY : test/all
 
 # Recursive "preinstall" directory target.
@@ -109,6 +110,7 @@ test/preinstall:
 
 # Recursive "clean" directory target.
 test/clean: test/CMakeFiles/testpinakey.dir/clean
+test/clean: test/CMakeFiles/testpinakey_nounderline.dir/clean
 .PHONY : test/clean
 
 #=============================================================================
@@ -240,6 +242,32 @@ testpinakey: test/CMakeFiles/testpinakey.dir/rule
 test/CMakeFiles/testpinakey.dir/clean:
 	$(MAKE) $(MAKESILENT) -f test/CMakeFiles/testpinakey.dir/build.make test/CMakeFiles/testpinakey.dir/clean
 .PHONY : test/CMakeFiles/testpinakey.dir/clean
+
+#=============================================================================
+# Target rules for target test/CMakeFiles/testpinakey_nounderline.dir
+
+# All Build rule for target.
+test/CMakeFiles/testpinakey_nounderline.dir/all: src/CMakeFiles/pinakey.dir/all
+	$(MAKE) $(MAKESILENT) -f test/CMakeFiles/testpinakey_nounderline.dir/build.make test/CMakeFiles/testpinakey_nounderline.dir/depend
+	$(MAKE) $(MAKESILENT) -f test/CMakeFiles/testpinakey_nounderline.dir/build.make test/CMakeFiles/testpinakey_nounderline.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/tungtran/Documents/pinakey/fcitx5/build/CMakeFiles --progress-num=6,7 "Built target testpinakey_nounderline"
+.PHONY : test/CMakeFiles/testpinakey_nounderline.dir/all
+
+# Build rule for subdir invocation for target.
+test/CMakeFiles/testpinakey_nounderline.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/tungtran/Documents/pinakey/fcitx5/build/CMakeFiles 5
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test/CMakeFiles/testpinakey_nounderline.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/tungtran/Documents/pinakey/fcitx5/build/CMakeFiles 0
+.PHONY : test/CMakeFiles/testpinakey_nounderline.dir/rule
+
+# Convenience name for target.
+testpinakey_nounderline: test/CMakeFiles/testpinakey_nounderline.dir/rule
+.PHONY : testpinakey_nounderline
+
+# clean rule for target.
+test/CMakeFiles/testpinakey_nounderline.dir/clean:
+	$(MAKE) $(MAKESILENT) -f test/CMakeFiles/testpinakey_nounderline.dir/build.make test/CMakeFiles/testpinakey_nounderline.dir/clean
+.PHONY : test/CMakeFiles/testpinakey_nounderline.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

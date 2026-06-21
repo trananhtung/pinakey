@@ -185,6 +185,20 @@ testpinakey/fast:
 	cd /home/tungtran/Documents/pinakey/fcitx5/build && $(MAKE) $(MAKESILENT) -f test/CMakeFiles/testpinakey.dir/build.make test/CMakeFiles/testpinakey.dir/build
 .PHONY : testpinakey/fast
 
+# Convenience name for target.
+test/CMakeFiles/testpinakey_nounderline.dir/rule:
+	cd /home/tungtran/Documents/pinakey/fcitx5/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test/CMakeFiles/testpinakey_nounderline.dir/rule
+.PHONY : test/CMakeFiles/testpinakey_nounderline.dir/rule
+
+# Convenience name for target.
+testpinakey_nounderline: test/CMakeFiles/testpinakey_nounderline.dir/rule
+.PHONY : testpinakey_nounderline
+
+# fast build rule for target.
+testpinakey_nounderline/fast:
+	cd /home/tungtran/Documents/pinakey/fcitx5/build && $(MAKE) $(MAKESILENT) -f test/CMakeFiles/testpinakey_nounderline.dir/build.make test/CMakeFiles/testpinakey_nounderline.dir/build
+.PHONY : testpinakey_nounderline/fast
+
 testpinakey.o: testpinakey.cpp.o
 .PHONY : testpinakey.o
 
@@ -209,6 +223,30 @@ testpinakey.cpp.s:
 	cd /home/tungtran/Documents/pinakey/fcitx5/build && $(MAKE) $(MAKESILENT) -f test/CMakeFiles/testpinakey.dir/build.make test/CMakeFiles/testpinakey.dir/testpinakey.cpp.s
 .PHONY : testpinakey.cpp.s
 
+testpinakey_nounderline.o: testpinakey_nounderline.cpp.o
+.PHONY : testpinakey_nounderline.o
+
+# target to build an object file
+testpinakey_nounderline.cpp.o:
+	cd /home/tungtran/Documents/pinakey/fcitx5/build && $(MAKE) $(MAKESILENT) -f test/CMakeFiles/testpinakey_nounderline.dir/build.make test/CMakeFiles/testpinakey_nounderline.dir/testpinakey_nounderline.cpp.o
+.PHONY : testpinakey_nounderline.cpp.o
+
+testpinakey_nounderline.i: testpinakey_nounderline.cpp.i
+.PHONY : testpinakey_nounderline.i
+
+# target to preprocess a source file
+testpinakey_nounderline.cpp.i:
+	cd /home/tungtran/Documents/pinakey/fcitx5/build && $(MAKE) $(MAKESILENT) -f test/CMakeFiles/testpinakey_nounderline.dir/build.make test/CMakeFiles/testpinakey_nounderline.dir/testpinakey_nounderline.cpp.i
+.PHONY : testpinakey_nounderline.cpp.i
+
+testpinakey_nounderline.s: testpinakey_nounderline.cpp.s
+.PHONY : testpinakey_nounderline.s
+
+# target to generate assembly for a file
+testpinakey_nounderline.cpp.s:
+	cd /home/tungtran/Documents/pinakey/fcitx5/build && $(MAKE) $(MAKESILENT) -f test/CMakeFiles/testpinakey_nounderline.dir/build.make test/CMakeFiles/testpinakey_nounderline.dir/testpinakey_nounderline.cpp.s
+.PHONY : testpinakey_nounderline.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -223,9 +261,13 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... test"
 	@echo "... testpinakey"
+	@echo "... testpinakey_nounderline"
 	@echo "... testpinakey.o"
 	@echo "... testpinakey.i"
 	@echo "... testpinakey.s"
+	@echo "... testpinakey_nounderline.o"
+	@echo "... testpinakey_nounderline.i"
+	@echo "... testpinakey_nounderline.s"
 .PHONY : help
 
 

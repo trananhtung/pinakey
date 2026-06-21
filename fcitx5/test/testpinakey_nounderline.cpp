@@ -1,0 +1,184 @@
+/*
+ * Test end-to-end chế độ "gõ không gạch chân" (SurroundingText diff-and-replace) qua fcitx5 thật.
+ *
+ * testfrontend của fcitx5 KHÔNG bật khả năng SurroundingText và deleteSurroundingText chỉ là no-op,
+ * nên ở đây ta tự dựng một InputContext giả lập một ô văn bản: nó bật cap SurroundingText, và hiện
+ * thực commitStringImpl + deleteSurroundingTextImpl trên một bộ đệm tài liệu (UTF-32). Gõ phím vào
+ * engine pinakey thật, rồi so nội dung tài liệu cuối — đúng thứ người dùng sẽ thấy, KHÔNG có preedit.
+ *
+ * GPL-3.0-or-later.
+ */
+#include <fcitx-utils/eventdispatcher.h>
+#include <fcitx-utils/key.h>
+#include <fcitx-utils/log.h>
+#include <fcitx-utils/testing.h>
+#include <fcitx/addonmanager.h>
+#include <fcitx/event.h>
+#include <fcitx/inputcontext.h>
+#include <fcitx/inputcontextmanager.h>
+#include <fcitx/inputmethodgroup.h>
+#include <fcitx/inputmethodmanager.h>
+#include <fcitx/instance.h>
+
+#include <string>
+
+using namespace fcitx;
+
+namespace {
+
+std::u32string fromUtf8(const std::string &s) {
+    std::u32string out;
+    size_t i = 0;
+    while (i < s.size()) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        char32_t cp;
+        int n;
+        if (c < 0x80) {
+            cp = c;
+            n = 1;
+        } else if ((c >> 5) == 0x6) {
+            cp = c & 0x1f;
+            n = 2;
+        } else if ((c >> 4) == 0xe) {
+            cp = c & 0x0f;
+            n = 3;
+        } else if ((c >> 3) == 0x1e) {
+            cp = c & 0x07;
+            n = 4;
+        } else {
+            cp = c;
+            n = 1;
+        }
+        for (int k = 1; k < n && i + k < s.size(); ++k) {
+            cp = (cp << 6) | (static_cast<unsigned char>(s[i + k]) & 0x3f);
+        }
+        out.push_back(cp);
+        i += n;
+    }
+    return out;
+}
+
+std::string toUtf8(const std::u32string &s) {
+    std::string out;
+    for (char32_t cp : s) {
+        if (cp < 0x80) {
+            out.push_back(static_cast<char>(cp));
+        } else if (cp < 0x800) {
+            out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3f)));
+        } else if (cp < 0x10000) {
+            out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3f)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3f)));
+        } else {
+            out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3f)));
+            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3f)));
+            out.push_back(static_cast<char>(0x80 | (cp & 0x3f)));
+        }
+    }
+    return out;
+}
+
+/// InputContext giả lập một ô văn bản hỗ trợ surrounding text.
+class DocInputContext : public InputContext {
+public:
+    explicit DocInputContext(InputContextManager &mgr)
+        : InputContext(mgr, "docapp") {
+        setCapabilityFlags(CapabilityFlags{CapabilityFlag::SurroundingText});
+        created();
+    }
+    ~DocInputContext() override { destroy(); }
+
+    const char *frontend() const override { return "doc"; }
+
+    void commitStringImpl(const std::string &text) override {
+        auto u = fromUtf8(text);
+        doc_.insert(cursor_, u);
+        cursor_ += u.size();
+    }
+    void deleteSurroundingTextImpl(int offset, unsigned int size) override {
+        long start = static_cast<long>(cursor_) + offset;
+        if (start < 0) {
+            start = 0;
+        }
+        if (static_cast<size_t>(start) > doc_.size()) {
+            start = static_cast<long>(doc_.size());
+        }
+        size_t n = size;
+        if (static_cast<size_t>(start) + n > doc_.size()) {
+            n = doc_.size() - static_cast<size_t>(start);
+        }
+        doc_.erase(static_cast<size_t>(start), n);
+        cursor_ = static_cast<size_t>(start);
+    }
+    void forwardKeyImpl(const ForwardKeyEvent & /*key*/) override {}
+    void updatePreeditImpl() override {}
+
+    std::string text() const { return toUtf8(doc_); }
+    void clearDoc() {
+        doc_.clear();
+        cursor_ = 0;
+    }
+
+private:
+    std::u32string doc_;
+    size_t cursor_ = 0;
+};
+
+void expectType(DocInputContext *ic, const std::string &keys,
+                const std::string &expected) {
+    for (char c : keys) {
+        Key key = (c == ' ') ? Key("space") : Key(std::string(1, c));
+        KeyEvent ke(ic, key, false);
+        ic->keyEvent(ke);
+    }
+    FCITX_ASSERT(ic->text() == expected)
+        << "gõ \"" << keys << "\" => \"" << ic->text() << "\", mong đợi \"" << expected << "\"";
+}
+
+} // namespace
+
+int main() {
+    setupTestingEnvironment(TESTING_BINARY_DIR,
+                            {PINAKEY_ADDON_SO_DIR},
+                            {PINAKEY_TEST_DATA_DIR, FCITX_SYS_PKGDATADIR});
+
+    char arg0[] = "testpinakey_nounderline";
+    char arg1[] = "--disable=all";
+    char arg2[] = "--enable=testim,testfrontend,testui,keyboard,pinakey";
+    char *argv[] = {arg0, arg1, arg2};
+
+    Log::setLogRule("default=3");
+    Instance instance(FCITX_ARRAY_SIZE(argv), argv);
+    instance.addonManager().registerDefaultLoader(nullptr);
+
+    EventDispatcher dispatcher;
+    dispatcher.attach(&instance.eventLoop());
+    dispatcher.schedule([&instance]() {
+        auto *pinakey = instance.addonManager().addon("pinakey", true);
+        FCITX_ASSERT(pinakey);
+
+        auto group = instance.inputMethodManager().currentGroup();
+        group.inputMethodList().clear();
+        group.inputMethodList().push_back(InputMethodGroupItem("keyboard-us"));
+        group.inputMethodList().push_back(InputMethodGroupItem("pinakey"));
+        group.setDefaultInputMethod("");
+        instance.inputMethodManager().setGroup(std::move(group));
+
+        auto ic = std::make_unique<DocInputContext>(instance.inputContextManager());
+        ic->focusIn();
+        instance.setCurrentInputMethod(ic.get(), "pinakey", true);
+        FCITX_ASSERT(ic->capabilityFlags().test(CapabilityFlag::SurroundingText));
+
+        // Gõ không gạch chân: tài liệu nhận thẳng văn bản tiếng Việt, KHÔNG qua preedit.
+        expectType(ic.get(), "tieengs vieetj", "tiếng việt");
+        ic->reset();
+        ic->clearDoc();
+        expectType(ic.get(), "ddaay laf vieejt", "đây là việt");
+
+        instance.exit();
+    });
+
+    return instance.exec();
+}

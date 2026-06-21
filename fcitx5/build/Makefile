@@ -236,6 +236,19 @@ testpinakey/fast:
 	$(MAKE) $(MAKESILENT) -f test/CMakeFiles/testpinakey.dir/build.make test/CMakeFiles/testpinakey.dir/build
 .PHONY : testpinakey/fast
 
+#=============================================================================
+# Target rules for targets named testpinakey_nounderline
+
+# Build rule for target.
+testpinakey_nounderline: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 testpinakey_nounderline
+.PHONY : testpinakey_nounderline
+
+# fast build rule for target.
+testpinakey_nounderline/fast:
+	$(MAKE) $(MAKESILENT) -f test/CMakeFiles/testpinakey_nounderline.dir/build.make test/CMakeFiles/testpinakey_nounderline.dir/build
+.PHONY : testpinakey_nounderline/fast
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -254,6 +267,7 @@ help:
 	@echo "... translation-file"
 	@echo "... pinakey"
 	@echo "... testpinakey"
+	@echo "... testpinakey_nounderline"
 .PHONY : help
 
 

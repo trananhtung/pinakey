@@ -52,12 +52,45 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
     const uint32_t sym = static_cast<uint32_t>(keyEvent.rawKey().sym());
     const uint32_t state = static_cast<uint32_t>(keyEvent.rawKey().states());
 
+    if (wantReplaceMode()) {
+        // Gõ không gạch chân: commit thẳng + xoá-chèn qua surrounding text.
+        const bool handled = pk_engine_process_key_replace(core_, sym, state);
+        applyReplaceResult();
+        if (handled) {
+            keyEvent.filterAndAccept();
+        }
+        return;
+    }
+
     const bool handled = pk_engine_process_key(core_, sym, state);
-
     applyResult();
-
     if (handled) {
         keyEvent.filterAndAccept();
+    }
+}
+
+/// Dùng chế độ "gõ không gạch chân" khi người dùng bật cờ và ứng dụng hỗ trợ SurroundingText
+/// (để có thể xoá ký tự đã chèn). Nếu không, lùi về chế độ preedit cổ điển.
+bool PinaKeyState::wantReplaceMode() const {
+    return pk_engine_no_underline(core_) &&
+           ic_->capabilityFlags().test(CapabilityFlag::SurroundingText);
+}
+
+/// Áp lệnh thay thế: xoá N ký tự trước con trỏ rồi commit chuỗi mới. Không hiện preedit.
+void PinaKeyState::applyReplaceResult() {
+    const uint32_t del = pk_engine_replace_delete(core_);
+    if (del > 0) {
+        ic_->deleteSurroundingText(-static_cast<int>(del), del);
+    }
+    if (const char *ins = pk_engine_replace_insert(core_); ins && ins[0] != '\0') {
+        ic_->commitString(ins);
+    }
+    // Bảo đảm không còn preedit sót lại khi chuyển từ chế độ preedit sang replace.
+    auto &panel = ic_->inputPanel();
+    if (!panel.empty()) {
+        panel.reset();
+        ic_->updatePreedit();
+        ic_->updateUserInterface(UserInterfaceComponent::InputPanel);
     }
 }
 

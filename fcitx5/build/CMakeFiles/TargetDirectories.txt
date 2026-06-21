@@ -17,6 +17,7 @@
 /home/tungtran/Documents/pinakey/fcitx5/build/src/CMakeFiles/install/local.dir
 /home/tungtran/Documents/pinakey/fcitx5/build/src/CMakeFiles/install/strip.dir
 /home/tungtran/Documents/pinakey/fcitx5/build/test/CMakeFiles/testpinakey.dir
+/home/tungtran/Documents/pinakey/fcitx5/build/test/CMakeFiles/testpinakey_nounderline.dir
 /home/tungtran/Documents/pinakey/fcitx5/build/test/CMakeFiles/test.dir
 /home/tungtran/Documents/pinakey/fcitx5/build/test/CMakeFiles/edit_cache.dir
 /home/tungtran/Documents/pinakey/fcitx5/build/test/CMakeFiles/rebuild_cache.dir

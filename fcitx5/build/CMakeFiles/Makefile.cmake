@@ -77,4 +77,5 @@ set(CMAKE_DEPEND_INFO_FILES
   "CMakeFiles/pinakey-ffi.dir/DependInfo.cmake"
   "src/CMakeFiles/pinakey.dir/DependInfo.cmake"
   "test/CMakeFiles/testpinakey.dir/DependInfo.cmake"
+  "test/CMakeFiles/testpinakey_nounderline.dir/DependInfo.cmake"
   )

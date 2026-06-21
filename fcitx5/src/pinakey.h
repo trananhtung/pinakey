@@ -39,6 +39,8 @@ public:
 
 private:
     void applyResult();
+    void applyReplaceResult();
+    bool wantReplaceMode() const;
 
     PinaKeyEngine *engine_;
     InputContext *ic_;

@@ -1,13 +1,13 @@
-Start testing: Jun 21 12:17 +07
+Start testing: Jun 21 12:28 +07
 ----------------------------------------------------------
-1/1 Testing: testpinakey
-1/1 Test: testpinakey
+1/2 Testing: testpinakey
+1/2 Test: testpinakey
 Command: "/home/tungtran/Documents/pinakey/fcitx5/build/test/testpinakey"
 Directory: /home/tungtran/Documents/pinakey/fcitx5/build/test
-"testpinakey" start time: Jun 21 12:17 +07
+"testpinakey" start time: Jun 21 12:28 +07
 Output:
 ----------------------------------------------------------
-E2026-06-21 12:17:46.764954 addonmanager.cpp:186] Failed to find addon loader for: StaticLibrary
+E2026-06-21 12:28:09.560230 addonmanager.cpp:186] Failed to find addon loader for: StaticLibrary
 Preedit: v|
 AuxUp: 
 AuxDown: 
@@ -100,8 +100,32 @@ Candidates:
 Test time =   0.01 sec
 ----------------------------------------------------------
 Test Passed.
-"testpinakey" end time: Jun 21 12:17 +07
+"testpinakey" end time: Jun 21 12:28 +07
 "testpinakey" time elapsed: 00:00:00
 ----------------------------------------------------------
 
-End testing: Jun 21 12:17 +07
+2/2 Testing: testpinakey_nounderline
+2/2 Test: testpinakey_nounderline
+Command: "/home/tungtran/Documents/pinakey/fcitx5/build/test/testpinakey_nounderline"
+Directory: /home/tungtran/Documents/pinakey/fcitx5/build/test
+"testpinakey_nounderline" start time: Jun 21 12:28 +07
+Output:
+----------------------------------------------------------
+E2026-06-21 12:28:09.570596 addonmanager.cpp:186] Failed to find addon loader for: StaticLibrary
+Preedit: 
+AuxUp: 
+AuxDown: 
+Candidates: 
+Preedit: 
+AuxUp: 
+AuxDown: 
+Candidates: 
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"testpinakey_nounderline" end time: Jun 21 12:28 +07
+"testpinakey_nounderline" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Jun 21 12:28 +07

@@ -31,6 +31,14 @@ pub struct PkEngine {
     // Bản sao NUL-terminated của tên kiểu gõ, để getter trả con trỏ C hợp lệ (String của Rust
     // không kết thúc bằng NUL nên không thể trả thẳng `.as_ptr()`).
     im_name: CString,
+
+    // ----- trạng thái cho chế độ "gõ không gạch chân" (diff-and-replace) -----
+    // Chuỗi mà segment hiện tại ĐANG hiển thị trong tài liệu (phần đang soạn, chưa cố định).
+    prev_displayed: String,
+    // Kết quả của lần process_key_replace gần nhất: xoá `replace_delete` ký tự cuối rồi chèn
+    // `replace_insert`. C++ thực hiện qua deleteSurroundingText(-n, n) + commitString.
+    replace_delete: u32,
+    replace_insert: CString,
 }
 
 impl PkEngine {
@@ -44,50 +52,96 @@ impl PkEngine {
             preedit_visible: false,
             preedit_underline: false,
             im_name,
+            prev_displayed: String::new(),
+            replace_delete: 0,
+            replace_insert: CString::default(),
         })
     }
 
-    /// Gộp danh sách [`Action`] (sinh ra cho MỘT phím) thành trạng thái commit + preedit phẳng mà
-    /// frontend fcitx5 cần. fcitx5 không có khái niệm "auxiliary"/"lookup table" theo kiểu signal
-    /// của IBus, nên các action đó được bỏ qua ở MVP (bảng emoji xử lý riêng ở lớp C++).
+    /// Chế độ preedit cổ điển: gộp [`Action`] thành trạng thái commit + preedit phẳng.
     fn apply(&mut self, actions: Vec<Action>) {
-        let mut commit = String::new();
-        // None = phím này không đụng tới preedit (giữ nguyên trạng thái cũ).
-        let mut new_preedit: Option<(String, u32, bool)> = None;
-        let mut hide = false;
-        for action in actions {
-            match action {
-                Action::CommitText(s) => commit.push_str(&s),
-                Action::UpdatePreedit {
-                    text,
-                    cursor,
-                    underline,
-                } => {
-                    new_preedit = Some((text, cursor, underline));
-                    hide = false;
-                }
-                Action::HidePreedit => {
-                    hide = true;
-                    new_preedit = None;
-                }
-                Action::UpdateAuxiliary { .. }
-                | Action::HideAuxiliary
-                | Action::HideLookupTable => {}
-            }
-        }
-        self.commit = to_cstring(&commit);
-        if let Some((text, cursor, underline)) = new_preedit {
+        let folded = fold_actions(actions);
+        self.commit = to_cstring(&folded.commit);
+        if let Some((text, cursor, underline)) = folded.preedit {
             self.preedit = to_cstring(&text);
             self.preedit_cursor = cursor;
             self.preedit_underline = underline;
             self.preedit_visible = !text_is_empty(&self.preedit);
-        } else if hide {
+        } else if folded.hide {
             self.preedit = CString::default();
             self.preedit_cursor = 0;
             self.preedit_visible = false;
         }
         // else: giữ nguyên preedit (phím không xử lý / không đổi preedit).
     }
+
+    /// Chế độ "gõ không gạch chân": tính lệnh thay thế (xoá N ký tự cuối + chèn chuỗi mới) bằng
+    /// cách so phần tiền tố chung giữa chuỗi đang hiển thị và chuỗi mong muốn mới. Đây chính là cốt
+    /// lõi của việc commit trực tiếp thay vì hiện preedit (đối chiếu fcitx5-lotus `compareAndSplit`).
+    fn apply_replace(&mut self, actions: Vec<Action>) {
+        let folded = fold_actions(actions);
+        let preedit = folded.preedit.map(|(t, _, _)| t).unwrap_or_default();
+        // Chuỗi mong muốn cho segment = (phần vừa cố định) + (phần còn đang soạn).
+        // commit đã là văn bản hoàn tất (gồm cả ký tự ngắt từ); preedit là phần còn soạn dở.
+        let new_displayed = format!("{}{}", folded.commit, preedit);
+        let (delete, insert) = diff_replace(&self.prev_displayed, &new_displayed);
+        self.replace_delete = delete;
+        self.replace_insert = to_cstring(&insert);
+        // Phần commit nay là cố định trong tài liệu; chỉ còn phần preedit là segment đang theo dõi.
+        self.prev_displayed = preedit;
+    }
+}
+
+/// Kết quả gộp các [`Action`] của một phím.
+struct Folded {
+    commit: String,
+    /// `Some` nếu phím cập nhật preedit; `None` nghĩa là không đụng preedit.
+    preedit: Option<(String, u32, bool)>,
+    /// `true` nếu phím yêu cầu ẩn preedit.
+    hide: bool,
+}
+
+fn fold_actions(actions: Vec<Action>) -> Folded {
+    let mut commit = String::new();
+    let mut preedit: Option<(String, u32, bool)> = None;
+    let mut hide = false;
+    for action in actions {
+        match action {
+            Action::CommitText(s) => commit.push_str(&s),
+            Action::UpdatePreedit {
+                text,
+                cursor,
+                underline,
+            } => {
+                preedit = Some((text, cursor, underline));
+                hide = false;
+            }
+            Action::HidePreedit => {
+                hide = true;
+                preedit = None;
+            }
+            Action::UpdateAuxiliary { .. } | Action::HideAuxiliary | Action::HideLookupTable => {}
+        }
+    }
+    Folded {
+        commit,
+        preedit,
+        hide,
+    }
+}
+
+/// So tiền tố chung (theo ký tự Unicode) giữa chuỗi cũ và mới; trả về `(số ký tự cuối cần xoá,
+/// chuỗi cần chèn)`. Ví dụ `("vie", "viê") -> (1, "ê")`, `("tiếng", "tiếng ") -> (0, " ")`.
+fn diff_replace(old: &str, new: &str) -> (u32, String) {
+    let old_chars: Vec<char> = old.chars().collect();
+    let new_chars: Vec<char> = new.chars().collect();
+    let mut i = 0;
+    while i < old_chars.len() && i < new_chars.len() && old_chars[i] == new_chars[i] {
+        i += 1;
+    }
+    let delete = (old_chars.len() - i) as u32;
+    let insert: String = new_chars[i..].iter().collect();
+    (delete, insert)
 }
 
 fn text_is_empty(c: &CStr) -> bool {
@@ -169,7 +223,23 @@ pub unsafe extern "C" fn pk_engine_free(e: *mut PkEngine) {
 /// # Safety
 /// `e` phải là con trỏ engine hợp lệ.
 #[no_mangle]
-pub unsafe extern "C" fn pk_engine_process_key(
+pub unsafe extern "C" fn pk_engine_process_key(e: *mut PkEngine, keyval: u32, state: u32) -> bool {
+    let Some(engine) = e.as_mut() else {
+        return false;
+    };
+    let (handled, actions) = engine.core.process_key_event(keyval, 0, state);
+    engine.apply(actions);
+    handled
+}
+
+/// Xử lý phím cho chế độ **gõ không gạch chân**: thay vì preedit, trả về một lệnh thay thế. Sau khi
+/// gọi, C++ đọc `pk_engine_replace_delete` (số ký tự cuối cần xoá) và `pk_engine_replace_insert`
+/// (chuỗi cần chèn) rồi áp bằng `deleteSurroundingText(-n, n)` + `commitString`. Trả về `handled`.
+///
+/// # Safety
+/// `e` phải là con trỏ engine hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_process_key_replace(
     e: *mut PkEngine,
     keyval: u32,
     state: u32,
@@ -178,8 +248,41 @@ pub unsafe extern "C" fn pk_engine_process_key(
         return false;
     };
     let (handled, actions) = engine.core.process_key_event(keyval, 0, state);
-    engine.apply(actions);
+    engine.apply_replace(actions);
     handled
+}
+
+/// Số ký tự (Unicode) ở cuối cần xoá khỏi tài liệu cho lần `process_key_replace` gần nhất.
+///
+/// # Safety
+/// `e` hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_replace_delete(e: *const PkEngine) -> u32 {
+    e.as_ref().map(|x| x.replace_delete).unwrap_or(0)
+}
+
+/// Chuỗi cần chèn (commit) cho lần `process_key_replace` gần nhất.
+///
+/// # Safety
+/// `e` hợp lệ; con trỏ trả về dùng được tới lần gọi kế tiếp.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_replace_insert(e: *const PkEngine) -> *const c_char {
+    match e.as_ref() {
+        Some(engine) => engine.replace_insert.as_ptr(),
+        None => c"".as_ptr(),
+    }
+}
+
+/// Người dùng có bật chế độ "gõ không gạch chân" không (cờ IB_NO_UNDERLINE). C++ dùng cờ này (cùng
+/// với khả năng SurroundingText của ứng dụng) để chọn giữa chế độ replace và preedit.
+///
+/// # Safety
+/// `e` hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_no_underline(e: *const PkEngine) -> bool {
+    e.as_ref()
+        .map(|x| x.core.config.ib_flags & pinakey_config::flags::IB_NO_UNDERLINE != 0)
+        .unwrap_or(false)
 }
 
 /// Chuỗi cần commit từ lần `process_key` gần nhất (rỗng nếu không có gì để commit).
@@ -249,6 +352,11 @@ pub unsafe extern "C" fn pk_engine_reset(e: *mut PkEngine) {
         engine.preedit = CString::default();
         engine.preedit_cursor = 0;
         engine.preedit_visible = false;
+        // Quên segment đang theo dõi: sau reset (đổi focus, click chuột…) tài liệu không còn liên
+        // quan tới buffer cũ, nên chế độ không-gạch-chân phải bắt đầu lại từ rỗng.
+        engine.prev_displayed.clear();
+        engine.replace_delete = 0;
+        engine.replace_insert = CString::default();
     }
 }
 
@@ -259,7 +367,9 @@ pub unsafe extern "C" fn pk_engine_reset(e: *mut PkEngine) {
 #[no_mangle]
 pub unsafe extern "C" fn pk_engine_set_program(e: *mut PkEngine, program: *const c_char) {
     if let Some(engine) = e.as_mut() {
-        engine.core.set_wm_class(opt_str(program).unwrap_or("").to_string());
+        engine
+            .core
+            .set_wm_class(opt_str(program).unwrap_or("").to_string());
     }
 }
 
@@ -312,7 +422,10 @@ mod tests {
             let cm = CStr::from_ptr(pk_engine_commit(e)).to_str().unwrap();
             commit.push_str(cm);
         }
-        let pe = CStr::from_ptr(pk_engine_preedit(e)).to_str().unwrap().to_string();
+        let pe = CStr::from_ptr(pk_engine_preedit(e))
+            .to_str()
+            .unwrap()
+            .to_string();
         (commit, pe)
     }
 
@@ -361,9 +474,90 @@ mod tests {
             pk_engine_set_input_method(e, name.as_ptr());
             // VNI: "viet65" -> "việt" (6=mũ? ) dùng chuỗi VNI cho "việt": v i e6 t -> ... an toàn:
             // chỉ kiểm tra getter trả đúng tên và engine vẫn gõ ra tiếng Việt.
-            assert_eq!(CStr::from_ptr(pk_engine_input_method(e)).to_str().unwrap(), "VNI");
+            assert_eq!(
+                CStr::from_ptr(pk_engine_input_method(e)).to_str().unwrap(),
+                "VNI"
+            );
             let (_c, preedit) = type_str(e, "a1"); // VNI: 1 = dấu sắc -> "á"
             assert_eq!(preedit, "á", "VNI preedit was {preedit:?}");
+            pk_engine_free(e);
+        }
+    }
+
+    // ----- chế độ "gõ không gạch chân" (diff-and-replace) -----
+
+    /// Gõ qua chế độ replace, mô phỏng tài liệu: mỗi phím xoá `delete` ký tự cuối rồi chèn chuỗi.
+    /// Trả về nội dung tài liệu cuối cùng — đúng thứ người dùng nhìn thấy.
+    unsafe fn type_replace(e: *mut PkEngine, s: &str) -> String {
+        let mut doc = String::new();
+        for c in s.chars() {
+            pk_engine_process_key_replace(e, c as u32, 0);
+            let del = pk_engine_replace_delete(e);
+            for _ in 0..del {
+                doc.pop();
+            }
+            let ins = CStr::from_ptr(pk_engine_replace_insert(e))
+                .to_str()
+                .unwrap();
+            doc.push_str(ins);
+        }
+        doc
+    }
+
+    #[test]
+    fn diff_replace_basics() {
+        assert_eq!(diff_replace("vie", "viê"), (1, "ê".to_string()));
+        assert_eq!(diff_replace("tiếng", "tiếng "), (0, " ".to_string()));
+        assert_eq!(diff_replace("", "abc"), (0, "abc".to_string()));
+        assert_eq!(diff_replace("abc", "ab"), (1, String::new()));
+        assert_eq!(diff_replace("viêt", "việt"), (2, "ệt".to_string())); // ê t -> ệ t
+        assert_eq!(diff_replace("xin", "xin"), (0, String::new()));
+    }
+
+    #[test]
+    fn no_underline_types_vietnamese_directly() {
+        unsafe {
+            let e = pk_engine_new();
+            // Không preedit: tài liệu nhận thẳng "việt" qua chuỗi xoá+chèn.
+            assert_eq!(type_replace(e, "vieetj"), "việt");
+            pk_engine_free(e);
+        }
+    }
+
+    #[test]
+    fn no_underline_word_break_and_multiword() {
+        unsafe {
+            let e = pk_engine_new();
+            // "tieengs" -> "tiếng", space cố định + thêm dấu cách; rồi "vieetj" -> "việt".
+            assert_eq!(type_replace(e, "tieengs vieetj"), "tiếng việt");
+            pk_engine_free(e);
+        }
+    }
+
+    #[test]
+    fn no_underline_non_vietnamese_fallback() {
+        unsafe {
+            let e = pk_engine_new();
+            assert_eq!(type_replace(e, "loz "), "loz ");
+            pk_engine_free(e);
+        }
+    }
+
+    #[test]
+    fn no_underline_reset_forgets_segment() {
+        unsafe {
+            let e = pk_engine_new();
+            type_replace(e, "vieet"); // đang soạn "viêt"
+            pk_engine_reset(e);
+            // Sau reset, gõ tiếp bắt đầu từ rỗng (không xoá nhầm chữ cũ trong tài liệu).
+            pk_engine_process_key_replace(e, 'a' as u32, 0);
+            assert_eq!(pk_engine_replace_delete(e), 0);
+            assert_eq!(
+                CStr::from_ptr(pk_engine_replace_insert(e))
+                    .to_str()
+                    .unwrap(),
+                "a"
+            );
             pk_engine_free(e);
         }
     }
