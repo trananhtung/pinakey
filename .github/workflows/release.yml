@@ -24,10 +24,32 @@ env:
 
 jobs:
   build-deb:
-    name: Build .deb (x86_64)
-    runs-on: ubuntu-24.04
+    name: Build .deb (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v5
+
+      # Cài Rust toolchain tường minh (lõi Rust build qua cargo bên trong CMake) — không phụ thuộc
+      # ngầm vào việc image runner có sẵn Rust, để build release lúc cắt tag không bất ngờ gãy.
+      - name: Cài Rust toolchain
+        run: rustup show || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.arch }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cài phụ thuộc build fcitx5
         run: |
