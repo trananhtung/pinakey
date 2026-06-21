@@ -5,6 +5,10 @@ gõ Telex / VNI / VIQR mà không cần cgo. Giao thức IBus được hiện th
 [`zbus`](https://crates.io/crates/zbus) và tích hợp X11 qua
 [`x11rb`](https://crates.io/crates/x11rb).
 
+🌐 **Trang giới thiệu:** **[trananhtung.github.io/pinakey-web](https://trananhtung.github.io/pinakey-web/)**
+— landing page song ngữ Việt/Anh, có **sân chơi gõ thử Telex/VNI ngay trong trình duyệt**.
+Mã nguồn trang web: [`trananhtung/pinakey-web`](https://github.com/trananhtung/pinakey-web).
+
 ## Về cái tên
 
 <img src="docs/assets/francisco-de-pina.jpg" alt="Francisco de Pina (trong tranh khắc cùng Alexandre de Rhodes)" align="right" width="200">
