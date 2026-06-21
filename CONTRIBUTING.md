@@ -9,11 +9,10 @@ chất lượng mà CI bắt buộc, và cách tạo lại dữ liệu được 
   ```sh
   rustup component add rustfmt clippy
   ```
-- Các thư viện hệ thống cho phần X11 / D-Bus (tên gói trên Debian/Ubuntu):
-  ```sh
-  sudo apt-get install -y libxcb1-dev libdbus-1-dev pkg-config
-  ```
-- Python 3 (chỉ để tạo lại các bảng charset).
+- Lõi Rust thuần (`cargo build/test --workspace`) **không cần** thư viện hệ thống đặc biệt
+  (frontend IBus dùng x11rb/zbus đã được gỡ).
+- Để build **addon fcitx5**, cài các gói fcitx5 dev — xem mục [Build addon fcitx5](#build-addon-fcitx5).
+- Python 3 (để tạo lại bảng charset, và chạy [test E2E](#test-đầu-cuối-e2e)).
 
 ## Quy trình hằng ngày
 
