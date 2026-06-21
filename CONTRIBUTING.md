@@ -87,3 +87,24 @@ ctest --test-dir fcitx5/build --output-on-failure
 ```
 
 Tạo lại header C-ABI sau khi đổi `pinakey-ffi`: `tools/gen-ffi-header.sh` (cần `cargo install cbindgen`).
+
+## Test đầu-cuối (E2E)
+
+`fcitx5/test/e2e/pinakey_e2e.py` chạy fcitx5 THẬT + dbusfrontend, bơm phím qua D-Bus và kiểm chuỗi
+ra (Telex, gõ không gạch chân qua SurroundingText, emoji…). CI (`.github/workflows/e2e.yml`) đóng
+gói `.deb`, cài vào Ubuntu rồi chạy E2E ở mỗi PR. Chạy thủ công với bản đã cài hệ thống:
+
+```sh
+sudo cmake --install fcitx5/build      # hoặc cài .deb
+bash tools/run-e2e.sh
+```
+
+Với bản cài ở `~/.local` (không sudo):
+
+```sh
+PINAKEY_E2E_ADDON_DIRS="$HOME/.local/lib/fcitx5:/usr/lib/x86_64-linux-gnu/fcitx5" \
+PINAKEY_E2E_DATA_HOME="$HOME/.local/share" bash tools/run-e2e.sh
+```
+
+Thêm ca kiểm thử: sửa danh sách `CASES` trong `pinakey_e2e.py` (mỗi ca: nhãn, có SurroundingText?,
+chuỗi phím, chuỗi mong đợi).
