@@ -545,6 +545,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pinakey-engine"
+version = "0.1.0"
+dependencies = [
+ "pinakey-config",
+ "pinakey-core",
+ "pinakey-emoji",
+]
+
+[[package]]
+name = "pinakey-ffi"
+version = "0.1.0"
+dependencies = [
+ "pinakey-config",
+ "pinakey-core",
+ "pinakey-engine",
+ "serde_json",
+]
+
+[[package]]
 name = "pinakey-ibus"
 version = "0.1.0"
 dependencies = [
@@ -552,6 +571,7 @@ dependencies = [
  "pinakey-config",
  "pinakey-core",
  "pinakey-emoji",
+ "pinakey-engine",
  "pinakey-platform",
  "serde",
  "tokio",

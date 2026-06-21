@@ -1,0 +1,14 @@
+[package]
+name = "pinakey-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Transport-neutral PinaKey engine: process_key -> (handled, Vec<Action>), no I/O"
+
+[dependencies]
+pinakey-core = { path = "../pinakey-core" }
+pinakey-config = { path = "../pinakey-config" }
+pinakey-emoji = { path = "../pinakey-emoji" }
+
+[lints]
+workspace = true

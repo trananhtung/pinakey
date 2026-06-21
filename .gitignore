@@ -1,2 +1,5 @@
 /target
 /dist
+
+# fcitx5 C++ build dir
+fcitx5/build/
