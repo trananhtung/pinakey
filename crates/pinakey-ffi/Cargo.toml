@@ -1,0 +1,21 @@
+[package]
+name = "pinakey-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "C-ABI cho lõi PinaKey — để addon fcitx5 (C++) dùng lại engine Rust qua FFI"
+
+[lib]
+name = "pinakey_ffi"
+# staticlib: liên kết tĩnh vào addon fcitx5 (khuyến nghị, không cần cài .so riêng).
+# cdylib: tuỳ chọn nếu muốn .so dùng chung.
+crate-type = ["staticlib", "cdylib"]
+
+[dependencies]
+pinakey-engine = { path = "../pinakey-engine" }
+pinakey-config = { path = "../pinakey-config" }
+pinakey-core = { path = "../pinakey-core" }
+serde_json = "1"
+
+[lints]
+workspace = true

@@ -1,0 +1,21 @@
+language = "C"
+pragma_once = true
+autogen_warning = "/* CẢNH BÁO: file sinh tự động bởi cbindgen. Đừng sửa tay. Tạo lại: tools/gen-ffi-header.sh */"
+header = "/* PinaKey C-ABI — để addon fcitx5 C++ dùng lại lõi engine Rust. GPL-3.0-or-later. */"
+include_guard = "PINAKEY_FFI_H"
+tab_width = 4
+style = "type"
+cpp_compat = true
+
+[parse]
+parse_deps = false
+
+[export]
+prefix = ""
+include = ["PkEngine"]
+
+[enum]
+prefix_with_name = true
+
+[fn]
+must_use = "PINAKEY_MUST_USE"

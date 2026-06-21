@@ -554,6 +554,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pinakey-ffi"
+version = "0.1.0"
+dependencies = [
+ "pinakey-config",
+ "pinakey-core",
+ "pinakey-engine",
+ "serde_json",
+]
+
+[[package]]
 name = "pinakey-ibus"
 version = "0.1.0"
 dependencies = [
