@@ -53,6 +53,9 @@ public:
 private:
     void applyResult();
     void applyReplaceResult();
+    // #7: reset segment đang theo dõi nếu con trỏ đã nhảy / văn bản đổi (so với surrounding text),
+    // tránh deleteSurroundingText xoá nhầm ký tự ở vị trí mới.
+    void resetIfDocumentDiverged();
     void applyReplaceViaUinput(); // #28: gõ không gạch chân cho app không có SurroundingText
     bool wantReplaceMode() const; // có dùng diff-and-replace (SurroundingText hoặc uinput) không
     bool useUinput() const;       // không có SurroundingText nhưng có server uinput

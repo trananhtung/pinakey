@@ -96,6 +96,7 @@ public:
         auto u = fromUtf8(text);
         doc_.insert(cursor_, u);
         cursor_ += u.size();
+        syncSurrounding();
     }
     void deleteSurroundingTextImpl(int offset, unsigned int size) override {
         long start = static_cast<long>(cursor_) + offset;
@@ -111,6 +112,7 @@ public:
         }
         doc_.erase(static_cast<size_t>(start), n);
         cursor_ = static_cast<size_t>(start);
+        syncSurrounding();
     }
     void forwardKeyImpl(const ForwardKeyEvent & /*key*/) override {}
     void updatePreeditImpl() override {}
@@ -119,6 +121,18 @@ public:
     void clearDoc() {
         doc_.clear();
         cursor_ = 0;
+        syncSurrounding();
+    }
+    /// Mô phỏng người dùng click chuột để dời con trỏ tới vị trí `pos` (theo ký tự Unicode).
+    void clickAt(size_t pos) {
+        cursor_ = pos > doc_.size() ? doc_.size() : pos;
+        syncSurrounding();
+    }
+
+    /// Cập nhật surrounding text của fcitx5 cho khớp tài liệu — như một app cư xử đúng mực.
+    void syncSurrounding() {
+        surroundingText().setText(toUtf8(doc_), cursor_, cursor_);
+        updateSurroundingText();
     }
 
 private:
@@ -126,13 +140,17 @@ private:
     size_t cursor_ = 0;
 };
 
-void expectType(DocInputContext *ic, const std::string &keys,
-                const std::string &expected) {
+void sendKeys(DocInputContext *ic, const std::string &keys) {
     for (char c : keys) {
         Key key = (c == ' ') ? Key("space") : Key(std::string(1, c));
         KeyEvent ke(ic, key, false);
         ic->keyEvent(ke);
     }
+}
+
+void expectType(DocInputContext *ic, const std::string &keys,
+                const std::string &expected) {
+    sendKeys(ic, keys);
     FCITX_ASSERT(ic->text() == expected)
         << "gõ \"" << keys << "\" => \"" << ic->text() << "\", mong đợi \"" << expected << "\"";
 }
@@ -176,6 +194,20 @@ int main() {
         ic->reset();
         ic->clearDoc();
         expectType(ic.get(), "ddaay laf vieejt", "đây là việt");
+
+        // #7: con trỏ nhảy giữa chừng (người dùng click chuột) rồi gõ tiếp KHÔNG được xoá nhầm
+        // ký tự ở vị trí mới. Gõ "vie" (doc="vie"), click về đầu, gõ "j" (nặng): vì segment "vie"
+        // đã ở chỗ khác con trỏ, engine phải reset và xử lý "j" như phím mới tại đầu — không
+        // deleteSurroundingText xoá nhầm "v". Mong đợi "vie" còn nguyên (không thành "ẹie").
+        ic->reset();
+        ic->clearDoc();
+        sendKeys(ic.get(), "vie");
+        FCITX_ASSERT(ic->text() == "vie") << "trước khi nhảy con trỏ: " << ic->text();
+        ic->clickAt(0); // người dùng click về đầu ô
+        sendKeys(ic.get(), "j");
+        FCITX_ASSERT(ic->text() == "jvie")
+            << "con trỏ nhảy rồi gõ tiếp bị xoá nhầm ký tự: doc=\"" << ic->text()
+            << "\", mong đợi \"jvie\" (giữ nguyên \"vie\")";
 
         instance.exit();
     });

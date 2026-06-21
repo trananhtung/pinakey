@@ -154,6 +154,7 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
     // Gõ không gạch chân #1: app hỗ trợ SurroundingText → xoá-chèn tại chỗ.
     if (pk_engine_no_underline(core_) &&
         ic_->capabilityFlags().test(CapabilityFlag::SurroundingText)) {
+        resetIfDocumentDiverged(); // #7: con trỏ nhảy → quên segment cũ, không xoá nhầm.
         const bool handled = pk_engine_process_key_replace(core_, sym, state);
         applyReplaceResult();
         if (handled) {
@@ -232,6 +233,44 @@ void PinaKeyState::deactivate() {
     ic_->inputPanel().reset();
     ic_->updatePreedit();
     ic_->updateUserInterface(UserInterfaceComponent::InputPanel);
+}
+
+/// #7: Nếu con trỏ đã nhảy / văn bản đổi (người dùng click chuột, bấm mũi tên, app sửa text…),
+/// segment mà engine đang theo dõi (`prev_displayed`) không còn nằm ngay trước con trỏ. Khi đó
+/// `deleteSurroundingText(-n, n)` sẽ xoá nhầm ký tự ở vị trí mới. Đối chiếu surrounding text trước
+/// con trỏ với segment; nếu lệch thì reset để phím tiếp theo được xử lý mới tại đúng chỗ.
+void PinaKeyState::resetIfDocumentDiverged() {
+    if (!ic_->capabilityFlags().test(CapabilityFlag::SurroundingText)) {
+        return;
+    }
+    const char *segPtr = pk_engine_replace_segment(core_);
+    if (!segPtr || segPtr[0] == '\0') {
+        return; // engine không theo dõi segment nào → không cần kiểm.
+    }
+    if (!ic_->surroundingText().isValid()) {
+        return; // không đọc được surrounding text → giữ nguyên hành vi cũ (không hồi quy).
+    }
+    const std::string segment(segPtr);
+    const std::string &text = ic_->surroundingText().text();
+    const unsigned int cursor = ic_->surroundingText().cursor();
+    // `cursor` đếm theo ký tự Unicode → tính byte-offset để lấy phần văn bản ngay trước con trỏ.
+    size_t bytePos = 0;
+    for (unsigned int chars = 0; bytePos < text.size() && chars < cursor; ++chars) {
+        const unsigned char c = static_cast<unsigned char>(text[bytePos]);
+        bytePos += (c < 0x80)            ? 1
+                   : ((c >> 5) == 0x6)   ? 2
+                   : ((c >> 4) == 0xe)   ? 3
+                   : ((c >> 3) == 0x1e)  ? 4
+                                         : 1;
+    }
+    const std::string before = text.substr(0, bytePos);
+    // UTF-8 tự đồng bộ: `before` kết thúc bằng `segment` (so byte) ⟺ đúng theo ký tự.
+    const bool endsWithSegment =
+        before.size() >= segment.size() &&
+        before.compare(before.size() - segment.size(), segment.size(), segment) == 0;
+    if (!endsWithSegment) {
+        pk_engine_reset(core_);
+    }
 }
 
 /// Áp lệnh thay thế: xoá N ký tự trước con trỏ rồi commit chuỗi mới. Không hiện preedit.
