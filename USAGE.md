@@ -7,29 +7,53 @@ chân** — chữ tiếng Việt hiện thẳng như gõ thường, không có d
 
 ## 1. Cài đặt
 
-### Cách nhanh (build từ nguồn)
+### Cách dễ nhất — gói `.deb` dựng sẵn (khuyến nghị, Ubuntu/Debian)
+
+Không cần build, không cần Rust. Một lệnh:
 
 ```sh
-cd ~/Documents/pinakey
-bash tools/install-fcitx5.sh
+curl -fsSL https://raw.githubusercontent.com/trananhtung/pinakey/main/tools/install-deb.sh | bash
 ```
 
-Script sẽ: build addon (cargo + cmake) → chạy test → `sudo cmake --install` (hỏi mật khẩu) → khởi
-động lại fcitx5. **Yêu cầu** (Debian/Ubuntu) đã cài sẵn:
+Hoặc tải thủ công gói `.deb` mới nhất tại **<https://github.com/trananhtung/pinakey/releases/latest>**
+rồi cài:
 
 ```sh
-sudo apt install fcitx5 libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev \
-                 fcitx5-modules-dev extra-cmake-modules cmake g++
+sudo apt install ./fcitx5-pinakey_*.deb
 ```
 
-> Đã có gói `.deb`? `sudo apt install ./fcitx5-pinakey-*.deb` rồi `fcitx5 -r -d`.
+> Gói tự kéo theo `fcitx5-configtool` + `im-config` (Recommends) và in hướng dẫn sau khi cài.
 
-### Bật PinaKey trong fcitx5
+### Cách build từ nguồn (cho người tự build / nhà phát triển)
 
-1. Mở **Fcitx5 Configuration** (lệnh: `fcitx5-configtool &`).
-2. Bỏ tick **“Only Show Current Language”** (góc dưới), tìm **PinaKey** → bấm **→** để thêm vào danh
-   sách bên trái.
-3. Đóng cửa sổ. Xong.
+```sh
+git clone https://github.com/trananhtung/pinakey.git
+cd pinakey
+bash tools/install-fcitx5.sh        # thêm --clean nếu cache CMake hỏng
+```
+
+Script tự kiểm dependency, build, cài vào `/usr`, và (hỏi rồi) tự thêm PinaKey vào fcitx5.
+**Yêu cầu** (Debian/Ubuntu):
+
+```sh
+sudo apt install fcitx5 fcitx5-configtool libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev \
+                 fcitx5-modules-dev extra-cmake-modules cmake g++ pkg-config
+# + Rust (rustup) >= 1.85
+```
+
+### Sau khi cài — 3 bước để bắt đầu gõ
+
+1. **Bật fcitx5 ở mức phiên (chỉ làm 1 lần)** — nếu fcitx5 chưa phải bộ gõ của hệ thống:
+   ```sh
+   im-config -n fcitx5
+   ```
+   rồi **ĐĂNG XUẤT và đăng nhập lại** (hoặc khởi động lại máy). *Bước này tránh lỗi
+   “PinaKey (Not available)”.*
+2. **Khởi động lại fcitx5** để nó nhận addon mới: `fcitx5 -r -d`.
+3. **Thêm PinaKey**: mở `fcitx5-configtool` → bỏ tick **“Only Show Current Language”** (góc dưới)
+   → tìm **PinaKey** → bấm **→**. (Nếu cài bằng `install-fcitx5.sh` và đã chọn tự thêm thì bỏ qua.)
+
+Xong — nhấn **Ctrl+Space** để chuyển sang PinaKey và gõ thử: `vieetj` → **việt**.
 
 ---
 
@@ -155,13 +179,10 @@ cargo build --release -p pinakey-settings --features gui
 
 ## 11. Gỡ cài đặt
 
-```sh
-sudo cmake --build fcitx5/build --target uninstall 2>/dev/null || \
-  echo "Xoá thủ công: /usr/lib/x86_64-linux-gnu/fcitx5/pinakey.so + /usr/share/fcitx5/{addon,inputmethod}/pinakey.conf"
-fcitx5 -r -d
-```
+- Cài bằng `.deb`: `sudo apt remove fcitx5-pinakey`
+- Cài từ nguồn: `sudo cmake --build fcitx5/build --target uninstall`
 
-(Hoặc gỡ gói `.deb`: `sudo apt remove fcitx5-pinakey`.)
+Rồi `fcitx5 -r -d` (hoặc đăng nhập lại).
 
 ---
 
@@ -169,6 +190,7 @@ fcitx5 -r -d
 
 | Triệu chứng | Cách xử lý |
 |---|---|
+| **PinaKey hiện “(Not available)”** | Addon chưa nạp được. (1) Bật fcitx5 ở mức phiên: `im-config -n fcitx5` rồi **đăng xuất/đăng nhập lại**. (2) Cài vào `/usr` (gói `.deb` hoặc `cmake --install`) — **đừng** cài kiểu user-local `~/.local` + `FCITX_ADDON_DIRS` vì không bền vững. |
 | Không thấy PinaKey trong configtool | Bỏ tick “Only Show Current Language”; chạy `fcitx5 -r -d` rồi mở lại. |
 | Gõ ra tiếng Anh | Nhấn **Ctrl+Space** để chuyển sang PinaKey; kiểm tra biểu tượng khay. |
 | Một số app hiện gạch chân | App đó không hỗ trợ Surrounding Text → bật daemon uinput (mục 9). |

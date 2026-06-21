@@ -22,7 +22,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            cmake g++ extra-cmake-modules pkg-config \
+            cmake g++ extra-cmake-modules pkg-config dpkg-dev \
             fcitx5 fcitx5-modules fcitx5-modules-dev \
             libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev \
             dbus-daemon python3-dbus python3-gi

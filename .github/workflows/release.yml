@@ -32,7 +32,7 @@ jobs:
       - name: Cài phụ thuộc build fcitx5
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ extra-cmake-modules pkg-config \
+          sudo apt-get install -y cmake g++ extra-cmake-modules pkg-config dpkg-dev \
             fcitx5 fcitx5-modules-dev libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev
 
       - name: Cấu hình + build addon
