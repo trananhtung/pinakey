@@ -9,6 +9,9 @@ preedit gạch chân.
 — landing page song ngữ Việt/Anh, có **sân chơi gõ thử Telex/VNI ngay trong trình duyệt**.
 Mã nguồn trang web: [`trananhtung/pinakey-web`](https://github.com/trananhtung/pinakey-web).
 
+📖 **Hướng dẫn sử dụng cho người dùng:** [USAGE.md](USAGE.md) — cài đặt, bật bộ gõ, bảng phím
+Telex/VNI/VIQR, gõ không gạch chân, emoji, từ điển, gõ tắt, khắc phục sự cố.
+
 > PinaKey tham khảo ý tưởng từ **Bamboo** (ibus-bamboo), **[fcitx5-lotus](https://github.com/LotusInputMethod/fcitx5-lotus)**
 > (gõ không gạch chân) và **[fcitx5-cskk](https://github.com/fcitx/fcitx5-cskk)** (addon C++ bọc lõi
 > không-C++ qua C-ABI).

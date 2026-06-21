@@ -1,0 +1,180 @@
+# Hướng dẫn sử dụng PinaKey
+
+**PinaKey** là bộ gõ tiếng Việt cho Linux (nền **fcitx5**). Trải nghiệm mặc định là **gõ không gạch
+chân** — chữ tiếng Việt hiện thẳng như gõ thường, không có dòng gạch chân chờ xác nhận.
+
+---
+
+## 1. Cài đặt
+
+### Cách nhanh (build từ nguồn)
+
+```sh
+cd ~/Documents/pinakey
+bash tools/install-fcitx5.sh
+```
+
+Script sẽ: build addon (cargo + cmake) → chạy test → `sudo cmake --install` (hỏi mật khẩu) → khởi
+động lại fcitx5. **Yêu cầu** (Debian/Ubuntu) đã cài sẵn:
+
+```sh
+sudo apt install fcitx5 libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev \
+                 fcitx5-modules-dev extra-cmake-modules cmake g++
+```
+
+> Đã có gói `.deb`? `sudo apt install ./fcitx5-pinakey-*.deb` rồi `fcitx5 -r -d`.
+
+### Bật PinaKey trong fcitx5
+
+1. Mở **Fcitx5 Configuration** (lệnh: `fcitx5-configtool &`).
+2. Bỏ tick **“Only Show Current Language”** (góc dưới), tìm **PinaKey** → bấm **→** để thêm vào danh
+   sách bên trái.
+3. Đóng cửa sổ. Xong.
+
+---
+
+## 2. Bật/tắt gõ tiếng Việt
+
+- Nhấn **Ctrl + Space** để chuyển qua lại giữa **PinaKey (tiếng Việt)** và bàn phím thường (tiếng Anh).
+- Biểu tượng trên khay hệ thống cho biết đang ở chế độ nào.
+
+---
+
+## 3. Gõ tiếng Việt
+
+PinaKey hỗ trợ **Telex / VNI / VIQR**. Mặc định là **Telex**.
+
+### Telex (mặc định)
+
+| Gõ | Ra | | Gõ | Ra |
+|----|----|----|----|----|
+| `aa` | â | | `s` | dấu sắc (a → á) |
+| `ee` | ê | | `f` | dấu huyền (a → à) |
+| `oo` | ô | | `r` | dấu hỏi (a → ả) |
+| `aw` | ă | | `x` | dấu ngã (a → ã) |
+| `ow` | ơ | | `j` | dấu nặng (a → ạ) |
+| `uw` / `w` | ư | | `z` | xoá dấu |
+| `dd` | đ | | | |
+
+**Ví dụ:** `Vieejt Nam` → **Việt Nam** · `tieengs Vieejt` → **tiếng Việt** · `dduwowngf` →
+**đường** · `ddi hocj` → **đi học**.
+
+### VNI
+
+| Gõ | Ra | | Gõ | Ra |
+|----|----|----|----|----|
+| `6` | â/ê/ô (a6, e6, o6) | | `1` | dấu sắc |
+| `7` | ư/ơ (u7, o7) | | `2` | dấu huyền |
+| `8` | ă (a8) | | `3` | dấu hỏi |
+| `9` | đ (d9) | | `4` | dấu ngã |
+| `0` | xoá dấu | | `5` | dấu nặng |
+
+**Ví dụ:** `a1` → **á** · `a6` → **â** · `a8` → **ă** · `o7` → **ơ** · `d9` → **đ** ·
+`viet65` → **việt** (gõ chữ, rồi `6` cho ê, `5` cho dấu nặng — dấu có thể gõ ở cuối từ).
+
+### VIQR
+
+`'` sắc · `` ` `` huyền · `?` hỏi · `~` ngã · `.` nặng · `^` â/ê/ô · `+` ư/ơ · `(` ă · `dd` đ.
+
+**Đổi kiểu gõ:** xem mục [6. Menu khay](#6-menu-khay-đổi-kiểu-gõ--bảng-mã).
+
+---
+
+## 4. Gõ không gạch chân (mặc định)
+
+Khác bộ gõ truyền thống (hiện chữ gạch chân rồi mới “chốt”), PinaKey **ghi thẳng** chữ tiếng Việt vào
+ô văn bản và tự sửa tại chỗ khi bạn gõ thêm dấu. Bạn thấy chữ như gõ bình thường, không có gạch chân.
+
+- Hoạt động tốt nhất với app hỗ trợ *Surrounding Text* (đa số app GTK/Qt: trình duyệt, soạn thảo…).
+- App không hỗ trợ → tự lùi về chế độ preedit (vẫn gõ được, chỉ là có dòng tạm).
+- Muốn dùng không-gạch-chân ở **mọi** app (kể cả terminal): bật daemon uinput — xem [mục 9](#9-gõ-không-gạch-chân-ở-mọi-app-nâng-cao).
+
+---
+
+## 5. Emoji và ký tự Unicode
+
+Khi không đang gõ dở một từ, gõ dấu **`:`** để mở bảng tra:
+
+- **Emoji theo tên:** `:grin`, `:smile`, `:heart` … → chọn bằng phím **số 1–9** hoặc **Enter**.
+- **Ký tự Unicode theo mã hex:** `:u1f600` → 😀, `:u00e9` → é. (Gõ `:u` rồi mã hex, Enter.)
+- **Esc** để huỷ, **Backspace** để xoá bớt.
+
+---
+
+## 6. Menu khay (đổi kiểu gõ / bảng mã)
+
+Bấm vào biểu tượng PinaKey trên khay (hoặc menu trạng thái của fcitx5) → có 2 menu con:
+
+- **Kiểu gõ:** Telex / VNI / VIQR / Telex (đơn giản) / …
+- **Bảng mã:** Unicode (mặc định) / TCVN3 / …
+
+---
+
+## 7. Từ điển & gõ tắt (macro)
+
+- **Từ điển riêng:** thêm các từ (mượn, tên riêng) vào `~/.config/pinakey/dict.txt` (mỗi dòng một từ)
+  để PinaKey không “sửa nhầm” chúng về tiếng Anh.
+- **Gõ tắt (macro):** tạo `~/.config/pinakey/ibus-PinaKey.macro.text`, mỗi dòng `khoá:nội dung`
+  (ví dụ `vn:Việt Nam`). Gõ `vn` rồi phím chốt → bung thành “Việt Nam”.
+- **Sửa nóng:** PinaKey **tự nạp lại** file dict/macro khi bạn sửa — không cần khởi động lại.
+
+---
+
+## 8. Loại trừ ứng dụng & ô mật khẩu
+
+- **Ô mật khẩu:** PinaKey tự động không xử lý tiếng Việt trong ô mật khẩu.
+- **Loại trừ app (gõ thẳng tiếng Anh):** thêm tên chương trình vào `EnglishExclude` trong
+  `~/.config/pinakey/ibus-PinaKey.config.json` (ví dụ `"EnglishExclude": ["konsole", "code"]`).
+- **Nhớ chế độ theo app:** dùng tuỳ chọn *Global Config → Share Input State = Program* của fcitx5 để
+  mỗi app nhớ riêng đang bật tiếng Việt hay không.
+
+---
+
+## 9. Gõ không gạch chân ở MỌI app (nâng cao)
+
+Một số app (terminal, vài app Electron) không hỗ trợ Surrounding Text. Để vẫn gõ không gạch chân ở
+đó, bật daemon bơm phím Backspace (đã cài kèm):
+
+```sh
+sudo udevadm control --reload && sudo udevadm trigger   # cấp quyền /dev/uinput
+systemctl --user enable --now pinakey-uinput-server     # chạy daemon dưới quyền của bạn
+```
+
+Đăng xuất/đăng nhập lại nếu cần. (Bỏ qua bước này nếu bạn chỉ gõ trong trình duyệt/app thường.)
+
+---
+
+## 10. Giao diện thiết lập (tuỳ chọn)
+
+```sh
+cargo build --release -p pinakey-settings --features gui
+./target/release/pinakey-settings
+```
+
+---
+
+## 11. Gỡ cài đặt
+
+```sh
+sudo cmake --build fcitx5/build --target uninstall 2>/dev/null || \
+  echo "Xoá thủ công: /usr/lib/x86_64-linux-gnu/fcitx5/pinakey.so + /usr/share/fcitx5/{addon,inputmethod}/pinakey.conf"
+fcitx5 -r -d
+```
+
+(Hoặc gỡ gói `.deb`: `sudo apt remove fcitx5-pinakey`.)
+
+---
+
+## 12. Khắc phục sự cố
+
+| Triệu chứng | Cách xử lý |
+|---|---|
+| Không thấy PinaKey trong configtool | Bỏ tick “Only Show Current Language”; chạy `fcitx5 -r -d` rồi mở lại. |
+| Gõ ra tiếng Anh | Nhấn **Ctrl+Space** để chuyển sang PinaKey; kiểm tra biểu tượng khay. |
+| Một số app hiện gạch chân | App đó không hỗ trợ Surrounding Text → bật daemon uinput (mục 9). |
+| Gõ tắt/từ điển không ăn | Kiểm tra đường dẫn file trong `~/.config/pinakey/`. |
+| Chẩn đoán chung | `fcitx5-diagnose` để xem fcitx5 có nhận PinaKey không. |
+
+---
+
+Báo lỗi / góp ý: <https://github.com/trananhtung/pinakey/issues>
