@@ -28,6 +28,10 @@ pub struct Config {
     pub default_input_mode: i32,
     #[serde(rename = "InputModeMapping")]
     pub input_mode_mapping: HashMap<String, i32>,
+    /// Danh sách tên chương trình (wm_class/program) mà PinaKey KHÔNG xử lý tiếng Việt — gõ thẳng
+    /// tiếng Anh (issue #9). So khớp không phân biệt hoa/thường: khớp khi bằng đúng hoặc là chuỗi con.
+    #[serde(rename = "EnglishExclude", default)]
+    pub english_exclude: Vec<String>,
 }
 
 impl Default for Config {
@@ -47,6 +51,7 @@ pub fn default_cfg() -> Config {
         shortcuts: [1, 126, 0, 0, 0, 0, 0, 0, 5, 117],
         default_input_mode: flags::PREEDIT_IM,
         input_mode_mapping: HashMap::new(),
+        english_exclude: Vec::new(),
     }
 }
 
@@ -63,6 +68,11 @@ pub fn get_config_dir() -> PathBuf {
 
 pub fn get_macro_path(engine_name: &str) -> PathBuf {
     get_config_dir().join(format!("ibus-{}.macro.text", engine_name))
+}
+
+/// `~/.config/pinakey/dict.txt` — từ điển chính tả do người dùng bổ sung (issue #18).
+pub fn get_dict_path() -> PathBuf {
+    get_config_dir().join("dict.txt")
 }
 
 pub fn get_config_path(engine_name: &str) -> PathBuf {

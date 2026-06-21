@@ -14,7 +14,9 @@
 //! truyền thẳng `keyEvent.rawKey().sym()` và `states()` mà không cần ánh xạ. Khi phím được *nhả*
 //! (release), C++ bật bit [`pinakey_engine::keysym::MOD_RELEASE`] (`1<<30`) trong `state`.
 
+use std::cell::RefCell;
 use std::ffi::{c_char, CStr, CString};
+use std::sync::OnceLock;
 
 use pinakey_config::{default_cfg, load_config, Config};
 use pinakey_engine::{Action, EngineCore};
@@ -28,9 +30,10 @@ pub struct PkEngine {
     preedit_cursor: u32,
     preedit_visible: bool,
     preedit_underline: bool,
-    // Bản sao NUL-terminated của tên kiểu gõ, để getter trả con trỏ C hợp lệ (String của Rust
-    // không kết thúc bằng NUL nên không thể trả thẳng `.as_ptr()`).
+    // Bản sao NUL-terminated của tên kiểu gõ + bảng mã, để getter trả con trỏ C hợp lệ (String của
+    // Rust không kết thúc bằng NUL nên không thể trả thẳng `.as_ptr()`).
     im_name: CString,
+    charset_name: CString,
 
     // ----- trạng thái cho chế độ "gõ không gạch chân" (diff-and-replace) -----
     // Chuỗi mà segment hiện tại ĐANG hiển thị trong tài liệu (phần đang soạn, chưa cố định).
@@ -44,6 +47,7 @@ pub struct PkEngine {
 impl PkEngine {
     fn from_config(config: Config) -> Box<PkEngine> {
         let im_name = to_cstring(&config.input_method);
+        let charset_name = to_cstring(&config.output_charset);
         Box::new(PkEngine {
             core: EngineCore::new(config),
             commit: CString::default(),
@@ -52,6 +56,7 @@ impl PkEngine {
             preedit_visible: false,
             preedit_underline: false,
             im_name,
+            charset_name,
             prev_displayed: String::new(),
             replace_delete: 0,
             replace_insert: CString::default(),
@@ -327,6 +332,18 @@ pub unsafe extern "C" fn pk_engine_preedit_visible(e: *const PkEngine) -> bool {
     e.as_ref().map(|x| x.preedit_visible).unwrap_or(false)
 }
 
+/// Engine có đang soạn dở một segment không (preedit hiển thị, hoặc đang theo dõi đoạn ở chế độ
+/// không-gạch-chân). C++ dùng để biết có nên kích hoạt tra emoji bằng `:` hay không (issue #11/#26).
+///
+/// # Safety
+/// `e` hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_is_composing(e: *const PkEngine) -> bool {
+    e.as_ref()
+        .map(|x| x.preedit_visible || !x.prev_displayed.is_empty())
+        .unwrap_or(false)
+}
+
 /// Preedit có nên gạch chân không (theo cờ IB_NO_UNDERLINE của người dùng).
 ///
 /// # Safety
@@ -339,6 +356,17 @@ pub unsafe extern "C" fn pk_engine_preedit_underline(e: *const PkEngine) -> bool
 // ------------------------------------------------------------------------------------------------
 // Điều khiển trạng thái
 // ------------------------------------------------------------------------------------------------
+
+/// Nạp lại file macro + từ điển từ đĩa (issue #20, live-reload) mà không đổi cấu hình đang chạy.
+///
+/// # Safety
+/// `e` hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_reload(e: *mut PkEngine) {
+    if let Some(engine) = e.as_mut() {
+        engine.core.reload_data();
+    }
+}
 
 /// Đặt lại buffer soạn thảo (tương ứng `reset()` của fcitx5 khi đổi focus/huỷ).
 ///
@@ -360,6 +388,30 @@ pub unsafe extern "C" fn pk_engine_reset(e: *mut PkEngine) {
     }
 }
 
+/// Kết thúc phiên soạn khi mất focus (issue #6): trả về phần preedit đang hiển thị để C++ commit
+/// (tránh kẹt/mất chữ), rồi reset engine. Dùng cho chế độ preedit; ở chế độ gõ-không-gạch-chân
+/// văn bản đã nằm sẵn trong tài liệu nên C++ chỉ gọi `pk_engine_reset`.
+///
+/// # Safety
+/// `e` hợp lệ; con trỏ trả về dùng được tới lần gọi kế tiếp.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_flush_preedit(e: *mut PkEngine) -> *const c_char {
+    let Some(engine) = e.as_mut() else {
+        return c"".as_ptr();
+    };
+    // Dùng lại ô `commit` làm nơi giữ chuỗi trả về (hợp lệ tới lần gọi kế tiếp).
+    engine.commit = engine.preedit.clone();
+    let ptr = engine.commit.as_ptr();
+    engine.core.reset_preeditor();
+    engine.preedit = CString::default();
+    engine.preedit_cursor = 0;
+    engine.preedit_visible = false;
+    engine.prev_displayed.clear();
+    engine.replace_delete = 0;
+    engine.replace_insert = CString::default();
+    ptr
+}
+
 /// Đặt tên chương trình của input context (vd `firefox`) để bật cách khắc phục theo ứng dụng.
 ///
 /// # Safety
@@ -371,6 +423,18 @@ pub unsafe extern "C" fn pk_engine_set_program(e: *mut PkEngine, program: *const
             .core
             .set_wm_class(opt_str(program).unwrap_or("").to_string());
     }
+}
+
+/// Chương trình đang focus (đặt qua `pk_engine_set_program`) có nằm trong danh sách loại trừ tiếng
+/// Anh không (issue #9). C++ dùng cờ này để cho phím đi thẳng (pass-through), không gõ tiếng Việt.
+///
+/// # Safety
+/// `e` hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_program_excluded(e: *const PkEngine) -> bool {
+    e.as_ref()
+        .map(|x| x.core.is_program_excluded())
+        .unwrap_or(false)
 }
 
 /// Đổi kiểu gõ ("Telex" / "VNI" / "VIQR" …) và dựng lại engine biến đổi.
@@ -395,6 +459,7 @@ pub unsafe extern "C" fn pk_engine_set_input_method(e: *mut PkEngine, name: *con
 pub unsafe extern "C" fn pk_engine_set_charset(e: *mut PkEngine, name: *const c_char) {
     if let (Some(engine), Some(n)) = (e.as_mut(), opt_str(name)) {
         engine.core.config.output_charset = n.to_string();
+        engine.charset_name = to_cstring(n);
     }
 }
 
@@ -408,6 +473,125 @@ pub unsafe extern "C" fn pk_engine_input_method(e: *const PkEngine) -> *const c_
         Some(engine) => engine.im_name.as_ptr(),
         None => c"".as_ptr(),
     }
+}
+
+/// Tên bảng mã hiện tại.
+///
+/// # Safety
+/// `e` hợp lệ; con trỏ trả về hợp lệ tới lần đổi cấu hình kế tiếp.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_charset(e: *const PkEngine) -> *const c_char {
+    match e.as_ref() {
+        Some(engine) => engine.charset_name.as_ptr(),
+        None => c"".as_ptr(),
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// Liệt kê kiểu gõ / bảng mã (cho menu fcitx5, issue #12/#17). Danh sách tĩnh, cache một lần;
+// con trỏ trả về sống suốt vòng đời tiến trình.
+// ------------------------------------------------------------------------------------------------
+
+static IM_NAMES: OnceLock<Vec<CString>> = OnceLock::new();
+static CHARSET_NAMES: OnceLock<Vec<CString>> = OnceLock::new();
+
+fn im_names() -> &'static [CString] {
+    IM_NAMES.get_or_init(|| {
+        pinakey_core::input_method_definitions()
+            .iter()
+            .map(|(n, _)| to_cstring(n))
+            .collect()
+    })
+}
+
+fn charset_names() -> &'static [CString] {
+    CHARSET_NAMES.get_or_init(|| {
+        pinakey_core::get_charset_names()
+            .iter()
+            .map(|s| to_cstring(s))
+            .collect()
+    })
+}
+
+/// Số kiểu gõ dựng sẵn.
+#[no_mangle]
+pub extern "C" fn pk_input_method_count() -> u32 {
+    im_names().len() as u32
+}
+
+/// Tên kiểu gõ thứ `i` (rỗng nếu ngoài phạm vi).
+///
+/// # Safety
+/// Con trỏ trả về sống suốt vòng đời tiến trình.
+#[no_mangle]
+pub unsafe extern "C" fn pk_input_method_name_at(i: u32) -> *const c_char {
+    im_names()
+        .get(i as usize)
+        .map(|c| c.as_ptr())
+        .unwrap_or(c"".as_ptr())
+}
+
+/// Số bảng mã đầu ra.
+#[no_mangle]
+pub extern "C" fn pk_charset_count() -> u32 {
+    charset_names().len() as u32
+}
+
+/// Tên bảng mã thứ `i` (rỗng nếu ngoài phạm vi).
+///
+/// # Safety
+/// Con trỏ trả về sống suốt vòng đời tiến trình.
+#[no_mangle]
+pub unsafe extern "C" fn pk_charset_name_at(i: u32) -> *const c_char {
+    charset_names()
+        .get(i as usize)
+        .map(|c| c.as_ptr())
+        .unwrap_or(c"".as_ptr())
+}
+
+// ------------------------------------------------------------------------------------------------
+// Tra cứu emoji (issue #11/#26). Trie EmojiOne đóng kèm binary; truy vấn theo tiền tố keyword/ascii.
+// ------------------------------------------------------------------------------------------------
+
+static EMOJI_TRIE: OnceLock<pinakey_emoji::TrieNode> = OnceLock::new();
+
+fn emoji_trie() -> &'static pinakey_emoji::TrieNode {
+    EMOJI_TRIE.get_or_init(|| {
+        pinakey_emoji::load_emojione_from_str(include_str!(
+            "../../pinakey-emoji/data/emojione.json"
+        ))
+        .unwrap_or_default()
+    })
+}
+
+thread_local! {
+    static EMOJI_RESULT: RefCell<CString> = RefCell::new(CString::default());
+}
+
+/// Tra emoji theo `query` (tiền tố keyword như "smile" hoặc ascii như ":)"). Trả về danh sách emoji
+/// khớp, mỗi dòng một emoji, phân tách bằng `\n` (tối đa 60). Con trỏ trả về hợp lệ tới lần gọi
+/// `pk_emoji_query` kế tiếp TRÊN CÙNG THREAD; C++ phải sao chép ngay.
+///
+/// # Safety
+/// `query` là chuỗi C hợp lệ hoặc null.
+#[no_mangle]
+pub unsafe extern "C" fn pk_emoji_query(query: *const c_char) -> *const c_char {
+    let q = opt_str(query).unwrap_or("");
+    let engine = pinakey_emoji::EmojiEngine::new(emoji_trie());
+    let mut seen = std::collections::HashSet::new();
+    let mut out: Vec<String> = Vec::new();
+    for emoji in engine.filter(q) {
+        if seen.insert(emoji.clone()) {
+            out.push(emoji);
+            if out.len() >= 60 {
+                break;
+            }
+        }
+    }
+    let joined = to_cstring(&out.join("\n"));
+    let ptr = joined.as_ptr();
+    EMOJI_RESULT.with(|cell| *cell.borrow_mut() = joined);
+    ptr
 }
 
 #[cfg(test)]
@@ -539,6 +723,59 @@ mod tests {
         unsafe {
             let e = pk_engine_new();
             assert_eq!(type_replace(e, "loz "), "loz ");
+            pk_engine_free(e);
+        }
+    }
+
+    #[test]
+    fn program_excluded_via_config() {
+        unsafe {
+            let cfg = CString::new(r#"{"EnglishExclude":["konsole","code"]}"#).unwrap();
+            let e = pk_engine_new_from_json(cfg.as_ptr());
+            // chưa đặt program → không loại trừ
+            assert!(!pk_engine_program_excluded(e));
+            let p1 = CString::new("konsole").unwrap();
+            pk_engine_set_program(e, p1.as_ptr());
+            assert!(pk_engine_program_excluded(e));
+            let p2 = CString::new("firefox").unwrap();
+            pk_engine_set_program(e, p2.as_ptr());
+            assert!(!pk_engine_program_excluded(e));
+            // khớp chuỗi con: "code - oss" chứa "code"
+            let p3 = CString::new("code - oss").unwrap();
+            pk_engine_set_program(e, p3.as_ptr());
+            assert!(pk_engine_program_excluded(e));
+            pk_engine_free(e);
+        }
+    }
+
+    #[test]
+    fn emoji_query_and_enumeration() {
+        unsafe {
+            // emoji theo keyword
+            let q = CString::new("grin").unwrap();
+            let res = CStr::from_ptr(pk_emoji_query(q.as_ptr())).to_str().unwrap();
+            assert!(res.contains('😀'), "kết quả grin: {res:?}");
+            // liệt kê kiểu gõ + bảng mã có phần tử
+            assert!(pk_input_method_count() >= 3);
+            assert!(pk_charset_count() >= 1);
+            let first_im = CStr::from_ptr(pk_input_method_name_at(0)).to_str().unwrap();
+            assert!(!first_im.is_empty());
+            let first_cs = CStr::from_ptr(pk_charset_name_at(0)).to_str().unwrap();
+            assert_eq!(first_cs, "Unicode");
+        }
+    }
+
+    #[test]
+    fn flush_preedit_commits_and_resets() {
+        unsafe {
+            let e = pk_engine_new();
+            let (_c, preedit) = type_str(e, "vieetj");
+            assert_eq!(preedit, "việt");
+            let flushed = CStr::from_ptr(pk_engine_flush_preedit(e)).to_str().unwrap();
+            assert_eq!(flushed, "việt"); // trả về để C++ commit
+                                         // sau flush, preedit trống (đã reset)
+            assert!(!pk_engine_preedit_visible(e));
+            assert_eq!(CStr::from_ptr(pk_engine_preedit(e)).to_bytes(), b"");
             pk_engine_free(e);
         }
     }

@@ -1,0 +1,3 @@
+# Cấp cho người dùng ở seat đang hoạt động quyền truy cập /dev/uinput (qua ACL uaccess),
+# để daemon pinakey-uinput-server (chạy dưới quyền người dùng) mở được thiết bị mà không cần root.
+KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"

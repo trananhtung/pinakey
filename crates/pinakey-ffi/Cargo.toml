@@ -15,6 +15,7 @@ crate-type = ["staticlib", "cdylib"]
 pinakey-engine = { path = "../pinakey-engine" }
 pinakey-config = { path = "../pinakey-config" }
 pinakey-core = { path = "../pinakey-core" }
+pinakey-emoji = { path = "../pinakey-emoji" }
 serde_json = "1"
 
 [lints]

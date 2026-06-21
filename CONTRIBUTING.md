@@ -46,21 +46,22 @@ hành vi dễ đối chiếu với nó). Trong những trường hợp đó, hã
 
 ## Bố cục dự án
 
-Xem [ARCHITECTURE.md](ARCHITECTURE.md) để biết đồ thị phụ thuộc giữa các crate và hai quyết định
-thiết kế then chốt (alias con trỏ → `Rc<RefCell>`, và thread actor của engine). Tóm lại:
+Xem [ARCHITECTURE.md](ARCHITECTURE.md) để biết đồ thị phụ thuộc giữa các crate và quyết định thiết
+kế then chốt (alias con trỏ → `Rc<RefCell>`, lõi non-C++ dùng lại qua C-ABI). Tóm lại:
 
-- Đặt **logic biến đổi thuần túy** trong `pinakey-core`. Nó không có I/O và không phụ thuộc vào các
-  crate anh em.
-- Đặt **hành vi IBus độc lập với lớp truyền tải** trong `pinakey-ibus::core`, trả về các `Action`
-  để nó vẫn unit-test được mà không cần daemon đang chạy. Giữ `pinakey-ibus::dbus` là một lớp dịch mỏng.
+- Đặt **logic biến đổi thuần túy** trong `pinakey-core`. Nó không có I/O và không phụ thuộc các crate
+  anh em.
+- Đặt **hành vi engine độc lập transport** trong `pinakey-engine`, trả về các `Action` để unit-test
+  được mà không cần daemon. Giữ addon fcitx5 (`fcitx5/`) là lớp dịch mỏng gọi qua `pinakey-ffi`.
 - Giữ mỗi file tập trung; nếu một module bắt đầu làm vài việc không liên quan, hãy tách nó ra.
 
 ## Test
 
-- `pinakey-core` được bao phủ bởi bộ test hành vi trong `crates/pinakey-core/tests/`. Khi bạn thêm
-  một hành vi biến đổi, hãy thêm test đi kèm.
-- Hãy test **logic thuần túy**, không phải phần đường ống D-Bus/màn hình (mà CI không chạy được).
-  Nếu bạn thêm hành vi IBus, hãy biểu diễn nó dưới dạng các `core::Action` và test chúng.
+- `pinakey-core` / `pinakey-engine` được bao phủ bởi bộ test hành vi. Khi thêm một hành vi biến đổi,
+  hãy thêm test đi kèm.
+- Hãy test **logic thuần túy** ở Rust (`pinakey-engine`/`pinakey-ffi`). Hành vi mới nên biểu diễn
+  dưới dạng `Action` và test chúng. Addon fcitx5 có test tích hợp trong `fcitx5/test/`
+  (`ctest --test-dir fcitx5/build`).
 
 ## Tạo lại các bảng charset
 
@@ -77,9 +78,12 @@ git diff                 # rà soát thay đổi
 Bộ sinh có tính tất định: tạo lại từ cùng một nguồn rồi chạy `cargo fmt` sẽ cho ra file giống hệt
 từng byte.
 
-## Chưa hiện thực
+## Build addon fcitx5
 
-Chế độ nhập Preedit mặc định đã hoạt động đầu-cuối. Các phần làm tiếp lớn hơn (chế độ sửa-lỗi-bằng-
-Backspace + tiêm phím, bảng tra cứu emoji/hex, phím tắt, menu thuộc tính, kiểm tra chính tả bằng từ
-điển, giao diện thiết lập đồ họa) được liệt kê trong [README.md](README.md#chưa-hiện-thực-phần-làm-tiếp).
-Mỗi phần cần một daemon IBus đang chạy + màn hình để kiểm tra đầy đủ.
+```sh
+cmake -S fcitx5 -B fcitx5/build -DCMAKE_INSTALL_PREFIX=/usr
+cmake --build fcitx5/build
+ctest --test-dir fcitx5/build --output-on-failure
+```
+
+Tạo lại header C-ABI sau khi đổi `pinakey-ffi`: `tools/gen-ffi-header.sh` (cần `cargo install cbindgen`).

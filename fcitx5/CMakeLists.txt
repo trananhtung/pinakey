@@ -48,6 +48,12 @@ set_target_properties(PinaKey::Ffi PROPERTIES
 
 add_subdirectory(src)
 
+# Daemon uinput bơm Backspace cho gõ không gạch chân ở app không hỗ trợ SurroundingText (#28).
+option(PINAKEY_BUILD_UINPUT_SERVER "Build the privileged uinput backspace server" ON)
+if(PINAKEY_BUILD_UINPUT_SERVER)
+    add_subdirectory(server)
+endif()
+
 # Test tích hợp (chỉ build nếu module testfrontend của fcitx5 có sẵn — gói -dev/-modules).
 option(PINAKEY_BUILD_TESTS "Build fcitx5 integration tests" ON)
 if(PINAKEY_BUILD_TESTS)
@@ -59,3 +65,17 @@ if(PINAKEY_BUILD_TESTS)
         message(STATUS "Không thấy Fcitx5::Module::TestFrontend — bỏ qua test tích hợp.")
     endif()
 endif()
+
+# ---------------------------------------------------------------------------
+# Đóng gói deb/rpm (issue #21): `cpack -G DEB` / `cpack -G RPM` trong fcitx5/build.
+# ---------------------------------------------------------------------------
+set(CPACK_PACKAGE_NAME "fcitx5-pinakey")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_CONTACT "trananhtung <https://github.com/trananhtung/pinakey>")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "PinaKey — bộ gõ tiếng Việt cho fcitx5 (lõi Rust)")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/trananhtung/pinakey")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "fcitx5")
+set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
+set(CPACK_RPM_PACKAGE_REQUIRES "fcitx5")
+set(CPACK_RPM_PACKAGE_LICENSE "GPL-3.0-or-later")
+include(CPack)

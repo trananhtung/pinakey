@@ -22,8 +22,12 @@ pub mod mode {
 pub mod flag {
     pub const FREE_TONE_MARKING: u32 = 1 << 0;
     pub const STD_TONE_STYLE: u32 = 1 << 1;
+    /// DÀNH RIÊNG / KHÔNG DÙNG (issue #8). Cờ này từng nằm trong `STD_FLAGS` nhưng **không nơi nào
+    /// đọc** — hành vi tự-sửa thực tế do `IB_AUTO_NON_VN_RESTORE` ở tầng engine điều khiển. Đã gỡ
+    /// khỏi `STD_FLAGS` để không gây hiểu nhầm; giữ giá trị bit để cấu hình cũ vẫn nạp được (bỏ qua
+    /// vô hại) và không xê dịch ý nghĩa các bit khác.
     pub const AUTO_CORRECT_ENABLED: u32 = 1 << 2;
-    pub const STD_FLAGS: u32 = FREE_TONE_MARKING | STD_TONE_STYLE | AUTO_CORRECT_ENABLED;
+    pub const STD_FLAGS: u32 = FREE_TONE_MARKING | STD_TONE_STYLE;
 }
 
 /// Loại hiệu ứng mà một rule áp dụng (`EffectType` bên Go).

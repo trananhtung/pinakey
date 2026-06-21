@@ -10,6 +10,7 @@
 #ifndef _PINAKEY_FCITX5_PINAKEY_H_
 #define _PINAKEY_FCITX5_PINAKEY_H_
 
+#include <fcitx/action.h>
 #include <fcitx/addonfactory.h>
 #include <fcitx/addoninstance.h>
 #include <fcitx/addonmanager.h>
@@ -18,6 +19,14 @@
 #include <fcitx/inputcontextproperty.h>
 #include <fcitx/inputmethodengine.h>
 #include <fcitx/instance.h>
+#include <fcitx/menu.h>
+
+#include <fcitx-utils/event.h>
+
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
 
 extern "C" {
 #include <pinakey_ffi.h>
@@ -35,16 +44,32 @@ public:
 
     void keyEvent(KeyEvent &keyEvent);
     void reset();
+    void deactivate();
     PkEngine *core() { return core_; }
+    InputContext *ic() { return ic_; }
+    /// Chọn emoji thứ `index` trong danh sách hiện tại rồi thoát chế độ emoji (gọi từ CandidateWord).
+    void emojiSelect(int index);
 
 private:
     void applyResult();
     void applyReplaceResult();
-    bool wantReplaceMode() const;
+    void applyReplaceViaUinput(); // #28: gõ không gạch chân cho app không có SurroundingText
+    bool wantReplaceMode() const; // có dùng diff-and-replace (SurroundingText hoặc uinput) không
+    bool useUinput() const;       // không có SurroundingText nhưng có server uinput
+    bool shouldPassThrough() const;
+
+    // ----- tra cứu emoji / hex (issue #11/#26) -----
+    bool handleEmojiKey(KeyEvent &keyEvent); // trả true nếu đã "nuốt" phím
+    void startEmoji();
+    void cancelEmoji(bool commitLiteral);
+    void updateEmojiUI();
+    std::vector<std::string> emojiCandidates_; // danh sách emoji hiện khớp
 
     PinaKeyEngine *engine_;
     InputContext *ic_;
     PkEngine *core_;
+    bool emojiMode_ = false;
+    std::string emojiQuery_; // gồm cả dấu ':' đầu, ví dụ ":grin"
 };
 
 /// Engine fcitx5 (một thực thể addon). Đăng ký factory tạo `PinaKeyState` cho mỗi input context.
@@ -61,9 +86,34 @@ public:
     auto *factory() { return &factory_; }
     PinaKeyState *state(InputContext *ic) { return ic->propertyFor(&factory_); }
 
+    /// Đổi kiểu gõ / bảng mã cho MỌI input context đang sống + cập nhật dấu chọn trong menu
+    /// (issue #12/#17). Áp dụng cho phiên hiện tại; lưu bền vững do GUI thiết lập đảm nhiệm.
+    void applyInputMethod(const std::string &name);
+    void applyCharset(const std::string &name);
+
 private:
+    void setupStatusMenu();
+    void addStatusActions(InputContext *ic);
+    void setupReloadTimer(); // #20 live-reload macro/dict
+    void checkReload();
+
     Instance *instance_;
     FactoryFor<PinaKeyState> factory_;
+
+    // #20: theo dõi file macro/dict để nạp lại khi sửa, không cần khởi động lại.
+    std::unique_ptr<EventSourceTime> reloadTimer_;
+    std::vector<std::string> reloadFiles_;
+    std::vector<uint64_t> reloadMtimes_;
+
+    // Menu khu vực trạng thái: chọn kiểu gõ + bảng mã (issue #12/#17).
+    std::unique_ptr<SimpleAction> imRootAction_;
+    std::unique_ptr<SimpleAction> charsetRootAction_;
+    std::unique_ptr<Menu> imMenu_;
+    std::unique_ptr<Menu> charsetMenu_;
+    std::vector<std::unique_ptr<SimpleAction>> imItems_;
+    std::vector<std::unique_ptr<SimpleAction>> charsetItems_;
+    std::vector<std::string> imNames_;
+    std::vector<std::string> charsetNames_;
 };
 
 class PinaKeyEngineFactory : public AddonFactory {

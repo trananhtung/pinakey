@@ -96,6 +96,12 @@ int main() {
         typeAscii(testfrontend, uuid, "as");
         sendKey(testfrontend, uuid, "space");
 
+        // 8) Tra emoji bằng hex (#11/#26): ":u1f600" + Enter -> 😀 (U+1F600).
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("\xF0\x9F\x98\x80"); // 😀
+        sendKey(testfrontend, uuid, "colon");
+        typeAscii(testfrontend, uuid, "u1f600");
+        sendKey(testfrontend, uuid, "Return");
+
         instance.exit();
     });
 

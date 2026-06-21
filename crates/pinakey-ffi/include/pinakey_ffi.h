@@ -135,12 +135,29 @@ uint32_t pk_engine_preedit_cursor(const PkEngine *e);
 bool pk_engine_preedit_visible(const PkEngine *e);
 
 /**
+ * Engine có đang soạn dở một segment không (preedit hiển thị, hoặc đang theo dõi đoạn ở chế độ
+ * không-gạch-chân). C++ dùng để biết có nên kích hoạt tra emoji bằng `:` hay không (issue #11/#26).
+ *
+ * # Safety
+ * `e` hợp lệ.
+ */
+bool pk_engine_is_composing(const PkEngine *e);
+
+/**
  * Preedit có nên gạch chân không (theo cờ IB_NO_UNDERLINE của người dùng).
  *
  * # Safety
  * `e` hợp lệ.
  */
 bool pk_engine_preedit_underline(const PkEngine *e);
+
+/**
+ * Nạp lại file macro + từ điển từ đĩa (issue #20, live-reload) mà không đổi cấu hình đang chạy.
+ *
+ * # Safety
+ * `e` hợp lệ.
+ */
+void pk_engine_reload(PkEngine *e);
 
 /**
  * Đặt lại buffer soạn thảo (tương ứng `reset()` của fcitx5 khi đổi focus/huỷ).
@@ -151,6 +168,16 @@ bool pk_engine_preedit_underline(const PkEngine *e);
 void pk_engine_reset(PkEngine *e);
 
 /**
+ * Kết thúc phiên soạn khi mất focus (issue #6): trả về phần preedit đang hiển thị để C++ commit
+ * (tránh kẹt/mất chữ), rồi reset engine. Dùng cho chế độ preedit; ở chế độ gõ-không-gạch-chân
+ * văn bản đã nằm sẵn trong tài liệu nên C++ chỉ gọi `pk_engine_reset`.
+ *
+ * # Safety
+ * `e` hợp lệ; con trỏ trả về dùng được tới lần gọi kế tiếp.
+ */
+const char *pk_engine_flush_preedit(PkEngine *e);
+
+/**
  * Đặt tên chương trình của input context (vd `firefox`) để bật cách khắc phục theo ứng dụng.
  *
  * # Safety
@@ -158,6 +185,15 @@ void pk_engine_reset(PkEngine *e);
  */
 void pk_engine_set_program(PkEngine *e,
                            const char *program);
+
+/**
+ * Chương trình đang focus (đặt qua `pk_engine_set_program`) có nằm trong danh sách loại trừ tiếng
+ * Anh không (issue #9). C++ dùng cờ này để cho phím đi thẳng (pass-through), không gõ tiếng Việt.
+ *
+ * # Safety
+ * `e` hợp lệ.
+ */
+bool pk_engine_program_excluded(const PkEngine *e);
 
 /**
  * Đổi kiểu gõ ("Telex" / "VNI" / "VIQR" …) và dựng lại engine biến đổi.
@@ -182,6 +218,50 @@ void pk_engine_set_charset(PkEngine *e, const char *name);
  * `e` hợp lệ; con trỏ trả về hợp lệ tới lần đổi cấu hình kế tiếp.
  */
 const char *pk_engine_input_method(const PkEngine *e);
+
+/**
+ * Tên bảng mã hiện tại.
+ *
+ * # Safety
+ * `e` hợp lệ; con trỏ trả về hợp lệ tới lần đổi cấu hình kế tiếp.
+ */
+const char *pk_engine_charset(const PkEngine *e);
+
+/**
+ * Số kiểu gõ dựng sẵn.
+ */
+uint32_t pk_input_method_count(void);
+
+/**
+ * Tên kiểu gõ thứ `i` (rỗng nếu ngoài phạm vi).
+ *
+ * # Safety
+ * Con trỏ trả về sống suốt vòng đời tiến trình.
+ */
+const char *pk_input_method_name_at(uint32_t i);
+
+/**
+ * Số bảng mã đầu ra.
+ */
+uint32_t pk_charset_count(void);
+
+/**
+ * Tên bảng mã thứ `i` (rỗng nếu ngoài phạm vi).
+ *
+ * # Safety
+ * Con trỏ trả về sống suốt vòng đời tiến trình.
+ */
+const char *pk_charset_name_at(uint32_t i);
+
+/**
+ * Tra emoji theo `query` (tiền tố keyword như "smile" hoặc ascii như ":)"). Trả về danh sách emoji
+ * khớp, mỗi dòng một emoji, phân tách bằng `\n` (tối đa 60). Con trỏ trả về hợp lệ tới lần gọi
+ * `pk_emoji_query` kế tiếp TRÊN CÙNG THREAD; C++ phải sao chép ngay.
+ *
+ * # Safety
+ * `query` là chuỗi C hợp lệ hoặc null.
+ */
+const char *pk_emoji_query(const char *query);
 
 #ifdef __cplusplus
 }  // extern "C"
