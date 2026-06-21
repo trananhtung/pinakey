@@ -100,7 +100,14 @@ pub fn load_config(engine_name: &str) -> Config {
 fn load_config_from(path: &Path) -> Config {
     let data = match std::fs::read_to_string(path) {
         Ok(d) => d,
-        Err(_) => return default_cfg(), // chưa có file: bình thường
+        Err(e) => {
+            // NotFound = bình thường (lần chạy đầu). Lỗi đọc thật (quyền, I/O...) thì cảnh báo —
+            // nếu nuốt im lặng, save_config sau sẽ ghi đè mất config mà người dùng không hay.
+            if e.kind() != std::io::ErrorKind::NotFound {
+                eprintln!("pinakey: không đọc được config ({e}); dùng mặc định");
+            }
+            return default_cfg();
+        }
     };
     match serde_json::from_str::<Config>(&data) {
         Ok(parsed) => parsed,
@@ -131,11 +138,19 @@ pub fn save_config(c: &Config, engine_name: &str) -> std::io::Result<()> {
 fn save_config_to(c: &Config, path: &Path) -> std::io::Result<()> {
     let data = serde_json::to_string_pretty(c).map_err(std::io::Error::other)?;
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
+        // parent() của đường dẫn tương đối không có thư mục cha trả về Some("") → create_dir_all("")
+        // lỗi trên một số OS; bỏ qua khi rỗng.
+        if !dir.as_os_str().is_empty() {
+            std::fs::create_dir_all(dir)?;
+        }
     }
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, data)?;
-    std::fs::rename(&tmp, path)
+    if let Err(e) = std::fs::rename(&tmp, path) {
+        let _ = std::fs::remove_file(&tmp); // không để lại file .tmp rác khi rename lỗi
+        return Err(e);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -234,6 +249,23 @@ mod tests {
         let back = load_config_from(&path);
         assert_eq!(back.input_method, "VNI");
         std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn save_to_cleans_up_tmp_when_rename_fails() {
+        let dir = std::env::temp_dir().join(format!("pk_renfail_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("ibus-Telex.config.json");
+        // Tạo một THƯ MỤC ngay tại path để rename(file -> dir-không-rỗng) thất bại.
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::write(path.join("keep"), b"x").unwrap();
+        let r = save_config_to(&default_cfg(), &path);
+        assert!(r.is_err(), "rename đè lên thư mục phải lỗi");
+        assert!(
+            !path.with_extension("json.tmp").exists(),
+            "phải dọn file .tmp khi rename lỗi, không để lại rác"
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
