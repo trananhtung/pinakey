@@ -3,4 +3,5 @@ Name=PinaKey
 Icon=pinakey
 LangCode=vi
 Addon=pinakey
+Label=V
 Configurable=False

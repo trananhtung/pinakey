@@ -364,6 +364,18 @@ void PinaKeyEngine::deactivate(const InputMethodEntry & /*entry*/, InputContextE
     state(event.inputContext())->deactivate();
 }
 
+std::string PinaKeyEngine::subModeLabelImpl(const InputMethodEntry & /*entry*/,
+                                            InputContext & /*ic*/) {
+    // Hiển thị "V" khi PinaKey đang được chọn (đang gõ tiếng Việt).
+    return "V";
+}
+
+std::string PinaKeyEngine::subModeIconImpl(const InputMethodEntry & /*entry*/,
+                                           InputContext & /*ic*/) {
+    // Rỗng → panel dùng nhãn "V" ở trên làm chỉ báo trạng thái.
+    return {};
+}
+
 // ============================ Menu khu vực trạng thái (#12/#17) ============================
 
 void PinaKeyEngine::setupStatusMenu() {

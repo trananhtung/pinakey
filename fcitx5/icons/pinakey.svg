@@ -1,7 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <rect width="64" height="64" rx="14" fill="#c53a24"/>
-  <text x="50%" y="50%" dy="2" text-anchor="middle" dominant-baseline="central"
-        font-family="Georgia, 'Playfair Display', serif" font-size="42" font-weight="800"
-        fill="#fdf7ec">P</text>
-  <circle cx="46" cy="16" r="4" fill="#d7a94b"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 64 64"
+   width="64"
+   height="64"
+   version="1.1"
+   id="svg1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <rect
+     width="64"
+     height="64"
+     rx="14"
+     fill="#c53a24"
+     id="rect1" />
+  <path
+     d="m 17.519531,47 v -2.599609 h 4.103516 V 17.523437 H 17.519531 V 14.923828 H 35.78125 q 5.349609,0 8.507812,2.556641 3.158204,2.535156 3.158204,6.810547 0,4.296875 -3.179688,6.875 -3.158203,2.55664 -8.486328,2.55664 h -5.886719 v 10.677735 h 5.177735 V 47 Z m 12.375,-15.876953 h 2.40625 q 2.792969,0 4.447266,-1.847656 1.675781,-1.869141 1.675781,-4.984375 0,-3.09375 -1.654297,-4.919922 -1.654297,-1.847657 -4.46875,-1.847657 h -2.40625 z"
+     id="text1"
+     style="font-weight:bold;font-size:44px;font-family:'DejaVu Serif';text-anchor:middle;fill:#fdf7ec"
+     aria-label="P" />
+  <circle
+     cx="47"
+     cy="17"
+     r="4.5"
+     fill="#d7a94b"
+     id="circle1" />
 </svg>
