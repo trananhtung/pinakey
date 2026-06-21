@@ -1,0 +1,26 @@
+# Maintainer: trananhtung <https://github.com/trananhtung/pinakey>
+pkgname=fcitx5-pinakey
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="PinaKey — bộ gõ tiếng Việt cho fcitx5 (lõi Rust, gõ không gạch chân)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/trananhtung/pinakey"
+license=('GPL-3.0-or-later')
+depends=('fcitx5')
+makedepends=('cargo' 'cmake' 'extra-cmake-modules' 'fcitx5')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$srcdir/pinakey-$pkgver"
+  cmake -S fcitx5 -B build \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DPINAKEY_BUILD_TESTS=OFF
+  cmake --build build
+}
+
+package() {
+  cd "$srcdir/pinakey-$pkgver"
+  DESTDIR="$pkgdir" cmake --install build
+}

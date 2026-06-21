@@ -1,13 +1,17 @@
 # PinaKey
 
-**PinaKey** là một bộ gõ tiếng Việt (IME) cho Linux/IBus, viết hoàn toàn bằng Rust thuần —
-gõ Telex / VNI / VIQR mà không cần cgo. Giao thức IBus được hiện thực trên
-[`zbus`](https://crates.io/crates/zbus) và tích hợp X11 qua
-[`x11rb`](https://crates.io/crates/x11rb).
+**PinaKey** là một bộ gõ tiếng Việt (IME) cho Linux trên nền **fcitx5**, với **lõi xử lý viết hoàn
+toàn bằng Rust thuần** (gõ Telex / VNI / VIQR, không cgo) và một **addon C++ mỏng** tích hợp vào
+fcitx5. Trải nghiệm mặc định là **gõ không gạch chân** — chữ hiện thẳng như gõ thường, không có
+preedit gạch chân.
 
 🌐 **Trang giới thiệu:** **[trananhtung.github.io/pinakey-web](https://trananhtung.github.io/pinakey-web/)**
 — landing page song ngữ Việt/Anh, có **sân chơi gõ thử Telex/VNI ngay trong trình duyệt**.
 Mã nguồn trang web: [`trananhtung/pinakey-web`](https://github.com/trananhtung/pinakey-web).
+
+> PinaKey tham khảo ý tưởng từ **Bamboo** (ibus-bamboo), **[fcitx5-lotus](https://github.com/LotusInputMethod/fcitx5-lotus)**
+> (gõ không gạch chân) và **[fcitx5-cskk](https://github.com/fcitx/fcitx5-cskk)** (addon C++ bọc lõi
+> không-C++ qua C-ABI).
 
 ## Về cái tên
 
@@ -19,127 +23,101 @@ Mã nguồn trang web: [`trananhtung/pinakey-web`](https://github.com/trananhtun
 cho Alexandre de Rhodes và thường bị lãng quên sau cái bóng của học trò; bộ gõ này là một lời tri
 ân nhỏ. Hậu tố **"Key"** đánh dấu nó là một bộ gõ (keyboard / input method).
 
-> PinaKey tham khảo ý tưởng từ **Bamboo** (bộ gõ ibus-bamboo).
+## Tính năng
+
+- **Telex / VNI / VIQR** + nhiều biến thể dựng sẵn, kể cả **Telex đơn giản** (gõ dấu chặt).
+- **Gõ không gạch chân**: với app hỗ trợ *Surrounding Text* (đa số GTK/Qt) commit thẳng + sửa tại
+  chỗ; với app khác, dùng **daemon uinput** bơm Backspace; nếu không có thì tự lùi về preedit.
+- **Bảng tra emoji** (`:tên`) và **nhập Unicode hex** (`:u<hex>`), chọn bằng số/Enter.
+- **Menu** trên khay trạng thái: đổi kiểu gõ + bảng mã.
+- **Từ điển chính tả** "giải oan" cho từ mượn (+ từ điển người dùng `~/.config/pinakey/dict.txt`).
+- **Gõ tắt (macro)**, **loại trừ app tiếng Anh** (terminal/IDE…), **tự bỏ qua ô mật khẩu**.
+- **Live-reload** file macro/dict khi sửa (không cần khởi động lại).
+- **Giao diện thiết lập** đồ họa thuần Rust (egui).
 
 ## Bố cục workspace
 
-| Crate | Trách nhiệm | Trạng thái |
-|-------|-------------|------------|
-| `pinakey-core` | Biến đổi Telex/VNI/VIQR, kiểm tra chính tả, mã hóa charset. | ✅ Hoàn chỉnh — 47 test biến đổi đều pass. |
-| `pinakey-config` | Cấu hình JSON, feature flag, đường dẫn cấu hình. | ✅ Hoàn chỉnh. |
-| `pinakey-emoji` | Trie emoji + bảng macro. | ✅ Hoàn chỉnh. |
-| `pinakey-engine` | **Lõi engine trung lập transport**: `process_key → (handled, Vec<Action>)`, không I/O. Dùng chung cho IBus và fcitx5. | ✅ Hoàn chỉnh. |
-| `pinakey-ibus` | Lớp truyền tải D-Bus IBus đầy đủ (zbus). | ✅ Hoàn chỉnh. |
-| `pinakey-ffi` | **C-ABI** bọc `pinakey-engine` (cbindgen) để addon fcitx5 C++ dùng lại lõi Rust. | ✅ Hoàn chỉnh. |
-| `pinakey-platform` | Nhận diện class của cửa sổ đang focus trên X11 (XWayland). | ◐ Wayland thuần + tiêm phím XTest là phần làm tiếp. |
-| `pinakey` (bin) | Binary của engine: chế độ `--version` và `--ibus` nhúng. | ✅ |
-| `fcitx5/` | **Addon fcitx5** (C++ mỏng) — frontend mới, hỗ trợ **gõ không gạch chân**. | ✅ MVP + SurroundingText. |
+| Crate | Trách nhiệm |
+|-------|-------------|
+| `pinakey-core` | Biến đổi Telex/VNI/VIQR, kiểm tra chính tả, từ điển, mã hóa charset. Logic thuần, không I/O. |
+| `pinakey-config` | Cấu hình JSON, feature flag, đường dẫn cấu hình. |
+| `pinakey-emoji` | Trie emoji + bảng macro. |
+| `pinakey-engine` | **Lõi engine trung lập transport**: `process_key → (handled, Vec<Action>)`, không I/O. |
+| `pinakey-ffi` | **C-ABI** (cbindgen) bọc `pinakey-engine` để addon fcitx5 C++ dùng lại lõi Rust. |
+| `pinakey-settings` | Giao diện thiết lập đồ họa (egui, feature `gui`). |
+| `fcitx5/` (C++) | **Addon fcitx5** (`InputMethodEngineV2`) + **daemon uinput** bơm Backspace. |
 
-Engine biến đổi (`pinakey-core`) là trái tim của dự án và được bao phủ bởi một bộ test hành vi,
-ánh xạ các con trỏ `*Transformation` được alias sang `Rc<RefCell<Transformation>>`
-(định danh con trỏ → `Rc::ptr_eq`, đột biến → `borrow_mut`).
-
-## Biên dịch
+## Biên dịch & test (lõi Rust)
 
 ```sh
-cargo build --workspace          # tất cả crate + binary
-cargo test --workspace           # 62 test
-cargo fmt --all --check          # cổng kiểm định dạng (CI bắt buộc)
-cargo clippy --workspace --all-targets -- -D warnings   # cổng lint
-./target/debug/pinakey --version
+cargo build --workspace
+cargo test --workspace
+cargo fmt --all --check                                  # cổng định dạng (CI)
+cargo clippy --workspace --all-targets -- -D warnings    # cổng lint (CI)
 ```
 
-Xem [ARCHITECTURE.md](ARCHITECTURE.md) để biết đồ thị phụ thuộc giữa các crate và lý do thiết kế,
-và [CONTRIBUTING.md](CONTRIBUTING.md) để biết quy trình phát triển cũng như cách tạo lại các bảng dữ liệu.
+Xem [ARCHITECTURE.md](ARCHITECTURE.md) để biết đồ thị phụ thuộc và lý do thiết kế,
+và [CONTRIBUTING.md](CONTRIBUTING.md) để biết quy trình phát triển.
 
-## Cài đặt (Linux / IBus)
+## Cài đặt (fcitx5)
 
-### Cách nhanh nhất — một dòng lệnh
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/trananhtung/pinakey/main/tools/install-online.sh | bash
-```
-
-Lệnh này tự nhận diện CPU (**x86_64** hoặc **aarch64**), tải binary của bản release mới nhất,
-đăng ký engine với IBus và thêm PinaKey vào nguồn nhập GNOME. Sau khi cài, nhấn **Super+Space**
-để chuyển sang *PinaKey — Bộ gõ tiếng Việt* và gõ Telex (ví dụ `vieetj` → `việt`).
-
-**Yêu cầu:** một bản Linux có **IBus** (GNOME mặc định đã có), lệnh `curl`, và quyền `sudo`
-(chỉ dùng để đặt file component vào `/usr/share/ibus/component` — nơi duy nhất IBus quét).
-
-Gỡ cài đặt bất cứ lúc nào:
+### Phụ thuộc build (Debian/Ubuntu)
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/trananhtung/pinakey/main/tools/install-online.sh | bash -s -- --uninstall
-```
-
-> Thích tự tay hơn? Mỗi bản [Releases](https://github.com/trananhtung/pinakey/releases) đính kèm
-> sẵn binary `pinakey-x86_64` / `pinakey-aarch64` kèm file `.sha256` để bạn tải và kiểm tra thủ công.
-
-### Cài từ mã nguồn (cho người phát triển)
-
-```sh
-cargo build --release -p pinakey
-! bash tools/install.sh      # cài binary + icon vào ~/.local/lib/pinakey, chép component XML
-                             # vào /usr/share/ibus/component (cần sudo), làm mới IBus, và thêm
-                             # PinaKey vào danh sách nguồn nhập GNOME
-```
-
-Gỡ bằng `bash tools/uninstall.sh`. Một bài kiểm tra đầu-cuối trực tiếp nằm ở
-`cargo run -p pinakey-ibus --example smoketest`.
-
-## Frontend fcitx5 (gõ không gạch chân) — mới
-
-PinaKey nay có thêm frontend **fcitx5** bên cạnh IBus. Lõi tiếng Việt (Rust) được dùng lại nguyên
-vẹn qua một **C-ABI** (`pinakey-ffi`, sinh header bằng cbindgen) và một **addon C++ mỏng**
-(`fcitx5/`) — đúng mô hình của [fcitx5-cskk](https://github.com/fcitx/fcitx5-cskk). Logic tiếng
-Việt KHÔNG bị viết lại; addon chỉ là lớp tích hợp.
-
-**Gõ không gạch chân (mặc định):** với ứng dụng hỗ trợ *Surrounding Text* (đa số app GTK/Qt), addon
-commit thẳng văn bản và sửa tại chỗ bằng `deleteSurroundingText` — không hiện preedit gạch chân.
-Ứng dụng không hỗ trợ thì tự lùi về chế độ preedit. (Bơm Backspace qua uinput cho mọi app — issue
-[#28] — là phần làm tiếp.)
-
-### Yêu cầu build
-
-```sh
-sudo apt install fcitx5 libfcitx5core-dev libfcitx5utils-dev fcitx5-modules-dev \
-                 extra-cmake-modules cmake g++          # Debian/Ubuntu
+sudo apt install fcitx5 libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev \
+                 fcitx5-modules-dev extra-cmake-modules cmake g++
+# + Rust (rustup) >= 1.85
 ```
 
 ### Build & cài
 
 ```sh
+bash tools/install-fcitx5.sh     # build + ctest + sudo cmake --install + restart fcitx5
+```
+
+hoặc thủ công:
+
+```sh
 cmake -S fcitx5 -B fcitx5/build -DCMAKE_INSTALL_PREFIX=/usr   # cargo tự build lõi Rust (staticlib)
 cmake --build fcitx5/build
 ctest --test-dir fcitx5/build --output-on-failure            # test tích hợp qua fcitx5 thật
-sudo cmake --install fcitx5/build                            # cài pinakey.so + .conf vào /usr
-fcitx5 -r -d                                                 # khởi động lại fcitx5
+sudo cmake --install fcitx5/build
+fcitx5 -r -d
 ```
 
-Sau đó mở **fcitx5-configtool**, thêm input method **PinaKey** (ngôn ngữ: Tiếng Việt), rồi nhấn
-phím chuyển input method (mặc định Ctrl+Space) và gõ Telex — ví dụ `vieetj` → `việt`.
+Sau đó mở **fcitx5-configtool** → thêm input method **PinaKey** (Tiếng Việt) → Ctrl+Space để chuyển
+→ gõ Telex, ví dụ `vieetj` → `việt`.
+
+> **Đóng gói sẵn** (deb/rpm/AUR/Nix): xem [packaging/](packaging/).
+
+### Giao diện thiết lập (tùy chọn)
+
+```sh
+cargo build --release -p pinakey-settings --features gui
+./target/release/pinakey-settings
+```
+
+### Gõ không gạch chân ở MỌI ứng dụng (daemon uinput, tùy chọn)
+
+Với app không hỗ trợ Surrounding Text (một số terminal/Electron), bật daemon uinput để bơm Backspace:
+
+```sh
+# Đã cài kèm khi `cmake --install`: udev rule + modules-load + systemd user service.
+sudo udevadm control --reload && sudo udevadm trigger
+systemctl --user enable --now pinakey-uinput-server
+```
 
 ## Ghi chú kiến trúc
 
-- `pinakey-core` dựa trên `Rc` (đơn luồng). Vì interface zbus bắt buộc phải `Send + Sync`, engine
-  được chạy trên một thread riêng phía sau một actor giao tiếp qua channel (`pinakey-ibus::EngineHandle`).
-- Logic xử lý phím ở chế độ Preedit nằm ở **`pinakey-engine`** (lõi trung lập transport), độc lập
-  với mọi frontend: nó trả về một danh sách `Action` (commit / cập-nhật-preedit / ẩn), nhờ vậy
-  toàn bộ hành vi IME được unit-test mà không cần daemon. Keysym/modifier dùng giá trị X11 trung
-  lập (`pinakey-engine::keysym`) — trùng cho cả IBus lẫn fcitx5.
-- **Hai frontend dùng chung một lõi:** lớp D-Bus (`pinakey-ibus`) dịch `Action` thành tín hiệu IBus;
-  addon fcitx5 (`fcitx5/`) gọi `pinakey-ffi` (C-ABI) rồi dịch `Action` thành lệnh fcitx5
-  (`commitString` / preedit / `deleteSurroundingText`).
+- Logic xử lý phím nằm ở **`pinakey-engine`** (lõi trung lập transport): trả về danh sách `Action`
+  (commit / cập-nhật-preedit / ẩn), unit-test được mà không cần daemon. Keysym/modifier dùng giá trị
+  X11 — trùng với fcitx5 nên không cần ánh xạ.
+- Addon fcitx5 (`fcitx5/`) gọi `pinakey-ffi` (C-ABI), rồi dịch `Action` thành lệnh fcitx5
+  (`commitString` / preedit / `deleteSurroundingText`). Gõ không gạch chân = so tiền tố chung giữa
+  chuỗi đang hiển thị và chuỗi mới → `(số ký tự xoá, chuỗi chèn)`.
+- `pinakey-core` dùng `Rc` (đơn luồng); mỗi input context giữ một thực thể engine riêng.
 
-## Chưa hiện thực (phần làm tiếp)
+## Lịch sử
 
-Chế độ nhập Preedit mặc định đã hoạt động đầu-cuối. Những tính năng sau vẫn còn lại (mỗi tính năng
-cần một daemon IBus đang chạy + màn hình để kiểm tra đầy đủ):
-
-- Các chế độ nhập sửa-lỗi-bằng-Backspace và tiêm phím XTest / Wayland.
-- Bảng tra cứu emoji và hexadecimal.
-- Phím tắt, menu thuộc tính, kiểm tra chính tả dựa trên từ điển.
-- Giao diện thiết lập đồ họa.
-
-Xem `docs/superpowers/specs/2026-06-18-pinakey-design.md` để biết toàn bộ thiết kế.
+PinaKey khởi đầu là bộ gõ IBus thuần Rust; từ EPIC #22 đã **chuyển hẳn sang fcitx5** để có gõ không
+gạch chân mượt + Wayland vững (bơm Backspace mà IBus không cấp). Frontend IBus cũ đã được gỡ bỏ.
