@@ -61,9 +61,18 @@ fn home_dir() -> String {
         .unwrap_or_else(|| "~".to_string())
 }
 
-/// `~/.config/pinakey` — thư mục cấu hình riêng cho từng người dùng của PinaKey.
+/// `$XDG_CONFIG_HOME/pinakey` (mặc định `~/.config/pinakey`) — thư mục cấu hình riêng cho
+/// từng người dùng của PinaKey. Tôn trọng chuẩn XDG; chỉ về `~/.config` khi không xác định được.
 pub fn get_config_dir() -> PathBuf {
-    PathBuf::from(format!("{}/.config/pinakey", home_dir()))
+    config_dir_in(dirs::config_dir(), &home_dir())
+}
+
+/// Logic thuần (không đọc môi trường) để test được trực tiếp: ưu tiên thư mục config base của
+/// XDG (`dirs::config_dir()` = `$XDG_CONFIG_HOME` hoặc `~/.config`), fallback `{home}/.config`.
+fn config_dir_in(xdg_config_base: Option<PathBuf>, home: &str) -> PathBuf {
+    xdg_config_base
+        .unwrap_or_else(|| PathBuf::from(format!("{}/.config", home)))
+        .join("pinakey")
 }
 
 pub fn get_macro_path(engine_name: &str) -> PathBuf {
@@ -122,6 +131,25 @@ mod tests {
         assert_eq!(c.output_charset, "Unicode");
         assert_eq!(c.flags, core_flag::STD_FLAGS);
         assert!(c.input_method_definitions.contains_key("Telex"));
+    }
+
+    #[test]
+    fn config_dir_uses_xdg_base_when_present() {
+        // Khi có thư mục config base của XDG ($XDG_CONFIG_HOME), config nằm dưới đó.
+        // Không mutate biến môi trường nên không có data race khi test chạy song song.
+        let xdg = PathBuf::from("/tmp/xdgbase");
+        assert_eq!(
+            config_dir_in(Some(xdg.clone()), "/home/u"),
+            xdg.join("pinakey")
+        );
+    }
+
+    #[test]
+    fn config_dir_falls_back_to_home_config_when_xdg_absent() {
+        assert_eq!(
+            config_dir_in(None, "/home/u"),
+            PathBuf::from("/home/u/.config/pinakey")
+        );
     }
 
     #[test]
