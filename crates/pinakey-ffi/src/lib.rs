@@ -357,6 +357,17 @@ pub unsafe extern "C" fn pk_engine_preedit_underline(e: *const PkEngine) -> bool
 // Điều khiển trạng thái
 // ------------------------------------------------------------------------------------------------
 
+/// Nạp lại file macro + từ điển từ đĩa (issue #20, live-reload) mà không đổi cấu hình đang chạy.
+///
+/// # Safety
+/// `e` hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_reload(e: *mut PkEngine) {
+    if let Some(engine) = e.as_mut() {
+        engine.core.reload_data();
+    }
+}
+
 /// Đặt lại buffer soạn thảo (tương ứng `reset()` của fcitx5 khi đổi focus/huỷ).
 ///
 /// # Safety

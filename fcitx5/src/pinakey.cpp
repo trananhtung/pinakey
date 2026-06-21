@@ -15,7 +15,10 @@
 #include <fcitx/text.h>
 #include <fcitx/userinterfacemanager.h>
 
+#include <sys/stat.h>
+
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <vector>
@@ -179,6 +182,56 @@ PinaKeyEngine::PinaKeyEngine(Instance *instance)
       }) {
     instance_->inputContextManager().registerProperty("pinakeyState", &factory_);
     setupStatusMenu();
+    setupReloadTimer();
+}
+
+namespace {
+uint64_t fileMtime(const std::string &path) {
+    struct stat st {};
+    if (stat(path.c_str(), &st) == 0) {
+        return static_cast<uint64_t>(st.st_mtime);
+    }
+    return 0;
+}
+} // namespace
+
+void PinaKeyEngine::setupReloadTimer() {
+    const char *home = std::getenv("HOME");
+    if (!home) {
+        return;
+    }
+    const std::string dir = std::string(home) + "/.config/pinakey/";
+    reloadFiles_ = {dir + "ibus-PinaKey.macro.text", dir + "dict.txt"};
+    reloadMtimes_.assign(reloadFiles_.size(), 0);
+    for (size_t i = 0; i < reloadFiles_.size(); ++i) {
+        reloadMtimes_[i] = fileMtime(reloadFiles_[i]);
+    }
+    constexpr uint64_t kInterval = 2000000; // 2s
+    reloadTimer_ = instance_->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + kInterval, 0,
+        [this](EventSourceTime *src, uint64_t) {
+            checkReload();
+            src->setTime(now(CLOCK_MONOTONIC) + kInterval);
+            return true;
+        });
+}
+
+void PinaKeyEngine::checkReload() {
+    bool changed = false;
+    for (size_t i = 0; i < reloadFiles_.size(); ++i) {
+        uint64_t m = fileMtime(reloadFiles_[i]);
+        if (m != reloadMtimes_[i]) {
+            reloadMtimes_[i] = m;
+            changed = true;
+        }
+    }
+    if (!changed) {
+        return;
+    }
+    instance_->inputContextManager().foreach([this](InputContext *ic) {
+        pk_engine_reload(state(ic)->core());
+        return true;
+    });
 }
 
 void PinaKeyEngine::keyEvent(const InputMethodEntry & /*entry*/, KeyEvent &keyEvent) {

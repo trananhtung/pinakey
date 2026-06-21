@@ -152,6 +152,14 @@ bool pk_engine_is_composing(const PkEngine *e);
 bool pk_engine_preedit_underline(const PkEngine *e);
 
 /**
+ * Nạp lại file macro + từ điển từ đĩa (issue #20, live-reload) mà không đổi cấu hình đang chạy.
+ *
+ * # Safety
+ * `e` hợp lệ.
+ */
+void pk_engine_reload(PkEngine *e);
+
+/**
  * Đặt lại buffer soạn thảo (tương ứng `reset()` của fcitx5 khi đổi focus/huỷ).
  *
  * # Safety

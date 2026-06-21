@@ -115,6 +115,20 @@ impl EngineCore {
         self.preeditor = build_preeditor(&self.config);
     }
 
+    /// Nạp lại file macro + từ điển từ đĩa (issue #20, live-reload) — KHÔNG đụng tới cấu hình đang
+    /// chạy (kiểu gõ/bảng mã/flags giữ nguyên). Gọi khi phát hiện file thay đổi.
+    pub fn reload_data(&mut self) {
+        if self.config.ib_flags & cfg::IB_MACRO_ENABLED != 0 {
+            let mut mt = MacroTable::new(self.config.ib_flags & cfg::IB_AUTO_CAPITALIZE_MACRO != 0);
+            if let Some(path) = pinakey_config::get_macro_path(ENGINE_NAME).to_str() {
+                let _ = mt.load_from_file(path);
+            }
+            mt.set_enabled(true);
+            self.macro_table = mt;
+        }
+        self.dictionary = load_dictionary(&self.config);
+    }
+
     // ----- các hàm đọc (không có side effect) -----
 
     fn get_processed_string(&self, mode_flags: u32) -> String {

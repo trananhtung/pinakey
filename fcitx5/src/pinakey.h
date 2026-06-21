@@ -21,6 +21,9 @@
 #include <fcitx/instance.h>
 #include <fcitx/menu.h>
 
+#include <fcitx-utils/event.h>
+
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -89,9 +92,16 @@ public:
 private:
     void setupStatusMenu();
     void addStatusActions(InputContext *ic);
+    void setupReloadTimer(); // #20 live-reload macro/dict
+    void checkReload();
 
     Instance *instance_;
     FactoryFor<PinaKeyState> factory_;
+
+    // #20: theo dõi file macro/dict để nạp lại khi sửa, không cần khởi động lại.
+    std::unique_ptr<EventSourceTime> reloadTimer_;
+    std::vector<std::string> reloadFiles_;
+    std::vector<uint64_t> reloadMtimes_;
 
     // Menu khu vực trạng thái: chọn kiểu gõ + bảng mã (issue #12/#17).
     std::unique_ptr<SimpleAction> imRootAction_;
