@@ -86,6 +86,17 @@ bool pk_engine_process_key_replace(PkEngine *e,
 uint32_t pk_engine_replace_delete(const PkEngine *e);
 
 /**
+ * Chuỗi segment mà engine TIN là đang hiển thị ngay trước con trỏ trong tài liệu (`prev_displayed`).
+ * C++ đối chiếu với surrounding text trước con trỏ để phát hiện con trỏ đã nhảy / văn bản đổi
+ * (khi đó phải reset trước khi xử lý phím, tránh deleteSurroundingText xoá nhầm). Con trỏ trả về
+ * hợp lệ tới lần gọi kế tiếp; C++ phải copy ngay nếu cần giữ.
+ *
+ * # Safety
+ * `e` phải là con trỏ engine hợp lệ.
+ */
+const char *pk_engine_replace_segment(const PkEngine *e);
+
+/**
  * Chuỗi cần chèn (commit) cho lần `process_key_replace` gần nhất.
  *
  * # Safety

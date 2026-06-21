@@ -42,6 +42,8 @@ pub struct PkEngine {
     // `replace_insert`. C++ thực hiện qua deleteSurroundingText(-n, n) + commitString.
     replace_delete: u32,
     replace_insert: CString,
+    // Bộ đệm trả `prev_displayed` cho C++ (giữ con trỏ hợp lệ tới lần gọi getter kế tiếp).
+    replace_segment_c: CString,
 }
 
 impl PkEngine {
@@ -60,6 +62,7 @@ impl PkEngine {
             prev_displayed: String::new(),
             replace_delete: 0,
             replace_insert: CString::default(),
+            replace_segment_c: CString::default(),
         })
     }
 
@@ -88,6 +91,7 @@ impl PkEngine {
         self.preedit_cursor = 0;
         self.preedit_visible = false;
         self.prev_displayed.clear();
+        self.replace_segment_c = CString::default();
         self.replace_delete = 0;
         self.replace_insert = CString::default();
     }
@@ -105,6 +109,8 @@ impl PkEngine {
         self.replace_delete = delete;
         self.replace_insert = to_cstring(&insert);
         // Phần commit nay là cố định trong tài liệu; chỉ còn phần preedit là segment đang theo dõi.
+        // Cập nhật luôn bộ đệm C để getter pk_engine_replace_segment là O(1) không cấp phát.
+        self.replace_segment_c = to_cstring(&preedit);
         self.prev_displayed = preedit;
     }
 }
@@ -278,6 +284,20 @@ pub unsafe extern "C" fn pk_engine_replace_delete(e: *const PkEngine) -> u32 {
     e.as_ref().map(|x| x.replace_delete).unwrap_or(0)
 }
 
+/// Chuỗi segment mà engine TIN là đang hiển thị ngay trước con trỏ trong tài liệu (`prev_displayed`).
+/// C++ đối chiếu với surrounding text trước con trỏ để phát hiện con trỏ đã nhảy / văn bản đổi
+/// (khi đó phải reset trước khi xử lý phím, tránh deleteSurroundingText xoá nhầm). Con trỏ trả về
+/// hợp lệ tới lần gọi kế tiếp; C++ phải copy ngay nếu cần giữ.
+///
+/// # Safety
+/// `e` phải là con trỏ engine hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_replace_segment(e: *const PkEngine) -> *const c_char {
+    e.as_ref()
+        .map(|x| x.replace_segment_c.as_ptr())
+        .unwrap_or(c"".as_ptr())
+}
+
 /// Chuỗi cần chèn (commit) cho lần `process_key_replace` gần nhất.
 ///
 /// # Safety
@@ -413,6 +433,7 @@ pub unsafe extern "C" fn pk_engine_flush_preedit(e: *mut PkEngine) -> *const c_c
     engine.preedit_cursor = 0;
     engine.preedit_visible = false;
     engine.prev_displayed.clear();
+    engine.replace_segment_c = CString::default();
     engine.replace_delete = 0;
     engine.replace_insert = CString::default();
     ptr
@@ -697,6 +718,26 @@ mod tests {
             doc.push_str(ins);
         }
         doc
+    }
+
+    #[test]
+    fn replace_segment_reports_tracked_segment() {
+        unsafe {
+            let e = pk_engine_new();
+            // Gõ "vie" qua chế độ replace — segment đang theo dõi phải là "vie".
+            let _ = type_replace(e, "vie");
+            let seg = CStr::from_ptr(pk_engine_replace_segment(e))
+                .to_str()
+                .unwrap();
+            assert_eq!(seg, "vie", "segment đang track phải khớp phần đang soạn");
+            // Sau reset, segment rỗng.
+            pk_engine_reset(e);
+            let seg2 = CStr::from_ptr(pk_engine_replace_segment(e))
+                .to_str()
+                .unwrap();
+            assert_eq!(seg2, "", "sau reset segment phải rỗng");
+            pk_engine_free(e);
+        }
     }
 
     #[test]
