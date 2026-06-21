@@ -577,6 +577,16 @@ void PinaKeyState::cancelEmoji(bool commitLiteral) {
 
 bool PinaKeyState::handleEmojiKey(KeyEvent &keyEvent) {
     const uint32_t sym = static_cast<uint32_t>(keyEvent.rawKey().sym());
+    const uint32_t state = static_cast<uint32_t>(keyEvent.rawKey().states());
+
+    // Tổ hợp có Ctrl/Alt/Super/Meta (vd Ctrl+C, Alt+Tab) → thoát chế độ emoji và để phím đi tiếp,
+    // KHÔNG nuốt thành ký tự truy vấn. (Ctrl=1<<2, Alt=1<<3, Super=1<<6, Super2=1<<26, Meta=1<<28.)
+    constexpr uint32_t kModMask =
+        (1u << 2) | (1u << 3) | (1u << 6) | (1u << 26) | (1u << 28);
+    if (state & kModMask) {
+        cancelEmoji(true);
+        return false;
+    }
 
     // Chế độ hex (":u<hex>") cần gõ chữ số → KHÔNG dùng số để chọn candidate.
     const bool hexMode =

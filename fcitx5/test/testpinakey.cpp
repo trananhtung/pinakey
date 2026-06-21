@@ -102,6 +102,12 @@ int main() {
         typeAscii(testfrontend, uuid, "u1f600");
         sendKey(testfrontend, uuid, "Return");
 
+        // 9) Trong chế độ emoji, tổ hợp Ctrl+C phải THOÁT emoji (commit literal ":") và KHÔNG
+        //    nuốt 'c' làm query (bug fix: phím modifier đi tiếp).
+        testfrontend->call<ITestFrontend::pushCommitExpectation>(":");
+        sendKey(testfrontend, uuid, "colon");
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Control+c"), false);
+
         instance.exit();
     });
 
