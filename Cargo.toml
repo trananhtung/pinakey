@@ -12,6 +12,11 @@ repository = "https://github.com/trananhtung/pinakey"
 lto = true
 opt-level = 3
 strip = true   # loại bỏ ký hiệu debug -> binary release nhỏ hơn khi phát hành
+# Một panic trong hàm `extern "C"` của pinakey-ffi unwind băng qua biên giới FFI vào C++ là hành vi
+# không xác định (UB). staticlib phát hành được liên kết tĩnh vào addon fcitx5 C++, nên đặt
+# panic = abort: panic thành abort() xác định (kết thúc tiến trình sạch) thay vì UB. Test chạy ở
+# profile dev (vẫn unwind) nên không ảnh hưởng; mã không dùng catch_unwind/should_panic.
+panic = "abort"
 
 # Lints applied across every crate (each crate opts in with `[lints] workspace = true`).
 # CI runs `cargo clippy --all-targets -- -D warnings`, so these warn locally but block on CI.
