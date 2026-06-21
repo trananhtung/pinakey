@@ -61,9 +61,12 @@ fn home_dir() -> String {
         .unwrap_or_else(|| "~".to_string())
 }
 
-/// `~/.config/pinakey` — thư mục cấu hình riêng cho từng người dùng của PinaKey.
+/// `$XDG_CONFIG_HOME/pinakey` (mặc định `~/.config/pinakey`) — thư mục cấu hình riêng cho
+/// từng người dùng của PinaKey. Tôn trọng chuẩn XDG; chỉ về `~/.config` khi không xác định được.
 pub fn get_config_dir() -> PathBuf {
-    PathBuf::from(format!("{}/.config/pinakey", home_dir()))
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from(format!("{}/.config", home_dir())))
+        .join("pinakey")
 }
 
 pub fn get_macro_path(engine_name: &str) -> PathBuf {
@@ -122,6 +125,18 @@ mod tests {
         assert_eq!(c.output_charset, "Unicode");
         assert_eq!(c.flags, core_flag::STD_FLAGS);
         assert!(c.input_method_definitions.contains_key("Telex"));
+    }
+
+    #[test]
+    fn config_dir_honors_xdg_config_home() {
+        // Khi đặt XDG_CONFIG_HOME, thư mục config phải nằm dưới đó (chuẩn XDG),
+        // không phải hardcode ~/.config.
+        let tmp = std::env::temp_dir().join("pk_xdg_cfg_test");
+        // SAFETY: edition 2021, test đơn luồng cho biến env này.
+        std::env::set_var("XDG_CONFIG_HOME", &tmp);
+        let dir = get_config_dir();
+        std::env::remove_var("XDG_CONFIG_HOME");
+        assert_eq!(dir, tmp.join("pinakey"));
     }
 
     #[test]
