@@ -194,8 +194,37 @@ Rồi `fcitx5 -r -d` (hoặc đăng nhập lại).
 | Không thấy PinaKey trong configtool | Bỏ tick “Only Show Current Language”; chạy `fcitx5 -r -d` rồi mở lại. |
 | Gõ ra tiếng Anh | Nhấn **Ctrl+Space** để chuyển sang PinaKey; kiểm tra biểu tượng khay. |
 | Một số app hiện gạch chân | App đó không hỗ trợ Surrounding Text → bật daemon uinput (mục 9). |
+| **Không gõ được tiếng Việt trong Slack / Discord / VS Code… (app cài bằng snap/flatpak)** | App chạy trong sandbox **thiếu GTK immodule `fcitx5`** → mọi bộ gõ đều chết, không riêng PinaKey. Cài bản **`.deb`/native** thay cho snap/flatpak (xem mục **“App snap/flatpak”** bên dưới). |
 | Gõ tắt/từ điển không ăn | Kiểm tra đường dẫn file trong `~/.config/pinakey/`. |
 | Chẩn đoán chung | `fcitx5-diagnose` để xem fcitx5 có nhận PinaKey không. |
+
+### App snap/flatpak không gõ được tiếng Việt (Slack, Discord, VS Code…)
+
+Đây **không phải lỗi PinaKey**. App đóng gói bằng **snap** hoặc **flatpak** chạy trong môi trường
+sandbox riêng, thường **không kèm GTK immodule `im-fcitx5.so`**, nên fcitx5 (PinaKey, Unikey…)
+hay cả ibus đều **không nạp được** trong app đó — gõ ra chữ không dấu.
+
+Kiểm tra app có phải bản snap/flatpak không:
+
+```sh
+snap list 2>/dev/null | grep -i slack      # hoặc tên app khác
+flatpak list 2>/dev/null | grep -i slack
+```
+
+**Cách khắc phục: cài bản `.deb`/native** (dùng GTK hệ thống có sẵn `im-fcitx5.so`), ví dụ Slack:
+
+```sh
+# Gỡ bản snap rồi cài .deb chính thức từ slack.com
+sudo snap remove slack
+sudo apt install ./slack-desktop-*.deb
+```
+
+Bản `.deb` tự kế thừa `GTK_IM_MODULE=fcitx` của phiên (như Google Chrome) nên gõ tiếng Việt
+bình thường. Mẹo kiểm chứng nhanh: nếu **Google Chrome (bản `.deb`)** gõ được tiếng Việt mà
+app kia thì không, gần như chắc chắn app kia là bản snap/flatpak.
+
+> Lưu ý: đặt `GTK_IM_MODULE=xim` cho app snap **không cứu được** các app nền Electron/Chromium
+> (Slack, Discord, VS Code) — phải dùng bản `.deb`/native.
 
 ---
 
