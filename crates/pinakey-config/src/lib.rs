@@ -64,8 +64,14 @@ fn home_dir() -> String {
 /// `$XDG_CONFIG_HOME/pinakey` (mặc định `~/.config/pinakey`) — thư mục cấu hình riêng cho
 /// từng người dùng của PinaKey. Tôn trọng chuẩn XDG; chỉ về `~/.config` khi không xác định được.
 pub fn get_config_dir() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from(format!("{}/.config", home_dir())))
+    config_dir_in(dirs::config_dir(), &home_dir())
+}
+
+/// Logic thuần (không đọc môi trường) để test được trực tiếp: ưu tiên thư mục config base của
+/// XDG (`dirs::config_dir()` = `$XDG_CONFIG_HOME` hoặc `~/.config`), fallback `{home}/.config`.
+fn config_dir_in(xdg_config_base: Option<PathBuf>, home: &str) -> PathBuf {
+    xdg_config_base
+        .unwrap_or_else(|| PathBuf::from(format!("{}/.config", home)))
         .join("pinakey")
 }
 
@@ -128,15 +134,22 @@ mod tests {
     }
 
     #[test]
-    fn config_dir_honors_xdg_config_home() {
-        // Khi đặt XDG_CONFIG_HOME, thư mục config phải nằm dưới đó (chuẩn XDG),
-        // không phải hardcode ~/.config.
-        let tmp = std::env::temp_dir().join("pk_xdg_cfg_test");
-        // SAFETY: edition 2021, test đơn luồng cho biến env này.
-        std::env::set_var("XDG_CONFIG_HOME", &tmp);
-        let dir = get_config_dir();
-        std::env::remove_var("XDG_CONFIG_HOME");
-        assert_eq!(dir, tmp.join("pinakey"));
+    fn config_dir_uses_xdg_base_when_present() {
+        // Khi có thư mục config base của XDG ($XDG_CONFIG_HOME), config nằm dưới đó.
+        // Không mutate biến môi trường nên không có data race khi test chạy song song.
+        let xdg = PathBuf::from("/tmp/xdgbase");
+        assert_eq!(
+            config_dir_in(Some(xdg.clone()), "/home/u"),
+            xdg.join("pinakey")
+        );
+    }
+
+    #[test]
+    fn config_dir_falls_back_to_home_config_when_xdg_absent() {
+        assert_eq!(
+            config_dir_in(None, "/home/u"),
+            PathBuf::from("/home/u/.config/pinakey")
+        );
     }
 
     #[test]
