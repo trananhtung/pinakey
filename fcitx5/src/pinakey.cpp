@@ -49,6 +49,11 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
         return;
     }
 
+    // #9/#19: app trong danh sách loại trừ tiếng Anh, hoặc ô mật khẩu → để phím đi thẳng.
+    if (shouldPassThrough()) {
+        return;
+    }
+
     const uint32_t sym = static_cast<uint32_t>(keyEvent.rawKey().sym());
     const uint32_t state = static_cast<uint32_t>(keyEvent.rawKey().states());
 
@@ -74,6 +79,27 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
 bool PinaKeyState::wantReplaceMode() const {
     return pk_engine_no_underline(core_) &&
            ic_->capabilityFlags().test(CapabilityFlag::SurroundingText);
+}
+
+/// Có nên để phím đi thẳng (không gõ tiếng Việt) không: app trong danh sách loại trừ (#9) hoặc
+/// đang ở ô nhập mật khẩu (#19, tự loại trừ).
+bool PinaKeyState::shouldPassThrough() const {
+    return pk_engine_program_excluded(core_) ||
+           ic_->capabilityFlags().test(CapabilityFlag::Password);
+}
+
+/// Kết thúc phiên khi rời input method / mất focus (#6): commit phần đang soạn để không kẹt/mất chữ.
+void PinaKeyState::deactivate() {
+    if (!wantReplaceMode()) {
+        if (const char *p = pk_engine_flush_preedit(core_); p && p[0] != '\0') {
+            ic_->commitString(p);
+        }
+    } else {
+        pk_engine_reset(core_);
+    }
+    ic_->inputPanel().reset();
+    ic_->updatePreedit();
+    ic_->updateUserInterface(UserInterfaceComponent::InputPanel);
 }
 
 /// Áp lệnh thay thế: xoá N ký tự trước con trỏ rồi commit chuỗi mới. Không hiện preedit.
@@ -150,8 +176,8 @@ void PinaKeyEngine::activate(const InputMethodEntry & /*entry*/, InputContextEve
 }
 
 void PinaKeyEngine::deactivate(const InputMethodEntry & /*entry*/, InputContextEvent &event) {
-    // Khi rời input method: dọn preedit để không kẹt chữ (chế độ commit-on-focus-out sẽ thêm ở #6).
-    state(event.inputContext())->reset();
+    // #6: khi rời input method / mất focus, commit phần preedit đang soạn (không để kẹt chữ).
+    state(event.inputContext())->deactivate();
 }
 
 } // namespace fcitx

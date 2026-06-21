@@ -35,12 +35,14 @@ public:
 
     void keyEvent(KeyEvent &keyEvent);
     void reset();
+    void deactivate();
     PkEngine *core() { return core_; }
 
 private:
     void applyResult();
     void applyReplaceResult();
     bool wantReplaceMode() const;
+    bool shouldPassThrough() const;
 
     PinaKeyEngine *engine_;
     InputContext *ic_;

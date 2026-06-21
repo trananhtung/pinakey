@@ -151,6 +151,16 @@ bool pk_engine_preedit_underline(const PkEngine *e);
 void pk_engine_reset(PkEngine *e);
 
 /**
+ * Kết thúc phiên soạn khi mất focus (issue #6): trả về phần preedit đang hiển thị để C++ commit
+ * (tránh kẹt/mất chữ), rồi reset engine. Dùng cho chế độ preedit; ở chế độ gõ-không-gạch-chân
+ * văn bản đã nằm sẵn trong tài liệu nên C++ chỉ gọi `pk_engine_reset`.
+ *
+ * # Safety
+ * `e` hợp lệ; con trỏ trả về dùng được tới lần gọi kế tiếp.
+ */
+const char *pk_engine_flush_preedit(PkEngine *e);
+
+/**
  * Đặt tên chương trình của input context (vd `firefox`) để bật cách khắc phục theo ứng dụng.
  *
  * # Safety
@@ -158,6 +168,15 @@ void pk_engine_reset(PkEngine *e);
  */
 void pk_engine_set_program(PkEngine *e,
                            const char *program);
+
+/**
+ * Chương trình đang focus (đặt qua `pk_engine_set_program`) có nằm trong danh sách loại trừ tiếng
+ * Anh không (issue #9). C++ dùng cờ này để cho phím đi thẳng (pass-through), không gõ tiếng Việt.
+ *
+ * # Safety
+ * `e` hợp lệ.
+ */
+bool pk_engine_program_excluded(const PkEngine *e);
 
 /**
  * Đổi kiểu gõ ("Telex" / "VNI" / "VIQR" …) và dựng lại engine biến đổi.

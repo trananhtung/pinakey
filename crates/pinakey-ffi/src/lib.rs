@@ -360,6 +360,30 @@ pub unsafe extern "C" fn pk_engine_reset(e: *mut PkEngine) {
     }
 }
 
+/// Kết thúc phiên soạn khi mất focus (issue #6): trả về phần preedit đang hiển thị để C++ commit
+/// (tránh kẹt/mất chữ), rồi reset engine. Dùng cho chế độ preedit; ở chế độ gõ-không-gạch-chân
+/// văn bản đã nằm sẵn trong tài liệu nên C++ chỉ gọi `pk_engine_reset`.
+///
+/// # Safety
+/// `e` hợp lệ; con trỏ trả về dùng được tới lần gọi kế tiếp.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_flush_preedit(e: *mut PkEngine) -> *const c_char {
+    let Some(engine) = e.as_mut() else {
+        return c"".as_ptr();
+    };
+    // Dùng lại ô `commit` làm nơi giữ chuỗi trả về (hợp lệ tới lần gọi kế tiếp).
+    engine.commit = engine.preedit.clone();
+    let ptr = engine.commit.as_ptr();
+    engine.core.reset_preeditor();
+    engine.preedit = CString::default();
+    engine.preedit_cursor = 0;
+    engine.preedit_visible = false;
+    engine.prev_displayed.clear();
+    engine.replace_delete = 0;
+    engine.replace_insert = CString::default();
+    ptr
+}
+
 /// Đặt tên chương trình của input context (vd `firefox`) để bật cách khắc phục theo ứng dụng.
 ///
 /// # Safety
@@ -371,6 +395,18 @@ pub unsafe extern "C" fn pk_engine_set_program(e: *mut PkEngine, program: *const
             .core
             .set_wm_class(opt_str(program).unwrap_or("").to_string());
     }
+}
+
+/// Chương trình đang focus (đặt qua `pk_engine_set_program`) có nằm trong danh sách loại trừ tiếng
+/// Anh không (issue #9). C++ dùng cờ này để cho phím đi thẳng (pass-through), không gõ tiếng Việt.
+///
+/// # Safety
+/// `e` hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_program_excluded(e: *const PkEngine) -> bool {
+    e.as_ref()
+        .map(|x| x.core.is_program_excluded())
+        .unwrap_or(false)
 }
 
 /// Đổi kiểu gõ ("Telex" / "VNI" / "VIQR" …) và dựng lại engine biến đổi.
@@ -539,6 +575,42 @@ mod tests {
         unsafe {
             let e = pk_engine_new();
             assert_eq!(type_replace(e, "loz "), "loz ");
+            pk_engine_free(e);
+        }
+    }
+
+    #[test]
+    fn program_excluded_via_config() {
+        unsafe {
+            let cfg = CString::new(r#"{"EnglishExclude":["konsole","code"]}"#).unwrap();
+            let e = pk_engine_new_from_json(cfg.as_ptr());
+            // chưa đặt program → không loại trừ
+            assert!(!pk_engine_program_excluded(e));
+            let p1 = CString::new("konsole").unwrap();
+            pk_engine_set_program(e, p1.as_ptr());
+            assert!(pk_engine_program_excluded(e));
+            let p2 = CString::new("firefox").unwrap();
+            pk_engine_set_program(e, p2.as_ptr());
+            assert!(!pk_engine_program_excluded(e));
+            // khớp chuỗi con: "code - oss" chứa "code"
+            let p3 = CString::new("code - oss").unwrap();
+            pk_engine_set_program(e, p3.as_ptr());
+            assert!(pk_engine_program_excluded(e));
+            pk_engine_free(e);
+        }
+    }
+
+    #[test]
+    fn flush_preedit_commits_and_resets() {
+        unsafe {
+            let e = pk_engine_new();
+            let (_c, preedit) = type_str(e, "vieetj");
+            assert_eq!(preedit, "việt");
+            let flushed = CStr::from_ptr(pk_engine_flush_preedit(e)).to_str().unwrap();
+            assert_eq!(flushed, "việt"); // trả về để C++ commit
+                                         // sau flush, preedit trống (đã reset)
+            assert!(!pk_engine_preedit_visible(e));
+            assert_eq!(CStr::from_ptr(pk_engine_preedit(e)).to_bytes(), b"");
             pk_engine_free(e);
         }
     }

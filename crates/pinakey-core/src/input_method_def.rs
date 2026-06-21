@@ -8,6 +8,15 @@ use std::collections::HashMap;
 
 pub type InputMethodDefinition = Vec<(&'static str, &'static str)>;
 
+/// Tên kiểu gõ "Telex đơn giản / hạn chế" (issue #16).
+pub const SIMPLE_TELEX: &str = "Telex (đơn giản)";
+
+/// Kiểu gõ này có phải Telex đơn giản không. Khi đúng, lớp dựng engine tắt `FREE_TONE_MARKING`
+/// để gõ dấu chặt chẽ (dấu áp ngay, không tự dời) — giống tuỳ chọn restricted Telex của Bamboo.
+pub fn is_simple_telex(name: &str) -> bool {
+    name == SIMPLE_TELEX
+}
+
 /// Dạng owned của tất cả định nghĩa, theo cấu trúc `name -> (key -> dòng quy tắc)`, để lưu trong
 /// config và round-trip qua JSON (tương ứng với `GetInputMethodDefinitions` của Go).
 pub fn input_method_definitions_owned() -> HashMap<String, HashMap<String, String>> {
@@ -29,6 +38,26 @@ pub fn input_method_definitions() -> Vec<(&'static str, InputMethodDefinition)> 
     vec![
         (
             "Telex",
+            vec![
+                ("z", "XoaDauThanh"),
+                ("s", "DauSac"),
+                ("f", "DauHuyen"),
+                ("r", "DauHoi"),
+                ("x", "DauNga"),
+                ("j", "DauNang"),
+                ("a", "A_Â"),
+                ("e", "E_Ê"),
+                ("o", "O_Ô"),
+                ("w", "UOA_ƯƠĂ"),
+                ("d", "D_Đ"),
+            ],
+        ),
+        (
+            // Telex "đơn giản / hạn chế" (issue #16): cùng bộ phím với Telex chuẩn, nhưng khi chọn
+            // kiểu này engine tắt FREE_TONE_MARKING (gõ dấu chặt chẽ — dấu áp ngay, không tự dời),
+            // giống tuỳ chọn restricted Telex của Bamboo. Việc tắt cờ do build engine xử lý dựa trên
+            // tên kiểu gõ (xem `is_simple_telex`).
+            "Telex (đơn giản)",
             vec![
                 ("z", "XoaDauThanh"),
                 ("s", "DauSac"),

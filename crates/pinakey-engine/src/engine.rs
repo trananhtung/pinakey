@@ -42,16 +42,29 @@ pub struct EngineCore {
     pub should_restore_key_strokes: bool,
     pub last_key_with_shift: bool,
     wm_class: String,
+    /// Từ điển chính tả (chỉ nạp khi bật cờ `IB_SPELL_CHECK_WITH_DICTS`) — issue #18.
+    dictionary: Option<core::Dictionary>,
 }
 
 const VN_CASE_ALL_SMALL: u8 = 1;
 const VN_CASE_ALL_CAPITAL: u8 = 2;
 const VN_CASE_NO_CHANGE: u8 = 3;
 
+/// Tên engine quy ước, dùng cho đường dẫn file macro `ibus-<name>.macro.text`.
+const ENGINE_NAME: &str = "PinaKey";
+
 impl EngineCore {
     pub fn new(config: Config) -> EngineCore {
         let preeditor = build_preeditor(&config);
-        let macro_table = MacroTable::new(config.ib_flags & cfg::IB_AUTO_CAPITALIZE_MACRO != 0);
+        let mut macro_table = MacroTable::new(config.ib_flags & cfg::IB_AUTO_CAPITALIZE_MACRO != 0);
+        // #7: nạp file gõ tắt (macro) khi người dùng bật IB_MACRO_ENABLED; thiếu file thì bỏ qua.
+        if config.ib_flags & cfg::IB_MACRO_ENABLED != 0 {
+            if let Some(path) = pinakey_config::get_macro_path(ENGINE_NAME).to_str() {
+                let _ = macro_table.load_from_file(path);
+            }
+            macro_table.set_enabled(true);
+        }
+        let dictionary = load_dictionary(&config);
         EngineCore {
             preeditor,
             config,
@@ -59,11 +72,37 @@ impl EngineCore {
             should_restore_key_strokes: false,
             last_key_with_shift: false,
             wm_class: String::new(),
+            dictionary,
         }
+    }
+
+    /// Từ điển có công nhận `word` không (chỉ khi cờ `IB_SPELL_CHECK_WITH_DICTS` bật và đã nạp).
+    /// Từ điển chỉ "giải oan" cho từ hợp lệ mà quy tắc CVC từ chối; không loại bỏ từ đã chấp nhận.
+    fn dict_accepts(&self, word: &str) -> bool {
+        self.config.ib_flags & cfg::IB_SPELL_CHECK_WITH_DICTS != 0
+            && self.dictionary.as_ref().is_some_and(|d| d.contains(word))
+    }
+
+    /// Truy vấn công khai: từ điển có công nhận `word` không (theo cờ + từ điển đã nạp). Issue #18.
+    pub fn accepts_word(&self, word: &str) -> bool {
+        self.dict_accepts(word)
     }
 
     pub fn set_wm_class(&mut self, wm_class: String) {
         self.wm_class = wm_class;
+    }
+
+    /// Chương trình đang focus có nằm trong danh sách loại trừ tiếng Anh không (issue #9).
+    /// Khớp không phân biệt hoa/thường: bằng đúng hoặc là chuỗi con của wm_class.
+    pub fn is_program_excluded(&self) -> bool {
+        if self.wm_class.is_empty() {
+            return false;
+        }
+        let w = self.wm_class.to_lowercase();
+        self.config.english_exclude.iter().any(|p| {
+            let p = p.trim().to_lowercase();
+            !p.is_empty() && (w == p || w.contains(&p))
+        })
     }
 
     /// Đặt lại trạng thái soạn thảo bên dưới (tương ứng `Reset` của IBus).
@@ -154,8 +193,11 @@ impl EngineCore {
         if self.config.ib_flags & cfg::IB_DD_FREE_STYLE != 0 && vn_seq.contains('đ') {
             return false;
         }
-        // Kiểm tra chính tả dựa trên từ điển (IBspellCheckWithDicts) chưa được chuyển thể; quay về
-        // dùng kiểm tra tính hợp lệ theo quy tắc, khớp với tập flag mặc định.
+        // #18: nếu từ điển công nhận chuỗi này thì coi là hợp lệ (không khôi phục tiếng Anh) —
+        // "giải oan" cho từ mượn / tên riêng mà bộ quy tắc CVC đơn giản từ chối.
+        if self.dict_accepts(&vn_seq) {
+            return false;
+        }
         !self.preeditor.is_valid(true)
     }
 
@@ -480,7 +522,27 @@ fn build_preeditor(config: &Config) -> PinaKeyEngine {
         .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
         .unwrap_or_default();
     let im = build_input_method_from_pairs(&config.input_method, &pairs);
-    core::new_engine(im, config.flags)
+    let mut flags = config.flags;
+    // Telex đơn giản (#16): tắt gõ-dấu-tự-do để dấu áp ngay, không tự dời.
+    if core::is_simple_telex(&config.input_method) {
+        flags &= !core::flag::FREE_TONE_MARKING;
+    }
+    core::new_engine(im, flags)
+}
+
+/// Nạp từ điển chính tả khi bật `IB_SPELL_CHECK_WITH_DICTS` (issue #18): bộ từ khởi đầu đóng kèm
+/// binary, phủ thêm từ điển người dùng `~/.config/pinakey/dict.txt` nếu có.
+fn load_dictionary(config: &Config) -> Option<core::Dictionary> {
+    if config.ib_flags & cfg::IB_SPELL_CHECK_WITH_DICTS == 0 {
+        return None;
+    }
+    let mut dict = core::Dictionary::bundled();
+    if let Some(path) = pinakey_config::get_dict_path().to_str() {
+        if let Ok(user) = core::Dictionary::load_file(path) {
+            dict.merge(&user);
+        }
+    }
+    Some(dict)
 }
 
 fn determine_macro_case(s: &str) -> u8 {
@@ -590,5 +652,55 @@ mod tests {
         // '.' với buffer rỗng không xử lý được, buffer lại rỗng -> không handle (cho đi qua)
         let (handled, _actions) = core.process_key_event('.' as u32, 0, 0);
         assert!(!handled);
+    }
+
+    fn simple_telex_cfg() -> pinakey_config::Config {
+        let mut c = default_cfg();
+        c.input_method = "Telex (đơn giản)".to_string();
+        c
+    }
+
+    #[test]
+    fn simple_telex_differs_from_standard_free_marking() {
+        // Telex chuẩn (free marking): "anhs" -> dấu sắc tìm đúng nguyên âm 'a' -> "ánh".
+        let mut std = EngineCore::new(default_cfg());
+        let std_out = last_preedit(&type_keys(&mut std, "anhs"));
+        // Telex đơn giản (free marking tắt): 's' sau phụ âm 'h' -> không áp dấu -> "anhs".
+        let mut simple = EngineCore::new(simple_telex_cfg());
+        let simple_out = last_preedit(&type_keys(&mut simple, "anhs"));
+        assert_eq!(std_out.as_deref(), Some("ánh"));
+        assert_ne!(
+            std_out, simple_out,
+            "free marking phải đổi hành vi của 'anhs'"
+        );
+    }
+
+    #[test]
+    fn dict_spellcheck_wiring() {
+        use pinakey_config::flags as cfg;
+        // Mặc định KHÔNG bật cờ dict → không công nhận theo từ điển.
+        let off = EngineCore::new(default_cfg());
+        assert!(!off.accepts_word("việt"));
+        // Bật cờ dict → nạp bộ từ khởi đầu (có "việt", "chào").
+        let mut c = default_cfg();
+        c.ib_flags |= cfg::IB_SPELL_CHECK_WITH_DICTS;
+        let on = EngineCore::new(c);
+        assert!(on.accepts_word("việt"));
+        assert!(on.accepts_word("chào"));
+        assert!(!on.accepts_word("zzqx"));
+    }
+
+    #[test]
+    fn simple_telex_still_types_basic_vietnamese() {
+        let mut e1 = EngineCore::new(simple_telex_cfg());
+        assert_eq!(
+            last_preedit(&type_keys(&mut e1, "as")).as_deref(),
+            Some("á")
+        );
+        let mut e2 = EngineCore::new(simple_telex_cfg());
+        assert_eq!(
+            last_preedit(&type_keys(&mut e2, "aa")).as_deref(),
+            Some("â")
+        );
     }
 }
