@@ -81,6 +81,9 @@ public:
     void reset(const InputMethodEntry &entry, InputContextEvent &event) override;
     void activate(const InputMethodEntry &entry, InputContextEvent &event) override;
     void deactivate(const InputMethodEntry &entry, InputContextEvent &event) override;
+    // Khi PinaKey đang được chọn, hiển thị nhãn "V" (chỉ báo đang gõ tiếng Việt) thay cho icon.
+    std::string subModeLabelImpl(const InputMethodEntry &entry, InputContext &ic) override;
+    std::string subModeIconImpl(const InputMethodEntry &entry, InputContext &ic) override;
 
     Instance *instance() { return instance_; }
     auto *factory() { return &factory_; }
