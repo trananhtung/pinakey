@@ -91,6 +91,7 @@ impl PkEngine {
         self.preedit_cursor = 0;
         self.preedit_visible = false;
         self.prev_displayed.clear();
+        self.replace_segment_c = CString::default();
         self.replace_delete = 0;
         self.replace_insert = CString::default();
     }
@@ -108,6 +109,8 @@ impl PkEngine {
         self.replace_delete = delete;
         self.replace_insert = to_cstring(&insert);
         // Phần commit nay là cố định trong tài liệu; chỉ còn phần preedit là segment đang theo dõi.
+        // Cập nhật luôn bộ đệm C để getter pk_engine_replace_segment là O(1) không cấp phát.
+        self.replace_segment_c = to_cstring(&preedit);
         self.prev_displayed = preedit;
     }
 }
@@ -289,12 +292,10 @@ pub unsafe extern "C" fn pk_engine_replace_delete(e: *const PkEngine) -> u32 {
 /// # Safety
 /// `e` phải là con trỏ engine hợp lệ.
 #[no_mangle]
-pub unsafe extern "C" fn pk_engine_replace_segment(e: *mut PkEngine) -> *const c_char {
-    let Some(engine) = e.as_mut() else {
-        return c"".as_ptr();
-    };
-    engine.replace_segment_c = to_cstring(&engine.prev_displayed);
-    engine.replace_segment_c.as_ptr()
+pub unsafe extern "C" fn pk_engine_replace_segment(e: *const PkEngine) -> *const c_char {
+    e.as_ref()
+        .map(|x| x.replace_segment_c.as_ptr())
+        .unwrap_or(c"".as_ptr())
 }
 
 /// Chuỗi cần chèn (commit) cho lần `process_key_replace` gần nhất.
@@ -432,6 +433,7 @@ pub unsafe extern "C" fn pk_engine_flush_preedit(e: *mut PkEngine) -> *const c_c
     engine.preedit_cursor = 0;
     engine.preedit_visible = false;
     engine.prev_displayed.clear();
+    engine.replace_segment_c = CString::default();
     engine.replace_delete = 0;
     engine.replace_insert = CString::default();
     ptr

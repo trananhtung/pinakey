@@ -94,7 +94,7 @@ uint32_t pk_engine_replace_delete(const PkEngine *e);
  * # Safety
  * `e` phải là con trỏ engine hợp lệ.
  */
-const char *pk_engine_replace_segment(PkEngine *e);
+const char *pk_engine_replace_segment(const PkEngine *e);
 
 /**
  * Chuỗi cần chèn (commit) cho lần `process_key_replace` gần nhất.

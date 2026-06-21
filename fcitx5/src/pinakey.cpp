@@ -263,11 +263,11 @@ void PinaKeyState::resetIfDocumentDiverged() {
                    : ((c >> 3) == 0x1e)  ? 4
                                          : 1;
     }
-    const std::string before = text.substr(0, bytePos);
-    // UTF-8 tự đồng bộ: `before` kết thúc bằng `segment` (so byte) ⟺ đúng theo ký tự.
+    // UTF-8 tự đồng bộ: phần văn bản trước con trỏ (text[0..bytePos]) kết thúc bằng `segment`
+    // (so byte) ⟺ đúng theo ký tự. So trực tiếp trên `text`, không cấp phát chuỗi con (hot path).
     const bool endsWithSegment =
-        before.size() >= segment.size() &&
-        before.compare(before.size() - segment.size(), segment.size(), segment) == 0;
+        bytePos >= segment.size() &&
+        text.compare(bytePos - segment.size(), segment.size(), segment) == 0;
     if (!endsWithSegment) {
         pk_engine_reset(core_);
     }
