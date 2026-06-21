@@ -27,6 +27,9 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Version sync check (Cargo.toml = nguồn duy nhất)
+        run: bash tools/check-versions.sh
+
       - name: Format check
         run: cargo fmt --all --check
 

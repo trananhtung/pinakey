@@ -5,7 +5,14 @@
 #   cmake --build fcitx5/build
 #   sudo cmake --install fcitx5/build
 cmake_minimum_required(VERSION 3.16)
-project(fcitx5-pinakey VERSION 1.0.0 LANGUAGES CXX)
+
+# Version: nguồn duy nhất là Cargo.toml của workspace (tránh lệch giữa .deb/CMake và crate Rust).
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../Cargo.toml" _pinakey_cargo_toml)
+string(REGEX MATCH "version[ \t]*=[ \t]*\"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _pinakey_ver_match "${_pinakey_cargo_toml}")
+if(NOT CMAKE_MATCH_1)
+    message(FATAL_ERROR "Không đọc được version từ ../Cargo.toml")
+endif()
+project(fcitx5-pinakey VERSION ${CMAKE_MATCH_1} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -80,7 +87,7 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "PinaKey — bộ gõ tiếng Việt cho f
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/trananhtung/pinakey")
 
 # --- DEB ---
-set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)              # tên gồm kiến trúc: fcitx5-pinakey_1.0.0_amd64.deb
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)              # tên gồm version+kiến trúc: fcitx5-pinakey_<ver>_amd64.deb
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "fcitx5 (>= 5.0.0)")
 # Recommends: công cụ cấu hình (gói riêng trên Ubuntu/Debian) + im-config để bật fcitx5 ở mức phiên.
 set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "fcitx5-config-qt | fcitx5-configtool, im-config")
