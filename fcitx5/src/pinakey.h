@@ -42,6 +42,13 @@ public:
     PinaKeyState(PinaKeyEngine *engine, InputContext *ic);
     ~PinaKeyState() override;
 
+    // Sở hữu raw `core_` (PkEngine*) và free trong destructor → cấm copy/move để không bao giờ
+    // double-free do sao chép nhầm (rule of five đầy đủ cho lớp owning raw pointer).
+    PinaKeyState(const PinaKeyState &) = delete;
+    PinaKeyState &operator=(const PinaKeyState &) = delete;
+    PinaKeyState(PinaKeyState &&) = delete;
+    PinaKeyState &operator=(PinaKeyState &&) = delete;
+
     void keyEvent(KeyEvent &keyEvent);
     void reset();
     void deactivate();
