@@ -148,5 +148,10 @@ Nhấn Ctrl+Space để chuyển sang PinaKey, gõ thử:  vieetj → việt
 
 Lỗi "(Not available)" sau khi đăng nhập lại? fcitx5 chưa bật ở mức phiên:
    im-config -n fcitx5   rồi ĐĂNG XUẤT / đăng nhập lại.
+
+Gõ không gạch chân ở trình duyệt/editor (Surrounding Text): tự bật, ổn định.
+Terminal mặc định dùng preedit (gõ vẫn đúng). Chế độ uinput bỏ gạch chân ở
+terminal là THỬ NGHIỆM, tắt mặc định, không ổn định trên GNOME Wayland — xem
+USAGE.md mục 9 nếu muốn thử.
 =============================================
 EOF

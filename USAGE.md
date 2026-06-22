@@ -109,9 +109,9 @@ PinaKey hỗ trợ **Telex / VNI / VIQR**. Mặc định là **Telex**.
 Khác bộ gõ truyền thống (hiện chữ gạch chân rồi mới “chốt”), PinaKey **ghi thẳng** chữ tiếng Việt vào
 ô văn bản và tự sửa tại chỗ khi bạn gõ thêm dấu. Bạn thấy chữ như gõ bình thường, không có gạch chân.
 
-- Hoạt động tốt nhất với app hỗ trợ *Surrounding Text* (đa số app GTK/Qt: trình duyệt, soạn thảo…).
-- App không hỗ trợ → tự lùi về chế độ preedit (vẫn gõ được, chỉ là có dòng tạm).
-- Muốn dùng không-gạch-chân ở **mọi** app (kể cả terminal): bật daemon uinput — xem [mục 9](#9-gõ-không-gạch-chân-ở-mọi-app-nâng-cao).
+- Hoạt động tốt nhất với app hỗ trợ *Surrounding Text* (đa số app GTK/Qt: trình duyệt, soạn thảo…) — gõ không gạch chân, ổn định.
+- App không hỗ trợ *Surrounding Text* (terminal, vài app Electron) → **tự lùi về chế độ preedit** (có dòng tạm/gạch chân nhưng gõ luôn đúng). Đây là hành vi mặc định, tin cậy.
+- Có một chế độ **thử nghiệm** dùng daemon uinput để bỏ gạch chân ở cả terminal, nhưng **không ổn định trên GNOME Wayland** — xem [mục 9](#9-thử-nghiệm-gõ-không-gạch-chân-ở-terminal-uinput).
 
 ---
 
@@ -154,17 +154,34 @@ Bấm vào biểu tượng PinaKey trên khay (hoặc menu trạng thái của f
 
 ---
 
-## 9. Gõ không gạch chân ở MỌI app (nâng cao)
+## 9. (Thử nghiệm) Gõ không gạch chân ở terminal — uinput
 
-Một số app (terminal, vài app Electron) không hỗ trợ Surrounding Text. Để vẫn gõ không gạch chân ở
-đó, bật daemon bơm phím Backspace (đã cài kèm):
+> ⚠️ **Thử nghiệm, tắt mặc định.** Một số app (terminal, vài app Electron) không hỗ trợ
+> *Surrounding Text*, nên mặc định PinaKey dùng **preedit** (có gạch chân nhưng gõ luôn đúng) ở đó.
+> Chế độ uinput dưới đây cố bỏ gạch chân bằng cách bơm phím Backspace, **nhưng KHÔNG ổn định trên
+> GNOME Wayland** (frontend D-Bus của GNOME không bảo đảm thứ tự xoá/commit → dễ rối/nhân đôi ký
+> tự). Chỉ nên thử nếu bạn hiểu rủi ro; trên môi trường khác (KDE/X11) có thể khá hơn.
 
-```sh
-sudo udevadm control --reload && sudo udevadm trigger   # cấp quyền /dev/uinput
-systemctl --user enable --now pinakey-uinput-server     # chạy daemon dưới quyền của bạn
-```
+Cần **3 bước** (thiếu bước nào cũng không có tác dụng):
 
-Đăng xuất/đăng nhập lại nếu cần. (Bỏ qua bước này nếu bạn chỉ gõ trong trình duyệt/app thường.)
+1. **Build kèm daemon** (mặc định không build):
+   ```sh
+   bash tools/install-fcitx5.sh --clean   # cấu hình lại; xem thêm bên dưới
+   # hoặc thủ công:
+   cmake -S fcitx5 -B fcitx5/build -DPINAKEY_BUILD_UINPUT_SERVER=ON && cmake --build fcitx5/build && sudo cmake --install fcitx5/build
+   ```
+2. **Bật daemon** (chạy dưới quyền bạn, cấp quyền /dev/uinput):
+   ```sh
+   sudo udevadm control --reload && sudo udevadm trigger
+   systemctl --user enable --now pinakey-uinput-server
+   ```
+3. **Bật cờ ở addon** — thêm vào `~/.config/environment.d/fcitx5.conf`:
+   ```sh
+   PINAKEY_UINPUT=1
+   ```
+   rồi **đăng xuất / đăng nhập lại**.
+
+Muốn tắt: bỏ `PINAKEY_UINPUT=1` (đăng nhập lại) hoặc `systemctl --user disable --now pinakey-uinput-server`.
 
 ---
 
@@ -193,7 +210,8 @@ Rồi `fcitx5 -r -d` (hoặc đăng nhập lại).
 | **PinaKey hiện “(Not available)”** | Addon chưa nạp được. (1) Bật fcitx5 ở mức phiên: `im-config -n fcitx5` rồi **đăng xuất/đăng nhập lại**. (2) Cài vào `/usr` (gói `.deb` hoặc `cmake --install`) — **đừng** cài kiểu user-local `~/.local` + `FCITX_ADDON_DIRS` vì không bền vững. |
 | Không thấy PinaKey trong configtool | Bỏ tick “Only Show Current Language”; chạy `fcitx5 -r -d` rồi mở lại. |
 | Gõ ra tiếng Anh | Nhấn **Ctrl+Space** để chuyển sang PinaKey; kiểm tra biểu tượng khay. |
-| Một số app hiện gạch chân | App đó không hỗ trợ Surrounding Text → bật daemon uinput (mục 9). |
+| Terminal hiện gạch chân | Bình thường: terminal không hỗ trợ Surrounding Text nên dùng preedit (gõ vẫn đúng). Muốn thử bỏ gạch chân: chế độ uinput thử nghiệm (mục 9) — lưu ý không ổn định trên GNOME Wayland. |
+| Trình duyệt/editor hiện gạch chân | App đó chưa cấp Surrounding Text, hoặc cờ "Không gạch chân preedit" đang tắt → bật lại trong công cụ thiết lập PinaKey. |
 | **Không gõ được tiếng Việt trong Slack / Discord / VS Code… (app cài bằng snap/flatpak)** | App chạy trong sandbox **thiếu GTK immodule `fcitx5`** → mọi bộ gõ đều chết, không riêng PinaKey. Cài bản **`.deb`/native** thay cho snap/flatpak (xem mục **“App snap/flatpak”** bên dưới). |
 | Gõ tắt/từ điển không ăn | Kiểm tra đường dẫn file trong `~/.config/pinakey/`. |
 | Chẩn đoán chung | `fcitx5-diagnose` để xem fcitx5 có nhận PinaKey không. |

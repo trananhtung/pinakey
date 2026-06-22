@@ -32,7 +32,8 @@ cho Alexandre de Rhodes và thường bị lãng quên sau cái bóng của họ
 
 - **Telex / VNI / VIQR** + nhiều biến thể dựng sẵn, kể cả **Telex đơn giản** (gõ dấu chặt).
 - **Gõ không gạch chân**: với app hỗ trợ *Surrounding Text* (đa số GTK/Qt) commit thẳng + sửa tại
-  chỗ; với app khác, dùng **daemon uinput** bơm Backspace; nếu không có thì tự lùi về preedit.
+  chỗ; với app khác (terminal…) tự lùi về **preedit** (ổn định). Có chế độ **uinput thử nghiệm**
+  (opt-in, không ổn định trên GNOME Wayland) — xem USAGE mục 9.
 - **Bảng tra emoji** (`:tên`) và **nhập Unicode hex** (`:u<hex>`), chọn bằng số/Enter.
 - **Menu** trên khay trạng thái: đổi kiểu gõ + bảng mã.
 - **Từ điển chính tả** "giải oan" cho từ mượn (+ từ điển người dùng `~/.config/pinakey/dict.txt`).
@@ -114,14 +115,19 @@ cargo build --release -p pinakey-settings --features gui
 ./target/release/pinakey-settings
 ```
 
-### Gõ không gạch chân ở MỌI ứng dụng (daemon uinput, tùy chọn)
+### (Thử nghiệm) Gõ không gạch chân ở terminal — daemon uinput
 
-Với app không hỗ trợ Surrounding Text (một số terminal/Electron), bật daemon uinput để bơm Backspace:
+> ⚠️ Tắt mặc định và **không ổn định trên GNOME Wayland** (frontend D-Bus không bảo đảm thứ tự
+> xoá/commit → rối ký tự). Terminal mặc định dùng preedit. Chi tiết + cảnh báo: USAGE mục 9.
+
+Cần cả 3: (1) build kèm `-DPINAKEY_BUILD_UINPUT_SERVER=ON` (mặc định OFF), (2) bật daemon, (3) đặt
+env `PINAKEY_UINPUT=1` rồi đăng nhập lại.
 
 ```sh
-# Đã cài kèm khi `cmake --install`: udev rule + modules-load + systemd user service.
+cmake -S fcitx5 -B fcitx5/build -DPINAKEY_BUILD_UINPUT_SERVER=ON && cmake --build fcitx5/build && sudo cmake --install fcitx5/build
 sudo udevadm control --reload && sudo udevadm trigger
 systemctl --user enable --now pinakey-uinput-server
+echo 'PINAKEY_UINPUT=1' >> ~/.config/environment.d/fcitx5.conf   # rồi đăng xuất/đăng nhập lại
 ```
 
 ## Ghi chú kiến trúc

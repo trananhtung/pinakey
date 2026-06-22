@@ -23,9 +23,11 @@
 
 #include <fcitx-utils/event.h>
 
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 extern "C" {
@@ -63,7 +65,13 @@ private:
     // #7: reset segment đang theo dõi nếu con trỏ đã nhảy / văn bản đổi (so với surrounding text),
     // tránh deleteSurroundingText xoá nhầm ký tự ở vị trí mới.
     void resetIfDocumentDiverged();
-    void applyReplaceViaUinput(); // #28: gõ không gạch chân cho app không có SurroundingText
+    // Gõ không gạch chân cho app không có SurroundingText (terminal…) qua daemon uinput + ACK:
+    // hoãn commit, bơm (N+1) Backspace, ĐẾM Backspace bơm-ngược quay về fcitx, chỉ commit chuỗi
+    // mới sau khi xác nhận đã xoá đủ — triệt tiêu cuộc đua "commit trước khi xoá xong" (như
+    // fcitx5-lotus). Thay cho đường commit-ngay cũ (#28) vốn racy.
+    void startUinputReplace();             // performReplacement: bơm Backspace, hoãn commit
+    void handleUinputAck(KeyEvent &keyEvent); // xử lý Backspace bơm-ngược; commit khi đủ
+    void replayBufferedKeys();             // gõ nhanh khi đang xoá → replay sau khi ACK xong
     bool wantReplaceMode() const; // có dùng diff-and-replace (SurroundingText hoặc uinput) không
     bool useUinput() const;       // không có SurroundingText nhưng có server uinput
     bool shouldPassThrough() const;
@@ -80,6 +88,14 @@ private:
     PkEngine *core_;
     bool emojiMode_ = false;
     std::string emojiQuery_; // gồm cả dấu ':' đầu, ví dụ ":grin"
+
+    // ----- trạng thái ACK cho chế độ uinput (xoá-bằng-Backspace, app không có SurroundingText) -----
+    bool deleting_ = false;             // đang trong chuỗi xoá tự động (chờ Backspace bơm-ngược)
+    int expectedBackspaces_ = 0;        // tổng Backspace đã bơm (N ký tự xoá + 1 phím trigger)
+    int currentBackspaceCount_ = 0;     // số Backspace bơm-ngược đã thấy quay về
+    std::string pendingCommit_;         // chuỗi mới, commit sau khi xoá xong
+    std::vector<std::pair<uint32_t, uint32_t>> bufferedKeys_; // (sym,state) gõ trong lúc đang xoá
+    std::chrono::steady_clock::time_point deletingSince_;     // mốc bắt đầu xoá (lưới an toàn timeout)
 };
 
 /// Engine fcitx5 (một thực thể addon). Đăng ký factory tạo `PinaKeyState` cho mỗi input context.
