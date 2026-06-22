@@ -7,8 +7,9 @@ case "$1" in
     if command -v gtk-update-icon-cache >/dev/null 2>&1; then
       gtk-update-icon-cache -q -f /usr/share/icons/hicolor 2>/dev/null || true
     fi
-    # Nạp lại udev rule cho /dev/uinput (gõ không gạch chân ở mọi app — tùy chọn).
-    if command -v udevadm >/dev/null 2>&1; then
+    # Nạp lại udev rule cho /dev/uinput — CHỈ khi gói có kèm daemon uinput (chế độ thử nghiệm,
+    # mặc định không đóng gói). Bản mặc định không có rule này nên bỏ qua.
+    if [ -f /usr/lib/udev/rules.d/99-pinakey-uinput.rules ] && command -v udevadm >/dev/null 2>&1; then
       udevadm control --reload-rules 2>/dev/null || true
       udevadm trigger 2>/dev/null || true
     fi
