@@ -107,3 +107,13 @@ PINAKEY_E2E_DATA_HOME="$HOME/.local/share" bash tools/run-e2e.sh
 
 Thêm ca kiểm thử: sửa danh sách `CASES` trong `pinakey_e2e.py` (mỗi ca: nhãn, có SurroundingText?,
 chuỗi phím, chuỗi mong đợi).
+
+## Ghi nhận đóng góp
+
+PinaKey dùng [all-contributors](https://allcontributors.org/) — **mọi loại đóng góp** đều được ghi
+nhận trong mục [Người đóng góp](README.md#người-đóng-góp) của README (code, tài liệu, báo lỗi, ý
+tưởng, dịch thuật, đóng gói…). Sau khi PR được merge, người duy trì (hoặc chính bạn) comment để thêm:
+
+```
+@all-contributors please add @your-username for code, doc
+```

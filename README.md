@@ -1,5 +1,7 @@
 # PinaKey
 
+[![All Contributors](https://img.shields.io/github/all-contributors/trananhtung/pinakey?color=ee8449&style=flat-square)](#người-đóng-góp)
+
 **PinaKey** là một bộ gõ tiếng Việt (IME) cho Linux trên nền **fcitx5**, với **lõi xử lý viết hoàn
 toàn bằng Rust thuần** (gõ Telex / VNI / VIQR, không cgo) và một **addon C++ mỏng** tích hợp vào
 fcitx5. Trải nghiệm mặc định là **gõ không gạch chân** — chữ hiện thẳng như gõ thường, không có
@@ -136,3 +138,42 @@ systemctl --user enable --now pinakey-uinput-server
 
 PinaKey khởi đầu là bộ gõ IBus thuần Rust; từ EPIC #22 đã **chuyển hẳn sang fcitx5** để có gõ không
 gạch chân mượt + Wayland vững (bơm Backspace mà IBus không cấp). Frontend IBus cũ đã được gỡ bỏ.
+
+## Đóng góp
+
+PinaKey rất hoan nghênh đóng góp — từ sửa lỗi, thêm bảng phím/bảng mã, cải thiện tài liệu, tới báo
+lỗi và góp ý. Xem [CONTRIBUTING.md](CONTRIBUTING.md) cho quy trình làm việc cục bộ và các cổng chất
+lượng (fmt/clippy/test/e2e) mà CI bắt buộc. Mọi PR đều được CI kiểm tự động trước khi merge.
+
+Một vài hướng dễ bắt đầu: thêm/đối chiếu test gõ Telex/VNI/VIQR, mở rộng từ điển chính tả, viết tài
+liệu, hoặc đóng gói cho thêm distro. Cứ mở issue/PR — chúng tôi sẵn lòng hỗ trợ!
+
+## Người đóng góp
+
+Cảm ơn những người tuyệt vời ✨ đã đóng góp cho PinaKey ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/trananhtung"><img src="https://avatars.githubusercontent.com/u/30992229?s=100" width="100px;" alt="Tung Tran"/><br /><sub><b>Tung Tran</b></sub></a><br /><a href="https://github.com/trananhtung/pinakey/commits?author=trananhtung" title="Code">💻</a> <a href="https://github.com/trananhtung/pinakey/commits?author=trananhtung" title="Documentation">📖</a> <a href="#maintenance-trananhtung" title="Maintenance">🚧</a> <a href="#infra-trananhtung" title="Infrastructure (Hosting, Build-Tools, etc)">🚇</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+Dự án theo chuẩn [all-contributors](https://github.com/all-contributors/all-contributors) — **mọi
+loại đóng góp** đều được ghi nhận, không chỉ code. Để thêm người đóng góp, comment trong issue/PR:
+
+```
+@all-contributors please add @username for code, doc
+```
+
+(cần cài [all-contributors bot](https://allcontributors.org/docs/en/bot/installation) cho repo;
+hoặc dùng CLI: `npx all-contributors-cli add @username code,doc`).

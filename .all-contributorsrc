@@ -1,0 +1,29 @@
+{
+  "projectName": "pinakey",
+  "projectOwner": "trananhtung",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": true,
+  "commitConvention": "angular",
+  "commitType": "docs",
+  "contributorsPerLine": 7,
+  "contributorsSortAlphabetically": false,
+  "contributors": [
+    {
+      "login": "trananhtung",
+      "name": "Tung Tran",
+      "avatar_url": "https://avatars.githubusercontent.com/u/30992229",
+      "profile": "https://github.com/trananhtung",
+      "contributions": [
+        "code",
+        "doc",
+        "maintenance",
+        "infra"
+      ]
+    }
+  ]
+}
