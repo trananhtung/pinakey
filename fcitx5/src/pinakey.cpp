@@ -21,12 +21,15 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>
+#include <thread>
+#include <utility>
 #include <vector>
 
 namespace fcitx {
@@ -106,6 +109,12 @@ UinputClient &uinputClient() {
     static UinputClient client;
     return client;
 }
+
+/// Phím Backspace (kể cả phím bơm-ngược từ daemon uinput). FcitxKey_BackSpace == 0xff08 == 65288;
+/// thêm 8 (ASCII BS) cho chắc với một số frontend.
+bool isBackspaceSym(uint32_t sym) {
+    return sym == FcitxKey_BackSpace || sym == 8u;
+}
 } // namespace
 
 // ----------------------------------- PinaKeyState -----------------------------------
@@ -119,6 +128,13 @@ PinaKeyState::PinaKeyState(PinaKeyEngine *engine, InputContext *ic)
 PinaKeyState::~PinaKeyState() { pk_engine_free(core_); }
 
 void PinaKeyState::reset() {
+    // Dọn trạng thái ACK uinput để không kẹt nếu reset xảy ra giữa chuỗi xoá (đổi focus, click…).
+    deleting_ = false;
+    expectedBackspaces_ = 0;
+    currentBackspaceCount_ = 0;
+    pendingCommit_.clear();
+    bufferedKeys_.clear();
+
     pk_engine_reset(core_);
     ic_->inputPanel().reset();
     ic_->updatePreedit();
@@ -129,6 +145,38 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
     // Phím nhả: lõi không xử lý; để đi tiếp.
     if (keyEvent.isRelease()) {
         return;
+    }
+
+    // ACK uinput: đang trong chuỗi xoá tự động → các phím Backspace bơm-ngược từ daemon đi qua đây.
+    if (deleting_) {
+        const uint32_t s = static_cast<uint32_t>(keyEvent.rawKey().sym());
+        if (isBackspaceSym(s)) {
+            handleUinputAck(keyEvent); // tự để-đi-tiếp (trung gian) hoặc commit + nuốt (trigger)
+            return;
+        }
+        // Lưới an toàn: nếu Backspace bơm-ngược không quay về trong 500ms (round-trip thất bại),
+        // bỏ ACK, commit phần đang chờ rồi xử lý phím này như thường — không để kẹt cứng.
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now() - deletingSince_)
+                                 .count();
+        if (elapsed > 500) {
+            if (!pendingCommit_.empty()) {
+                ic_->commitString(pendingCommit_);
+            }
+            pendingCommit_.clear();
+            deleting_ = false;
+            expectedBackspaces_ = 0;
+            currentBackspaceCount_ = 0;
+            // KHÔNG return → rơi xuống xử lý phím bình thường bên dưới.
+        } else {
+            // Gõ nhanh hợp lệ khi đang xoá: đệm ký tự thường để replay sau, nuốt phím lúc này.
+            const std::string u = Key::keySymToUTF8(static_cast<KeySym>(s));
+            if (!u.empty() && bufferedKeys_.size() < 32) {
+                bufferedKeys_.emplace_back(s, static_cast<uint32_t>(keyEvent.rawKey().states()));
+            }
+            keyEvent.filterAndAccept();
+            return;
+        }
     }
 
     // #9/#19: app trong danh sách loại trừ tiếng Anh, hoặc ô mật khẩu → để phím đi thẳng.
@@ -164,10 +212,10 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
     }
 
     // Gõ không gạch chân #2 (#28): app KHÔNG có SurroundingText nhưng có daemon uinput → bơm
-    // Backspace + commit.
+    // Backspace + commit có ĐỒNG BỘ ACK (xem startUinputReplace/handleUinputAck).
     if (useUinput()) {
         const bool handled = pk_engine_process_key_replace(core_, sym, state);
-        applyReplaceViaUinput();
+        startUinputReplace();
         if (handled) {
             keyEvent.filterAndAccept();
         }
@@ -190,27 +238,91 @@ bool PinaKeyState::wantReplaceMode() const {
     return ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) || useUinput();
 }
 
-/// Không có SurroundingText nhưng bật gõ-không-gạch-chân và có daemon uinput → dùng bơm Backspace.
+/// Có dùng chế độ uinput+ACK (xoá-bằng-Backspace) cho app KHÔNG có SurroundingText không.
+///
+/// MẶC ĐỊNH TẮT. Trên GNOME Wayland, terminal nói chuyện với fcitx5 qua frontend D-Bus (lớp IBus),
+/// nơi GNOME không bảo đảm thứ tự giữa "xoá" và "commit" → mọi kỹ thuật xoá-bằng-Backspace
+/// (uinput commit-ngay, forwardKey, kể cả uinput+ACK kiểu Lotus) đều rối ký tự. Vì vậy mặc định
+/// rơi về preedit (ổn định 100%); app có SurroundingText (trình duyệt/editor) vẫn gõ không gạch
+/// chân qua đường #1. Đặt `PINAKEY_UINPUT=1` để bật lại uinput+ACK (thử nghiệm, tự chịu rủi ro).
 bool PinaKeyState::useUinput() const {
+    static const bool enabled = [] {
+        const char *e = std::getenv("PINAKEY_UINPUT");
+        return e != nullptr && e[0] == '1' && e[1] == '\0';
+    }();
+    if (!enabled) {
+        return false;
+    }
     return pk_engine_no_underline(core_) &&
            !ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
            uinputClient().available();
 }
 
-/// Áp lệnh thay thế bằng cách bơm Backspace qua daemon uinput rồi commit chuỗi mới (#28).
-void PinaKeyState::applyReplaceViaUinput() {
+/// Bắt đầu thay thế qua uinput (app không có SurroundingText): bơm Backspace, HOÃN commit.
+/// Khác đường cũ (#28) — không commit ngay để tránh cuộc đua "commit tới trước khi Backspace
+/// kịp xoá". Chuỗi mới được cất ở `pendingCommit_` và chỉ commit trong handleUinputAck khi đã
+/// đếm đủ Backspace bơm-ngược (xác nhận app xoá xong).
+void PinaKeyState::startUinputReplace() {
     const uint32_t del = pk_engine_replace_delete(core_);
-    if (del > 0) {
-        uinputClient().sendBackspaces(static_cast<int>(del));
-    }
-    if (const char *ins = pk_engine_replace_insert(core_); ins && ins[0] != '\0') {
-        ic_->commitString(ins);
-    }
+    const char *ins = pk_engine_replace_insert(core_);
+    const std::string insert = (ins && ins[0] != '\0') ? std::string(ins) : std::string();
+
+    // Chế độ replace không hiện preedit → dọn panel nếu còn sót.
     auto &panel = ic_->inputPanel();
     if (!panel.empty()) {
         panel.reset();
         ic_->updatePreedit();
         ic_->updateUserInterface(UserInterfaceComponent::InputPanel);
+    }
+
+    if (del == 0) {
+        // Không cần xoá (gõ ký tự mới bình thường) → commit ngay, không cần ACK.
+        if (!insert.empty()) {
+            ic_->commitString(insert);
+        }
+        return;
+    }
+
+    // Cần xoá `del` ký tự: bơm (del+1) Backspace. `del` cái đầu được để-đi-tiếp để xoá thật;
+    // cái thứ (del+1) là "trigger" — khi nó quay về nghĩa là đã xoá xong → commit + nuốt trigger.
+    pendingCommit_ = insert;
+    currentBackspaceCount_ = 0;
+    expectedBackspaces_ = static_cast<int>(del) + 1;
+    deleting_ = true;
+    deletingSince_ = std::chrono::steady_clock::now();
+    uinputClient().sendBackspaces(expectedBackspaces_);
+}
+
+/// Xử lý một phím Backspace bơm-ngược (từ daemon uinput) trong lúc `deleting_`.
+/// - Backspace trung gian (< expected): KHÔNG nuốt → để đi tiếp tới app, thật sự xoá 1 ký tự.
+/// - Backspace cuối (== expected, là trigger): app đã xoá xong → commit chuỗi mới rồi NUỐT trigger
+///   để nó không xoá nhầm một ký tự thật, sau đó replay các phím đã đệm (nếu user gõ nhanh).
+void PinaKeyState::handleUinputAck(KeyEvent &keyEvent) {
+    currentBackspaceCount_ += 1;
+    if (currentBackspaceCount_ < expectedBackspaces_) {
+        return; // trung gian: để phím đi tiếp (không filterAndAccept) → app xoá 1 ký tự
+    }
+    // Trigger: chờ một nhịp ngắn cho app kịp xử lý các Backspace vừa để-đi-tiếp, rồi commit.
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    if (!pendingCommit_.empty()) {
+        ic_->commitString(pendingCommit_);
+    }
+    pendingCommit_.clear();
+    deleting_ = false;
+    expectedBackspaces_ = 0;
+    currentBackspaceCount_ = 0;
+    keyEvent.filterAndAccept(); // nuốt phím trigger (+1)
+    replayBufferedKeys();
+}
+
+/// Replay các phím người dùng gõ trong lúc đang xoá. Xử lý lần lượt; nếu một phím lại sinh ra
+/// lệnh xoá (deleting_ = true) thì dừng — phần còn lại sẽ được replay khi ACK lần đó hoàn tất.
+void PinaKeyState::replayBufferedKeys() {
+    while (!bufferedKeys_.empty() && !deleting_) {
+        const auto [s, st] = bufferedKeys_.front();
+        bufferedKeys_.erase(bufferedKeys_.begin());
+        pk_engine_process_key_replace(core_, s, st);
+        startUinputReplace();
     }
 }
 

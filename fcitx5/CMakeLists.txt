@@ -60,7 +60,11 @@ install(FILES icons/pinakey.svg
         DESTINATION "${FCITX_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
 
 # Daemon uinput bơm Backspace cho gõ không gạch chân ở app không hỗ trợ SurroundingText (#28).
-option(PINAKEY_BUILD_UINPUT_SERVER "Build the privileged uinput backspace server" ON)
+# MẶC ĐỊNH TẮT: đây là chế độ THỬ NGHIỆM (chỉ chạy khi đặt env `PINAKEY_UINPUT=1`) và không ổn
+# định trên GNOME Wayland (frontend D-Bus không bảo đảm thứ tự xoá/commit → rối ký tự). Mặc định
+# terminal dùng preedit; trình duyệt/editor dùng SurroundingText. Bật ON nếu muốn tự thử uinput —
+# khi ON sẽ cài kèm binary + udev rule (nạp module kernel `uinput` + cấp ACL /dev/uinput mỗi boot).
+option(PINAKEY_BUILD_UINPUT_SERVER "Build the experimental uinput backspace server (opt-in)" OFF)
 if(PINAKEY_BUILD_UINPUT_SERVER)
     add_subdirectory(server)
 endif()
