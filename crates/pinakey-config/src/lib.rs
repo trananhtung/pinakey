@@ -110,6 +110,12 @@ pub fn get_emoji_recent_path() -> PathBuf {
     get_config_dir().join("emoji-recent.txt")
 }
 
+/// `~/.config/pinakey/transport-rules.conf` — rule transport theo app của NGƯỜI DÙNG (issue #67),
+/// thắng rule built-in/hệ thống. Cú pháp: mỗi dòng `preedit|replace|auto <mẫu-tên-chương-trình>`.
+pub fn get_transport_rules_path() -> PathBuf {
+    get_config_dir().join("transport-rules.conf")
+}
+
 pub fn get_config_path(engine_name: &str) -> PathBuf {
     get_config_dir().join(format!("ibus-{}.config.json", engine_name))
 }

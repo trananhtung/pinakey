@@ -49,6 +49,8 @@ pub struct EngineCore {
     /// #65: cửa sổ double-space→". " đang mở (vừa commit "từ " xong). Single-shot: phím kế
     /// tiếp bất kỳ (không bị addon tiêu thụ) sẽ đóng lại.
     double_space_armed: bool,
+    /// #67: bảng rule transport theo app (nhúng sẵn → hệ thống → người dùng, lớp sau thắng).
+    transport_rules: crate::transport::TransportRules,
 }
 
 /// #65: máy trạng thái viết hoa đầu câu. Engine thấy MỌI phím (kể cả phím forward khi buffer
@@ -92,7 +94,14 @@ impl EngineCore {
             dictionary,
             sentence: SentenceState::Idle,
             double_space_armed: false,
+            transport_rules: load_transport_rules(),
         }
+    }
+
+    /// #67: transport ép buộc cho app đang focus (theo bảng rule 3 lớp). `Auto` = theo
+    /// capability như trước.
+    pub fn transport_for_app(&self) -> crate::transport::TransportPref {
+        self.transport_rules.lookup(&self.wm_class)
     }
 
     /// #65: dấu cách kế tiếp có nên biến thành ". " không. Addon C++ hỏi TRƯỚC khi đưa phím
@@ -141,17 +150,10 @@ impl EngineCore {
     }
 
     /// Surrounding text của chương trình đang focus có KHÔNG đáng tin không (issue #66).
-    /// LibreOffice/OpenOffice (soffice) báo surrounding text lạc hậu/thiếu dấu cách khi gõ nhanh,
-    /// làm diff xoá-chèn sai vùng — với các app này addon phải rơi về preedit dù chúng quảng cáo
-    /// khả năng SurroundingText. Khớp không phân biệt hoa/thường, theo chuỗi con (như danh sách
-    /// loại trừ #9) để phủ mọi biến thể: soffice.bin, libreoffice-writer, org.libreoffice.…
+    /// Từ #67, đây là hệ quả của bảng rule transport: app bị ép Preedit (LibreOffice built-in,
+    /// terminal, hoặc rule người dùng) coi như không dùng được diff xoá-chèn.
     pub fn is_surrounding_text_unreliable(&self) -> bool {
-        const BROKEN_SURROUNDING: [&str; 2] = ["soffice", "libreoffice"];
-        if self.wm_class.is_empty() {
-            return false;
-        }
-        let w = self.wm_class.to_ascii_lowercase();
-        BROKEN_SURROUNDING.iter().any(|p| w.contains(p))
+        self.transport_for_app() == crate::transport::TransportPref::Preedit
     }
 
     /// Đặt lại trạng thái soạn thảo bên dưới (tương ứng `Reset` của IBus).
@@ -703,6 +705,22 @@ fn build_preeditor(config: &Config) -> PinaKeyEngine {
     core::new_engine(im, flags)
 }
 
+/// #67: nạp bảng rule transport 3 lớp — nhúng sẵn → file hệ thống (đóng gói cập nhật không cần
+/// rebuild) → file người dùng `~/.config/pinakey/transport-rules.conf` (thắng tất cả). File
+/// thiếu là bình thường; lỗi đọc chỉ bỏ qua lớp đó, không phá phiên gõ.
+fn load_transport_rules() -> crate::transport::TransportRules {
+    use crate::transport::{TransportRules, EMBEDDED_RULES, SYSTEM_RULES_PATH};
+    let mut rules = TransportRules::empty();
+    rules.append_layer(EMBEDDED_RULES);
+    if let Ok(text) = std::fs::read_to_string(SYSTEM_RULES_PATH) {
+        rules.append_layer(&text);
+    }
+    if let Ok(text) = std::fs::read_to_string(pinakey_config::get_transport_rules_path()) {
+        rules.append_layer(&text);
+    }
+    rules
+}
+
 /// Nạp từ điển chính tả khi bật `IB_SPELL_CHECK_WITH_DICTS` (issue #18): bộ từ khởi đầu đóng kèm
 /// binary, phủ thêm từ điển người dùng `~/.config/pinakey/dict.txt` nếu có.
 fn load_dictionary(config: &Config) -> Option<core::Dictionary> {
@@ -1103,6 +1121,30 @@ mod tests {
         actions.extend(sp);
         let all = commits(&actions).join("");
         assert_eq!(all.trim_end(), "$TIME", "commit: {all:?}");
+    }
+
+    #[test]
+    fn transport_for_app_uses_builtin_rules() {
+        // #67: rule built-in — LibreOffice (#66) và terminal → Preedit; app thường → Auto.
+        use crate::transport::TransportPref;
+        let mut core = EngineCore::new(default_cfg());
+        assert_eq!(core.transport_for_app(), TransportPref::Auto);
+        for p in ["soffice.bin", "libreoffice-writer", "kitty", "Alacritty"] {
+            core.set_wm_class(p.to_string());
+            assert_eq!(
+                core.transport_for_app(),
+                TransportPref::Preedit,
+                "{p} phải ép preedit"
+            );
+        }
+        for p in ["firefox", "google-chrome", "gedit"] {
+            core.set_wm_class(p.to_string());
+            assert_eq!(
+                core.transport_for_app(),
+                TransportPref::Auto,
+                "{p} phải Auto"
+            );
+        }
     }
 
     #[test]
