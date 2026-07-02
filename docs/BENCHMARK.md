@@ -19,7 +19,7 @@ còn lại (fcitx5, D-Bus, toolkit vẽ chữ) như nhau với mọi bộ gõ.
 |---|---|---|
 | `per_key_mid_word` | 1 phím biến đổi Telex giữa từ đang soạn (trường hợp phổ biến nhất) | **~14 µs** |
 | `paragraph_88_keys` | Câu 88 phím gõ liên tục, đủ dấu + word-break | ~2,1 ms (≈24 µs/phím) |
-| `worst_case_non_vn_restore` | 18 phím từ hỗn tạp + khôi phục nguyên văn khi ngắt từ (đường đắt nhất) | ~0,7 ms |
+| `worst_case_non_vn_restore` | 18 phím từ hỗn tạp + khôi phục nguyên văn khi ngắt từ (đường đắt nhất) | ~0,6 ms |
 | `emoji_fuzzy_full_table` | 1 truy vấn fuzzy quét toàn bảng emoji ~11k khóa (mỗi phím trong chế độ `:`) | ~180 µs |
 
 ¹ Đo ngày 2026-07-02 trên Intel Core i7-1260P (laptop), Linux 6.17, rustc 1.90, build

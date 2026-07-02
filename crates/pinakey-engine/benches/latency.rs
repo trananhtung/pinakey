@@ -43,8 +43,11 @@ fn bench_paragraph(c: &mut Criterion) {
     const PARAGRAPH: &str = "tieengs vieejt laf ngoon nguwx cuar nguwowfi vieejt nam \
                              chungs ta cufng nhau giwx gifn suwj trong sangs cuar tieengs vieejt ";
     c.bench_function("paragraph_88_keys", |b| {
+        // Khởi tạo NGOÀI vòng đo: EngineCore::new đọc config/dict/rule từ đĩa — tính vào thì
+        // benchmark đo I/O chứ không đo gõ phím. Mỗi lượt chỉ reset trạng thái soạn thảo.
+        let mut core = EngineCore::new(default_cfg());
         b.iter(|| {
-            let mut core = EngineCore::new(default_cfg());
+            core.reset_preeditor();
             black_box(type_str(&mut core, black_box(PARAGRAPH)))
         });
     });
@@ -54,8 +57,9 @@ fn bench_paragraph(c: &mut Criterion) {
 /// (auto non-VN restore) — đường đắt nhất của một phím đơn.
 fn bench_worst_case_restore(c: &mut Criterion) {
     c.bench_function("worst_case_non_vn_restore", |b| {
+        let mut core = EngineCore::new(default_cfg());
         b.iter(|| {
-            let mut core = EngineCore::new(default_cfg());
+            core.reset_preeditor();
             type_str(&mut core, "aáàrgh mixedwordxs");
             let (_h, actions) = core.process_key_event(black_box(' ' as u32), 0, 0);
             black_box(actions.len())
