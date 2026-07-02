@@ -45,7 +45,7 @@ body:
         - Telex
         - VNI
         - VIQR
-        - Khác (ghi rõ ở phần mô tả)
+        - Khác (ghi rõ ở phần chuỗi phím bên dưới)
     validations:
       required: true
   - type: textarea
@@ -76,5 +76,5 @@ body:
     id: log
     attributes:
       label: Log chi tiết (nếu có)
-      description: "Chạy `fcitx5 -r -d --verbose 'pinakey=4'` rồi tái hiện lỗi; dán phần log liên quan. KHÔNG dán nội dung nhạy cảm bạn đã gõ."
+      description: "Chạy foreground trong terminal: `fcitx5 -r --verbose 'pinakey=4' 2>&1 | tee /tmp/pinakey.log` rồi tái hiện lỗi; dán phần log liên quan. (Đừng thêm `-d` — daemonize sẽ đóng stderr, mất log.) KHÔNG dán nội dung nhạy cảm bạn đã gõ."
       render: text

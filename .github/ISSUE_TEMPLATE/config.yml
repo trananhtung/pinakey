@@ -1,4 +1,4 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
   - name: 📖 Hướng dẫn sử dụng & khắc phục sự cố (USAGE)
     url: https://github.com/trananhtung/pinakey/blob/main/USAGE.md

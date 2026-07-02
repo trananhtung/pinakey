@@ -252,13 +252,14 @@ Rồi `fcitx5 -r -d` (hoặc đăng nhập lại).
 Khi [mở issue](https://github.com/trananhtung/pinakey/issues/new/choose), đính kèm:
 
 1. **`fcitx5-diagnose`** — chạy trong terminal, dán toàn bộ output (form báo lỗi có ô riêng).
-2. **Log chi tiết của addon** khi tái hiện được lỗi:
+2. **Log chi tiết của addon** khi tái hiện được lỗi — chạy fcitx5 **foreground** trong một
+   terminal (đừng thêm `-d`: daemonize đóng stderr, mất log):
    ```sh
-   fcitx5 -r -d --verbose 'pinakey=4'   # khởi động lại fcitx5 với log mức 4 cho pinakey
-   journalctl --user -f | grep -i pinakey   # hoặc xem log qua journal
+   fcitx5 -r --verbose 'pinakey=4' 2>&1 | tee /tmp/pinakey.log
    ```
-   Tái hiện lỗi rồi copy phần log quanh thời điểm đó. **Lưu ý:** log không chứa nội dung bạn
-   gõ, nhưng vẫn nên rà lại trước khi dán.
+   Tái hiện lỗi ở cửa sổ khác rồi copy phần log quanh thời điểm đó (xong việc `fcitx5 -r -d`
+   để trả fcitx5 về chạy nền). **Lưu ý:** log không chứa nội dung bạn gõ, nhưng vẫn nên rà
+   lại trước khi dán.
 3. Môi trường: distro, DE, X11/Wayland (`echo $XDG_SESSION_TYPE`), app xảy ra lỗi **kèm cách
    cài** (deb/snap/flatpak — hành xử rất khác nhau).
 
