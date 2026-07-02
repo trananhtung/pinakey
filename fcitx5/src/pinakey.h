@@ -53,7 +53,9 @@ public:
 
     void keyEvent(KeyEvent &keyEvent);
     void reset();
-    void deactivate();
+    /// `imSwitch` = deactivate do người dùng ĐỔI input method (Ctrl+Space) — fcitx5 không tự
+    /// commit client preedit trong trường hợp này, khác với mất focus (có tự commit).
+    void deactivate(bool imSwitch);
     PkEngine *core() { return core_; }
     InputContext *ic() { return ic_; }
     /// Chọn emoji thứ `index` trong danh sách hiện tại rồi thoát chế độ emoji (gọi từ CandidateWord).

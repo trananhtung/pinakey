@@ -135,6 +135,12 @@ void PinaKeyState::reset() {
     pendingCommit_.clear();
     bufferedKeys_.clear();
 
+    // Dọn trạng thái emoji: reset là "vứt bỏ" (không commit) — nếu để sót, phím gõ sau khi quay
+    // lại context này bị nuốt vào query emoji vô hình.
+    emojiMode_ = false;
+    emojiQuery_.clear();
+    emojiCandidates_.clear();
+
     pk_engine_reset(core_);
     ic_->inputPanel().reset();
     ic_->updatePreedit();
@@ -334,9 +340,22 @@ bool PinaKeyState::shouldPassThrough() const {
 }
 
 /// Kết thúc phiên khi rời input method / mất focus (#6): commit phần đang soạn để không kẹt/mất chữ.
-void PinaKeyState::deactivate() {
+void PinaKeyState::deactivate(bool imSwitch) {
+    // Ai chốt phần đang soạn? (mô hình fcitx5-unikey)
+    //   - Đổi IM (Ctrl+Space): fcitx5 KHÔNG tự commit → addon phải commit tay, kẻo mất chữ.
+    //   - Mất focus + app có CapabilityFlag::Preedit: fcitx5 (≥5.1) TỰ commit client preedit →
+    //     addon không được commit tay lần nữa, kẻo ĐÚP chữ ("viêt" → "viêtviêt").
+    //   - Mất focus + app không có client preedit: không ai chốt → addon commit tay (#6).
+    const bool clientPreedit = ic_->capabilityFlags().test(CapabilityFlag::Preedit);
+    const bool mustCommit = imSwitch || !clientPreedit;
+    // Đang tra emoji dở: thoát chế độ emoji để phím gõ sau không bị nuốt vào query cũ; chốt
+    // literal ":query" khi không ai khác chốt hộ.
+    if (emojiMode_) {
+        cancelEmoji(mustCommit);
+    }
     if (!wantReplaceMode()) {
-        if (const char *p = pk_engine_flush_preedit(core_); p && p[0] != '\0') {
+        // flush_preedit luôn được gọi để reset trạng thái soạn dở của lõi.
+        if (const char *p = pk_engine_flush_preedit(core_); p && p[0] != '\0' && mustCommit) {
             ic_->commitString(p);
         }
     } else {
@@ -458,11 +477,17 @@ uint64_t fileMtime(const std::string &path) {
 } // namespace
 
 void PinaKeyEngine::setupReloadTimer() {
-    const char *home = std::getenv("HOME");
-    if (!home) {
+    // Khớp cách lõi Rust tìm thư mục cấu hình (dirs::config_dir()): ưu tiên $XDG_CONFIG_HOME,
+    // fallback $HOME/.config — nếu không, watcher canh mtime của file không bao giờ tồn tại.
+    std::string base;
+    if (const char *xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg) {
+        base = xdg;
+    } else if (const char *home = std::getenv("HOME"); home && *home) {
+        base = std::string(home) + "/.config";
+    } else {
         return;
     }
-    const std::string dir = std::string(home) + "/.config/pinakey/";
+    const std::string dir = base + "/pinakey/";
     reloadFiles_ = {dir + "ibus-PinaKey.macro.text", dir + "dict.txt"};
     reloadMtimes_.assign(reloadFiles_.size(), 0);
     for (size_t i = 0; i < reloadFiles_.size(); ++i) {
@@ -511,8 +536,9 @@ void PinaKeyEngine::activate(const InputMethodEntry & /*entry*/, InputContextEve
 }
 
 void PinaKeyEngine::deactivate(const InputMethodEntry & /*entry*/, InputContextEvent &event) {
-    // #6: khi rời input method / mất focus, commit phần preedit đang soạn (không để kẹt chữ).
-    state(event.inputContext())->deactivate();
+    // #6: khi rời input method / mất focus, chốt phần đang soạn (không để kẹt/mất/đúp chữ).
+    const bool imSwitch = event.type() == EventType::InputContextSwitchInputMethod;
+    state(event.inputContext())->deactivate(imSwitch);
 }
 
 std::string PinaKeyEngine::subModeLabelImpl(const InputMethodEntry & /*entry*/,
@@ -662,7 +688,10 @@ void PinaKeyState::updateEmojiUI() {
         if (!hex.empty() &&
             hex.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos) {
             char32_t cp = static_cast<char32_t>(strtoul(hex.c_str(), nullptr, 16));
-            if (cp != 0 && cp <= 0x10FFFF) {
+            // Loại surrogate U+D800–DFFF: mã hoá ra UTF-8 không hợp lệ, commit sẽ bị
+            // frontend D-Bus từ chối (fcitx abort "Invalid utf8 string").
+            const bool surrogate = cp >= 0xD800 && cp <= 0xDFFF;
+            if (cp != 0 && cp <= 0x10FFFF && !surrogate) {
                 emojiCandidates_.push_back(utf32ToUtf8(cp));
             }
         }

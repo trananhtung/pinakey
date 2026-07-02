@@ -26,6 +26,14 @@ pub const MOD_META: u32 = 1 << 28;
 /// lớp C-ABI sẽ bật bit này khi đó để engine xử lý đồng nhất.
 pub const MOD_RELEASE: u32 = 1 << 30;
 
+/// Keysym là phím modifier đứng một mình (Shift/Ctrl/Alt/Super/Caps… và các ISO shift/latch/lock
+/// như AltGr). Nhấn các phím này không mang ký tự nào — engine phải cho đi qua, không được coi là
+/// "phím lạ" rồi ép commit từ đang gõ.
+pub fn is_modifier_keysym(keysym: u32) -> bool {
+    // 0xffe1–0xffee: Shift_L … Hyper_R; 0xfe01–0xfe13: ISO_Lock … ISO_Level5_Lock (gồm AltGr).
+    matches!(keysym, 0xffe1..=0xffee | 0xfe01..=0xfe13)
+}
+
 // ----- Mã phím (keysym) -----
 pub const KEY_TAB: u32 = 0xff09;
 pub const KEY_BACKSPACE: u32 = 0xff08;

@@ -55,24 +55,25 @@ pub fn default_cfg() -> Config {
     }
 }
 
-fn home_dir() -> String {
-    dirs::home_dir()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "~".to_string())
+/// `$XDG_CONFIG_HOME/pinakey` (mặc định `~/.config/pinakey`) — thư mục cấu hình riêng cho từng
+/// người dùng. `None` khi cả XDG lẫn `$HOME` đều không xác định (systemd unit, `env -i`…) —
+/// tuyệt đối không fallback về đường dẫn tương đối.
+pub fn try_config_dir() -> Option<PathBuf> {
+    config_dir_in(dirs::config_dir(), dirs::home_dir())
 }
 
-/// `$XDG_CONFIG_HOME/pinakey` (mặc định `~/.config/pinakey`) — thư mục cấu hình riêng cho
-/// từng người dùng của PinaKey. Tôn trọng chuẩn XDG; chỉ về `~/.config` khi không xác định được.
+/// Tương thích cũ: như [`try_config_dir`] nhưng trả đường dẫn rỗng khi không xác định được
+/// (mọi thao tác đọc trên đường dẫn rỗng đều lỗi → coi như "không có file").
 pub fn get_config_dir() -> PathBuf {
-    config_dir_in(dirs::config_dir(), &home_dir())
+    try_config_dir().unwrap_or_default()
 }
 
 /// Logic thuần (không đọc môi trường) để test được trực tiếp: ưu tiên thư mục config base của
 /// XDG (`dirs::config_dir()` = `$XDG_CONFIG_HOME` hoặc `~/.config`), fallback `{home}/.config`.
-fn config_dir_in(xdg_config_base: Option<PathBuf>, home: &str) -> PathBuf {
+fn config_dir_in(xdg_config_base: Option<PathBuf>, home: Option<PathBuf>) -> Option<PathBuf> {
     xdg_config_base
-        .unwrap_or_else(|| PathBuf::from(format!("{}/.config", home)))
-        .join("pinakey")
+        .or_else(|| home.map(|h| h.join(".config")))
+        .map(|base| base.join("pinakey"))
 }
 
 pub fn get_macro_path(engine_name: &str) -> PathBuf {
@@ -132,6 +133,12 @@ fn load_config_from(path: &Path) -> Config {
 /// hỏng file config: ghi ra file tạm cùng thư mục rồi `rename` (đổi tên là thao tác atomic trên
 /// cùng filesystem).
 pub fn save_config(c: &Config, engine_name: &str) -> std::io::Result<()> {
+    if try_config_dir().is_none() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "không xác định được thư mục cấu hình ($XDG_CONFIG_HOME và $HOME đều thiếu)",
+        ));
+    }
     save_config_to(c, &get_config_path(engine_name))
 }
 
@@ -144,13 +151,19 @@ fn save_config_to(c: &Config, path: &Path) -> std::io::Result<()> {
             std::fs::create_dir_all(dir)?;
         }
     }
-    let tmp = path.with_extension("json.tmp");
+    let tmp = tmp_path_for(path, std::process::id());
     std::fs::write(&tmp, data)?;
     if let Err(e) = std::fs::rename(&tmp, path) {
         let _ = std::fs::remove_file(&tmp); // không để lại file .tmp rác khi rename lỗi
         return Err(e);
     }
     Ok(())
+}
+
+/// Đường dẫn file tạm cho ghi atomic: cùng thư mục với `path` (để `rename` là atomic) nhưng mang
+/// PID để hai tiến trình ghi cùng lúc không giẫm lên file tạm của nhau.
+fn tmp_path_for(path: &Path, pid: u32) -> PathBuf {
+    path.with_extension(format!("json.tmp.{pid}"))
 }
 
 #[cfg(test)]
@@ -185,17 +198,33 @@ mod tests {
         // Không mutate biến môi trường nên không có data race khi test chạy song song.
         let xdg = PathBuf::from("/tmp/xdgbase");
         assert_eq!(
-            config_dir_in(Some(xdg.clone()), "/home/u"),
-            xdg.join("pinakey")
+            config_dir_in(Some(xdg.clone()), Some(PathBuf::from("/home/u"))),
+            Some(xdg.join("pinakey"))
         );
     }
 
     #[test]
     fn config_dir_falls_back_to_home_config_when_xdg_absent() {
         assert_eq!(
-            config_dir_in(None, "/home/u"),
-            PathBuf::from("/home/u/.config/pinakey")
+            config_dir_in(None, Some(PathBuf::from("/home/u"))),
+            Some(PathBuf::from("/home/u/.config/pinakey"))
         );
+    }
+
+    #[test]
+    fn config_dir_is_none_without_xdg_and_home() {
+        // Thiếu cả XDG lẫn HOME: KHÔNG được fallback về đường dẫn tương đối kiểu "~/.config"
+        // (từng tạo thư mục tên "~" thật trong CWD — nguy cơ `rm -rf ~`).
+        assert_eq!(config_dir_in(None, None), None);
+    }
+
+    #[test]
+    fn tmp_path_unique_per_process_and_same_dir() {
+        // Hai tiến trình ghi cùng config phải dùng file tạm khác nhau (tránh publish file dở),
+        // nhưng vẫn cùng thư mục để rename là atomic trên cùng filesystem.
+        let p = Path::new("/x/ibus-Telex.config.json");
+        assert_ne!(tmp_path_for(p, 1234), tmp_path_for(p, 5678));
+        assert_eq!(tmp_path_for(p, 1).parent(), p.parent());
     }
 
     fn unique_tmp(tag: &str) -> PathBuf {
@@ -242,7 +271,7 @@ mod tests {
         save_config_to(&cfg, &path).unwrap();
         // Không để lại file .tmp rác.
         assert!(
-            !path.with_extension("json.tmp").exists(),
+            !tmp_path_for(&path, std::process::id()).exists(),
             "không được để lại file .tmp sau khi ghi atomic"
         );
         // Đọc lại đúng nội dung.
@@ -262,7 +291,7 @@ mod tests {
         let r = save_config_to(&default_cfg(), &path);
         assert!(r.is_err(), "rename đè lên thư mục phải lỗi");
         assert!(
-            !path.with_extension("json.tmp").exists(),
+            !tmp_path_for(&path, std::process::id()).exists(),
             "phải dọn file .tmp khi rename lỗi, không để lại rác"
         );
         std::fs::remove_dir_all(&dir).ok();

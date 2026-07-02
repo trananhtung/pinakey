@@ -222,8 +222,14 @@ int main(int argc, char *argv[]) {
         if (client.valid() && (fds[1].revents & (POLLIN | POLLHUP | POLLERR))) {
             int count = 0;
             ssize_t n = recv(client.get(), &count, sizeof(count), 0);
-            if (n <= 0) {
-                client.reset(-1);
+            if (n < 0) {
+                // EINTR (tín hiệu) / EAGAIN (poll đánh thức giả trên socket non-blocking):
+                // client chưa chết — giữ kết nối, yêu cầu đang bay không bị mất.
+                if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+                    client.reset(-1);
+                }
+            } else if (n == 0) {
+                client.reset(-1); // peer đóng kết nối
             } else if (count > 0 && count < 1000) {
                 for (int i = 0; i < count && g_running.load(); ++i) {
                     kbd.sendBackspace();

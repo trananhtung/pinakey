@@ -74,6 +74,56 @@ fn test_remove_last_char_engine() {
 }
 
 #[test]
+fn test_restore_last_word_to_vietnamese_skips_virtual_keys() {
+    // hoasn -> "hoán", Backspace -> "hóa". restore(true) phải giữ nguyên "hóa";
+    // trước đây nó replay cả phím ảo '\0' (sinh bởi refresh dấu) tạo "phụ âm cuối ma"
+    // làm dấu nhảy chỗ thành "hoá".
+    let mut ng = new_std_engine();
+    ng.process_string("hoasn", VIE);
+    assert_eq!(ng.get_processed_string(VIE), "hoán");
+    ng.remove_last_char(true);
+    assert_eq!(ng.get_processed_string(VIE), "hóa");
+    ng.restore_last_word(true);
+    assert_eq!(ng.get_processed_string(VIE), "hóa");
+}
+
+#[test]
+fn test_restore_after_backspace_matches_retype() {
+    // restore(true) tương đương gõ lại chuỗi phím thô còn lại từ đầu (oracle).
+    fn oracle(keys: &str) -> String {
+        let mut ng = new_std_engine();
+        ng.process_string(keys, VIE);
+        ng.get_processed_string(VIE)
+    }
+    for seq in ["hoasn", "wsuw", "uowns"] {
+        let mut ng = new_std_engine();
+        ng.process_string(seq, VIE);
+        ng.remove_last_char(true);
+        let raw = ng.get_processed_string(ENG | mode::FULL_TEXT);
+        ng.restore_last_word(true);
+        assert_eq!(ng.get_processed_string(VIE), oracle(&raw), "seq={seq}");
+    }
+}
+
+#[test]
+fn test_backspace_after_restore_stays_in_sync() {
+    // Backspace sau restore phải xoá đúng một ký tự hiển thị, không phải no-op
+    // (trước đây phím ảo '\0' rác làm remove_last_char pop nhầm phần tử).
+    let mut ng = new_std_engine();
+    ng.process_string("hoasn", VIE);
+    ng.remove_last_char(true);
+    ng.restore_last_word(true);
+    let before = ng.get_processed_string(VIE);
+    ng.remove_last_char(true);
+    let after = ng.get_processed_string(VIE);
+    assert_eq!(
+        after.chars().count(),
+        before.chars().count() - 1,
+        "trước: {before:?}, sau: {after:?}"
+    );
+}
+
+#[test]
 fn test_process_upper_string() {
     let mut ng = new_std_engine();
     ng.process_string("VIEETJ", VIE);

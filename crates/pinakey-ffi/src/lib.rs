@@ -101,6 +101,14 @@ impl PkEngine {
     /// lõi của việc commit trực tiếp thay vì hiện preedit (đối chiếu fcitx5-lotus `compareAndSplit`).
     fn apply_replace(&mut self, actions: Vec<Action>) {
         let folded = fold_actions(actions);
+        // Sự kiện không sinh action nào (phím nhả với MOD_RELEASE, modifier đứng một mình…):
+        // giữ nguyên trạng thái — như nhánh "giữ nguyên preedit" của `apply`. Nếu không, preedit
+        // None bị gộp thành chuỗi rỗng và diff sẽ ra lệnh xoá cả segment đang soạn.
+        if folded.preedit.is_none() && !folded.hide && folded.commit.is_empty() {
+            self.replace_delete = 0;
+            self.replace_insert = CString::default();
+            return;
+        }
         let preedit = folded.preedit.map(|(t, _, _)| t).unwrap_or_default();
         // Chuỗi mong muốn cho segment = (phần vừa cố định) + (phần còn đang soạn).
         // commit đã là văn bản hoàn tất (gồm cả ký tự ngắt từ); preedit là phần còn soạn dở.
@@ -736,6 +744,45 @@ mod tests {
                 .to_str()
                 .unwrap();
             assert_eq!(seg2, "", "sau reset segment phải rỗng");
+            pk_engine_free(e);
+        }
+    }
+
+    #[test]
+    fn replace_key_release_and_bare_modifier_are_noops() {
+        // Theo contract (pinakey_ffi.h): C++ forward cả phím nhả với bit MOD_RELEASE.
+        // Sự kiện không sinh action nào (release, modifier đứng một mình) phải là no-op:
+        // không xoá, không chèn, không làm mất segment đang theo dõi.
+        use pinakey_engine::keysym::MOD_RELEASE;
+        unsafe {
+            let e = pk_engine_new();
+            let mut doc = String::new();
+            for c in "vi".chars() {
+                pk_engine_process_key_replace(e, c as u32, 0);
+                for _ in 0..pk_engine_replace_delete(e) {
+                    doc.pop();
+                }
+                doc.push_str(
+                    CStr::from_ptr(pk_engine_replace_insert(e))
+                        .to_str()
+                        .unwrap(),
+                );
+                pk_engine_process_key_replace(e, c as u32, MOD_RELEASE);
+                assert_eq!(pk_engine_replace_delete(e), 0, "release không được xoá");
+                assert_eq!(
+                    CStr::from_ptr(pk_engine_replace_insert(e)).to_bytes(),
+                    b"",
+                    "release không được chèn"
+                );
+            }
+            // Nhấn Shift đơn lẻ giữa từ cũng phải là no-op.
+            pk_engine_process_key_replace(e, 0xffe1, 0);
+            assert_eq!(pk_engine_replace_delete(e), 0, "Shift không được xoá");
+            assert_eq!(doc, "vi");
+            let seg = CStr::from_ptr(pk_engine_replace_segment(e))
+                .to_str()
+                .unwrap();
+            assert_eq!(seg, "vi", "segment phải sống sót qua release/modifier");
             pk_engine_free(e);
         }
     }

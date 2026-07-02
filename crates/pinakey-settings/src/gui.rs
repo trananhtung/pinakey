@@ -158,7 +158,8 @@ impl eframe::App for SettingsApp {
         }
         if do_save {
             self.status = match self.controller.save() {
-                Ok(()) => "Đã lưu cấu hình. Khởi động lại IBus để áp dụng.".to_string(),
+                Ok(()) => "Đã lưu cấu hình. Khởi động lại fcitx5 (fcitx5 -r) hoặc IBus để áp dụng."
+                    .to_string(),
                 Err(e) => format!("Lỗi lưu: {e}"),
             };
         }
