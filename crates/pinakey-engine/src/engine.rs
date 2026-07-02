@@ -167,6 +167,14 @@ impl EngineCore {
 
     fn expand_macro(&self, s: &str) -> String {
         let macro_text = self.macro_table.get_text(s);
+        // #64: thay $DATE/$TIME bằng ngày/giờ TẠI THỜI ĐIỂM KÍCH HOẠT, theo format trong config.
+        // Mở rộng TRƯỚC biến đổi hoa/thường: nếu sau, ALL_SMALL hạ "$TIME" thành "$time" và
+        // placeholder không bao giờ khớp.
+        let macro_text = pinakey_emoji::expand_placeholders_now(
+            &macro_text,
+            &self.config.macro_date_format,
+            &self.config.macro_time_format,
+        );
         if self.config.ib_flags & cfg::IB_AUTO_CAPITALIZE_MACRO != 0 {
             match determine_macro_case(s) {
                 VN_CASE_ALL_SMALL => return macro_text.to_lowercase(),
@@ -674,6 +682,77 @@ mod tests {
         actions.extend(sp);
         // Phím ngắt từ (space) được commit cùng với từ.
         assert!(commits(&actions).iter().any(|c| c.trim() == "tiếng"));
+    }
+
+    /// Dựng engine bật macro với nội dung bảng macro cho trước (ghi file tạm rồi nạp).
+    /// `name` phải là duy nhất cho mỗi test — các test chạy song song, trùng file tạm sẽ race.
+    fn core_with_macro(name: &str, macro_lines: &str, cfg: pinakey_config::Config) -> EngineCore {
+        let path = std::env::temp_dir().join(format!(
+            "pinakey_engine_macro_test_{}_{}.txt",
+            std::process::id(),
+            name
+        ));
+        std::fs::write(&path, macro_lines).unwrap();
+        let mut cfg = cfg;
+        cfg.ib_flags |= cfg::IB_MACRO_ENABLED;
+        let mut core = EngineCore::new(cfg);
+        let mut mt = MacroTable::new(false);
+        mt.load_from_file(path.to_str().unwrap()).unwrap();
+        mt.set_enabled(true);
+        core.macro_table = mt;
+        std::fs::remove_file(&path).ok();
+        core
+    }
+
+    #[test]
+    fn macro_expands_date_placeholder_at_activation() {
+        // #64: "$DATE" trong giá trị macro → ngày hiện tại theo format mặc định dd/mm/yyyy.
+        let mut core = core_with_macro("date_mac_dinh", "hnay : hôm nay $DATE\n", default_cfg());
+        let mut actions = type_keys(&mut core, "hnay");
+        let (_h, sp) = core.process_key_event(' ' as u32, 0, 0);
+        actions.extend(sp);
+        let all = commits(&actions).join("");
+        let rest = all
+            .strip_prefix("hôm nay ")
+            .unwrap_or_else(|| panic!("commit phải bắt đầu bằng 'hôm nay ': {all:?}"));
+        let date: Vec<char> = rest.trim_end().chars().collect();
+        assert_eq!(date.len(), 10, "dd/mm/yyyy phải 10 ký tự: {rest:?}");
+        for (i, c) in date.iter().enumerate() {
+            if i == 2 || i == 5 {
+                assert_eq!(*c, '/', "vị trí {i} phải là '/': {rest:?}");
+            } else {
+                assert!(c.is_ascii_digit(), "vị trí {i} phải là chữ số: {rest:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn macro_custom_format_from_config() {
+        // #64: format lấy từ config tại thời điểm kích hoạt. Format toàn ký tự literal
+        // (không có %) hợp lệ với strftime → kết quả xác định, test không phụ thuộc đồng hồ.
+        let mut cfg = default_cfg();
+        cfg.macro_date_format = "ngày".to_string();
+        let mut core = core_with_macro("date_tuy_chinh", "hnay : hôm nay $DATE\n", cfg);
+        let mut actions = type_keys(&mut core, "hnay");
+        let (_h, sp) = core.process_key_event(' ' as u32, 0, 0);
+        actions.extend(sp);
+        let all = commits(&actions).join("");
+        assert_eq!(all.trim_end(), "hôm nay ngày", "commit: {all:?}");
+    }
+
+    #[test]
+    fn macro_double_dollar_stays_literal() {
+        // #64: "$$TIME" phải ra literal "$TIME", không bị thay bằng giờ. Tắt auto-capitalize
+        // macro: tính năng đó (có sẵn) hạ/nâng chữ TOÀN BỘ kết quả theo cách gõ key, sẽ biến
+        // "$TIME" thành "$time" — không liên quan tới cơ chế escape đang test.
+        let mut cfg = default_cfg();
+        cfg.ib_flags &= !cfg::IB_AUTO_CAPITALIZE_MACRO;
+        let mut core = core_with_macro("literal", "sig : $$TIME\n", cfg);
+        let mut actions = type_keys(&mut core, "sig");
+        let (_h, sp) = core.process_key_event(' ' as u32, 0, 0);
+        actions.extend(sp);
+        let all = commits(&actions).join("");
+        assert_eq!(all.trim_end(), "$TIME", "commit: {all:?}");
     }
 
     #[test]

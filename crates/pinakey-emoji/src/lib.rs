@@ -8,7 +8,10 @@ mod trie;
 
 pub use emoji::{load_emojione, load_emojione_from_str, EmojiEngine};
 pub use fuzzy::{fuzzy_score, EmojiIndex};
-pub use mactab::MacroTable;
+pub use mactab::{
+    expand_placeholders, expand_placeholders_now, MacroTable, DEFAULT_DATE_FORMAT,
+    DEFAULT_TIME_FORMAT,
+};
 pub use recent::RecentEmoji;
 pub use trie::TrieNode;
 

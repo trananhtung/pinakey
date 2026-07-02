@@ -137,6 +137,30 @@ impl SettingsController {
         self.set_flag(flag, !self.flag_enabled(flag));
     }
 
+    pub fn macro_date_format(&self) -> &str {
+        &self.config.macro_date_format
+    }
+
+    /// Đổi format strftime cho `$DATE` trong macro (#64).
+    pub fn set_macro_date_format(&mut self, fmt: &str) {
+        if fmt != self.config.macro_date_format {
+            self.config.macro_date_format = fmt.to_string();
+            self.dirty = true;
+        }
+    }
+
+    pub fn macro_time_format(&self) -> &str {
+        &self.config.macro_time_format
+    }
+
+    /// Đổi format strftime cho `$TIME` trong macro (#64).
+    pub fn set_macro_time_format(&mut self, fmt: &str) {
+        if fmt != self.config.macro_time_format {
+            self.config.macro_time_format = fmt.to_string();
+            self.dirty = true;
+        }
+    }
+
     /// Khôi phục về cấu hình mặc định.
     pub fn reset_to_default(&mut self) {
         self.config = default_cfg();
@@ -220,6 +244,25 @@ mod tests {
         let was = c.flag_enabled(flags::IB_SPELL_CHECK_WITH_DICTS);
         c.toggle_flag(flags::IB_SPELL_CHECK_WITH_DICTS);
         assert_eq!(c.flag_enabled(flags::IB_SPELL_CHECK_WITH_DICTS), !was);
+        assert!(c.is_dirty());
+    }
+
+    #[test]
+    fn macro_formats_set_and_mark_dirty() {
+        // #64: đổi format $DATE/$TIME trong GUI phải cập nhật config + dirty; đặt lại giá trị
+        // đang có thì không dirty.
+        let mut c = ctrl();
+        assert_eq!(c.macro_date_format(), "%d/%m/%Y");
+        assert_eq!(c.macro_time_format(), "%H:%M");
+        c.set_macro_date_format("%Y-%m-%d");
+        assert_eq!(c.macro_date_format(), "%Y-%m-%d");
+        assert!(c.is_dirty());
+
+        let mut c = ctrl();
+        c.set_macro_time_format("%H:%M");
+        assert!(!c.is_dirty(), "đặt lại giá trị cũ không được dirty");
+        c.set_macro_time_format("%H giờ %M");
+        assert_eq!(c.macro_time_format(), "%H giờ %M");
         assert!(c.is_dirty());
     }
 
