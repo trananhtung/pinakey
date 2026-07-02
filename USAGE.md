@@ -122,6 +122,11 @@ Khác bộ gõ truyền thống (hiện chữ gạch chân rồi mới “chốt
 
 - Hoạt động tốt nhất với app hỗ trợ *Surrounding Text* (đa số app GTK/Qt: trình duyệt, soạn thảo…) — gõ không gạch chân, ổn định.
 - App không hỗ trợ *Surrounding Text* (terminal, vài app Electron) → **tự lùi về chế độ preedit** (có dòng tạm/gạch chân nhưng gõ luôn đúng). Đây là hành vi mặc định, tin cậy.
+- Một số app **có** Surrounding Text nhưng dùng không đáng tin (LibreOffice, terminal) → PinaKey
+  **tự nhận diện theo tên app** và dùng preedit, không cần chỉnh gì.
+- **Tự chỉnh per-app:** tạo `~/.config/pinakey/transport-rules.conf`, mỗi dòng
+  `preedit|replace|auto <tên-app>` (ví dụ `preedit slack`) — rule của bạn **thắng** rule có sẵn.
+  Danh sách có sẵn xem `/usr/share/pinakey/transport-rules.conf`.
 - Có một chế độ **thử nghiệm** dùng daemon uinput để bỏ gạch chân ở cả terminal, nhưng **không ổn định trên GNOME Wayland** — xem [mục 9](#9-thử-nghiệm-gõ-không-gạch-chân-ở-terminal-uinput).
 
 ---

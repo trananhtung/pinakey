@@ -86,14 +86,18 @@ std::string toUtf8(const std::u32string &s) {
 /// InputContext giả lập một ô văn bản hỗ trợ surrounding text.
 class DocInputContext : public InputContext {
 public:
-    explicit DocInputContext(InputContextManager &mgr)
-        : InputContext(mgr, "docapp") {
+    explicit DocInputContext(InputContextManager &mgr, const std::string &program = "docapp")
+        : InputContext(mgr, program) {
         setCapabilityFlags(CapabilityFlags{CapabilityFlag::SurroundingText});
         created();
     }
     ~DocInputContext() override { destroy(); }
 
     const char *frontend() const override { return "doc"; }
+
+    /// Số lần addon gọi deleteSurroundingText — phân biệt đường replace (diff xoá-chèn, >0 khi
+    /// gõ dấu) với đường preedit (#67: không bao giờ đụng surrounding text).
+    int deleteCalls() const { return deleteCalls_; }
 
     void commitStringImpl(const std::string &text) override {
         auto u = fromUtf8(text);
@@ -102,6 +106,7 @@ public:
         syncSurrounding();
     }
     void deleteSurroundingTextImpl(int offset, unsigned int size) override {
+        ++deleteCalls_;
         long start = static_cast<long>(cursor_) + offset;
         if (start < 0) {
             start = 0;
@@ -141,6 +146,7 @@ public:
 private:
     std::u32string doc_;
     size_t cursor_ = 0;
+    int deleteCalls_ = 0;
 };
 
 /// InputContext giả lập LibreOffice Writer (issue #66): CÓ khả năng SurroundingText nhưng báo cáo
@@ -254,7 +260,7 @@ int main() {
 
     EventDispatcher dispatcher;
     dispatcher.attach(&instance.eventLoop());
-    dispatcher.schedule([&instance]() {
+    dispatcher.schedule([&instance, &xdgDir]() {
         auto *pinakey = instance.addonManager().addon("pinakey", true);
         FCITX_ASSERT(pinakey);
 
@@ -313,6 +319,37 @@ int main() {
         FCITX_ASSERT(ic->text() == "tiếng ")
             << "double-space sau khi click chuột phá văn bản: doc=\"" << ic->text()
             << "\", mong đợi \"tiếng \" (nguyên vẹn)";
+
+        // #67: terminal (kitty) CÓ quảng cáo SurroundingText nhưng rule built-in ép preedit →
+        // addon không bao giờ gọi deleteSurroundingText, chữ vẫn đúng (qua đường commit preedit).
+        auto kitty =
+            std::make_unique<DocInputContext>(instance.inputContextManager(), "kitty");
+        kitty->focusIn();
+        instance.setCurrentInputMethod(kitty.get(), "pinakey", true);
+        sendKeys(kitty.get(), "vieetj ");
+        FCITX_ASSERT(kitty->text() == "việt ")
+            << "kitty: doc=\"" << kitty->text() << "\", mong đợi \"việt \"";
+        FCITX_ASSERT(kitty->deleteCalls() == 0)
+            << "kitty phải đi đường preedit, không được deleteSurroundingText ("
+            << kitty->deleteCalls() << " lần)";
+
+        // #67: rule NGƯỜI DÙNG thắng built-in — ~/.config/pinakey/transport-rules.conf ép
+        // "preedit" cho app thường (mặc định Auto→replace). Engine đọc rule lúc tạo context
+        // nên phải ghi file TRƯỚC khi tạo context mới.
+        {
+            std::ofstream rules(xdgDir + "/pinakey/transport-rules.conf");
+            rules << "# rule người dùng\npreedit userpreeditapp\n";
+        }
+        auto up = std::make_unique<DocInputContext>(instance.inputContextManager(),
+                                                    "userpreeditapp");
+        up->focusIn();
+        instance.setCurrentInputMethod(up.get(), "pinakey", true);
+        sendKeys(up.get(), "vieetj ");
+        FCITX_ASSERT(up->text() == "việt ")
+            << "override người dùng: doc=\"" << up->text() << "\"";
+        FCITX_ASSERT(up->deleteCalls() == 0)
+            << "rule người dùng 'preedit' phải thắng Auto (deleteCalls="
+            << up->deleteCalls() << ")";
 
         // #66: LibreOffice Writer — app CÓ SurroundingText nhưng báo cáo không đáng tin (lạc hậu
         // khi gõ nhanh, thiếu dấu cách). Addon phải nhận diện program "soffice" → dùng preedit

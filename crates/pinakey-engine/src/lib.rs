@@ -7,8 +7,11 @@
 //!
 //! - [`keysym`] — hằng keysym/modifier trung lập (giá trị X11 dùng chung cho IBus và fcitx5).
 //! - [`engine`] — logic engine chế độ Preedit (chuyển từ `engine_preedit.go`).
+//! - [`transport`] — quy tắc chọn transport theo ứng dụng (issue #67).
 
 pub mod engine;
 pub mod keysym;
+pub mod transport;
 
 pub use engine::{Action, EngineCore};
+pub use transport::{TransportPref, TransportRules};
