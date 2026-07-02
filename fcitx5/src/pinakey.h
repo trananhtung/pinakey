@@ -67,6 +67,9 @@ private:
     // #7: reset segment đang theo dõi nếu con trỏ đã nhảy / văn bản đổi (so với surrounding text),
     // tránh deleteSurroundingText xoá nhầm ký tự ở vị trí mới.
     void resetIfDocumentDiverged();
+    // #65: guard an toàn cho double-space → ". " — văn bản trước con trỏ phải kết thúc bằng
+    // "ký tự từ + dấu cách" (không selection); chống con trỏ bị click dời mà app không reset.
+    bool surroundingEndsWithWordSpace() const;
     // Gõ không gạch chân cho app không có SurroundingText (terminal…) qua daemon uinput + ACK:
     // hoãn commit, bơm (N+1) Backspace, ĐẾM Backspace bơm-ngược quay về fcitx, chỉ commit chuỗi
     // mới sau khi xác nhận đã xoá đủ — triệt tiêu cuộc đua "commit trước khi xoá xong" (như

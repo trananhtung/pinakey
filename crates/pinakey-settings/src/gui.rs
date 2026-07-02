@@ -4,7 +4,7 @@
 
 use eframe::egui;
 
-use crate::controller::{settings_flags, SettingsController};
+use crate::controller::{settings_flags, w_shortcut_levels, SettingsController};
 
 /// Mở cửa sổ thiết lập cho `engine_name` và chạy vòng lặp GUI tới khi người dùng đóng.
 pub fn run(engine_name: &str) -> Result<(), eframe::Error> {
@@ -67,8 +67,17 @@ impl eframe::App for SettingsApp {
         let mut set_flags: Vec<(u32, bool)> = Vec::new();
         let mut set_date_fmt: Option<String> = None;
         let mut set_time_fmt: Option<String> = None;
+        let mut set_w_level: Option<u8> = None;
         let mut do_save = false;
         let mut do_reset = false;
+        let w_levels = w_shortcut_levels();
+        let cur_w = self.controller.w_shortcut();
+        let cur_w_label = w_levels
+            .iter()
+            .find(|(v, _)| *v == cur_w)
+            .map(|(_, l)| *l)
+            .unwrap_or("?")
+            .to_string();
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("PinaKey — Bộ gõ tiếng Việt");
@@ -126,6 +135,20 @@ impl eframe::App for SettingsApp {
             }
 
             ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.label("Gõ w ra ư (Telex)");
+                egui::ComboBox::from_id_salt("w_shortcut")
+                    .selected_text(cur_w_label.as_str())
+                    .show_ui(ui, |ui| {
+                        for (v, l) in &w_levels {
+                            if ui.selectable_label(*v == cur_w, *l).clicked() {
+                                set_w_level = Some(*v);
+                            }
+                        }
+                    });
+            });
+
+            ui.add_space(8.0);
             ui.separator();
             ui.label("Macro: placeholder $DATE / $TIME (format strftime, ví dụ %d/%m/%Y, %H:%M)");
             egui::Grid::new("macro_fmt_grid")
@@ -174,6 +197,9 @@ impl eframe::App for SettingsApp {
         }
         for (flag, on) in set_flags {
             self.controller.set_flag(flag, on);
+        }
+        if let Some(v) = set_w_level {
+            self.controller.set_w_shortcut(v);
         }
         if let Some(f) = set_date_fmt {
             self.controller.set_macro_date_format(&f);

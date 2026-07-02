@@ -44,6 +44,23 @@ pub struct EngineCore {
     wm_class: String,
     /// Từ điển chính tả (chỉ nạp khi bật cờ `IB_SPELL_CHECK_WITH_DICTS`) — issue #18.
     dictionary: Option<core::Dictionary>,
+    /// #65: trạng thái theo dõi kết câu cho tự-viết-hoa-đầu-câu (chỉ dùng khi bật cờ).
+    sentence: SentenceState,
+    /// #65: cửa sổ double-space→". " đang mở (vừa commit "từ " xong). Single-shot: phím kế
+    /// tiếp bất kỳ (không bị addon tiêu thụ) sẽ đóng lại.
+    double_space_armed: bool,
+}
+
+/// #65: máy trạng thái viết hoa đầu câu. Engine thấy MỌI phím (kể cả phím forward khi buffer
+/// rỗng) nên có thể theo dõi "kết câu rồi + đã có khoảng trắng" thuần túy từ luồng phím/commit.
+#[derive(Clone, Copy, PartialEq)]
+enum SentenceState {
+    /// Bình thường.
+    Idle,
+    /// Vừa commit chuỗi kết thúc bằng `.` `!` `?` — chờ khoảng trắng.
+    AfterPunct,
+    /// Đã có khoảng trắng sau dấu kết câu — chữ cái tiếp theo sẽ được viết hoa (one-shot).
+    ReadyToCapitalize,
 }
 
 const VN_CASE_ALL_SMALL: u8 = 1;
@@ -73,6 +90,24 @@ impl EngineCore {
             last_key_with_shift: false,
             wm_class: String::new(),
             dictionary,
+            sentence: SentenceState::Idle,
+            double_space_armed: false,
+        }
+    }
+
+    /// #65: dấu cách kế tiếp có nên biến thành ". " không. Addon C++ hỏi TRƯỚC khi đưa phím
+    /// space vào engine; nếu đúng và app cho phép xoá surrounding text, addon tự xoá dấu cách
+    /// cũ + commit ". " rồi gọi [`Self::double_space_consume`].
+    pub fn double_space_armed(&self) -> bool {
+        self.double_space_armed
+    }
+
+    /// #65: addon đã thực hiện double-space→". ": đóng cửa sổ; văn bản giờ kết thúc ". " nên
+    /// nếu bật viết-hoa-đầu-câu thì chữ cái kế tiếp được viết hoa luôn.
+    pub fn double_space_consume(&mut self) {
+        self.double_space_armed = false;
+        if self.config.ib_flags & cfg::IB_CAPITALIZE_SENTENCE != 0 {
+            self.sentence = SentenceState::ReadyToCapitalize;
         }
     }
 
@@ -122,6 +157,9 @@ impl EngineCore {
     /// Đặt lại trạng thái soạn thảo bên dưới (tương ứng `Reset` của IBus).
     pub fn reset_preeditor(&mut self) {
         self.preeditor.reset();
+        // Mất focus / con trỏ nhảy → không còn biết văn cảnh, huỷ viết hoa chờ + double-space.
+        self.sentence = SentenceState::Idle;
+        self.double_space_armed = false;
     }
 
     /// Dựng lại engine biến đổi sau khi cấu hình thay đổi (input method / flags).
@@ -315,7 +353,72 @@ impl EngineCore {
         if s.is_empty() {
             return;
         }
+        self.track_sentence_commit(s);
+        self.track_double_space_commit(s);
         out.push(Action::CommitText(self.encode_text(s)));
+    }
+
+    /// #65: mở cửa sổ double-space khi commit là "từ + một dấu cách" — ký tự ngay trước dấu
+    /// cách phải là chữ/số (sau dấu câu như "xong. " thì "xong.. " là vô nghĩa → không mở).
+    fn track_double_space_commit(&mut self, s: &str) {
+        if self.config.ib_flags & cfg::IB_DOUBLE_SPACE_PERIOD == 0 {
+            return;
+        }
+        let mut rev = s.chars().rev();
+        self.double_space_armed =
+            rev.next() == Some(' ') && rev.next().is_some_and(|c| c.is_alphanumeric());
+    }
+
+    /// #65: cập nhật máy trạng thái viết-hoa-đầu-câu theo chuỗi vừa commit. Chuỗi kết thúc bằng
+    /// `.` `!` `?` → chờ khoảng trắng; kết thúc bằng khoảng trắng ngay sau dấu kết câu ("xong. ")
+    /// → sẵn sàng viết hoa; còn lại → về Idle.
+    fn track_sentence_commit(&mut self, s: &str) {
+        if self.config.ib_flags & cfg::IB_CAPITALIZE_SENTENCE == 0 {
+            return;
+        }
+        let mut rev = s.chars().rev().peekable();
+        let mut saw_ws = false;
+        while rev.peek().is_some_and(|c| c.is_whitespace()) {
+            rev.next();
+            saw_ws = true;
+        }
+        self.sentence = match rev.next() {
+            Some('.' | '!' | '?') if saw_ws => SentenceState::ReadyToCapitalize,
+            Some('.' | '!' | '?') => SentenceState::AfterPunct,
+            _ => SentenceState::Idle,
+        };
+    }
+
+    /// #65: xử lý phím cho viết-hoa-đầu-câu, TRƯỚC khi phím vào luồng chính. Trả về `key_val`
+    /// (đã đổi thành chữ hoa nếu đúng lúc). Khoảng trắng sau dấu kết câu — dù bị forward vì
+    /// buffer rỗng — vẫn đi qua đây nên máy trạng thái nhìn thấy đủ.
+    fn apply_sentence_capitalize(&mut self, key_val: u32, state: u32) -> u32 {
+        if self.config.ib_flags & cfg::IB_CAPITALIZE_SENTENCE == 0 {
+            return key_val;
+        }
+        let key_rune = char::from_u32(key_val).unwrap_or('\0');
+        match self.sentence {
+            SentenceState::Idle => {}
+            SentenceState::AfterPunct => {
+                self.sentence = if key_rune == ' ' || key_val == KEY_RETURN {
+                    SentenceState::ReadyToCapitalize
+                } else {
+                    SentenceState::Idle
+                };
+            }
+            SentenceState::ReadyToCapitalize => {
+                if key_rune == ' ' || key_val == KEY_RETURN {
+                    // thêm khoảng trắng/xuống dòng → vẫn chờ chữ cái đầu.
+                } else if key_rune.is_ascii_lowercase() && is_valid_state(state) {
+                    self.sentence = SentenceState::Idle;
+                    return key_val - 32; // 'a'..'z' → 'A'..'Z'
+                } else {
+                    // Chữ hoa sẵn, số, Backspace, phím điều hướng… → người dùng tự quyết.
+                    self.sentence = SentenceState::Idle;
+                }
+            }
+        }
+        key_val
     }
 
     fn commit_preedit_and_reset(&mut self, s: &str, out: &mut Vec<Action>) {
@@ -356,6 +459,15 @@ impl EngineCore {
         self.preeditor.can_process_key(key_rune)
     }
 
+    /// #65 mức 1 (w→ư "không áp dụng ở đầu từ"): chặn w/W tạo `ư` khi từ hiện tại còn rỗng —
+    /// "www", "word", "web"… giữ nguyên; giữa từ ("tw" → "tư") vẫn hoạt động. Phím bị chặn rơi
+    /// xuống nhánh xử lý tiếng Anh (append thô).
+    fn w_suppressed(&self, key_rune: char) -> bool {
+        self.config.w_shortcut == 1
+            && matches!(key_rune, 'w' | 'W')
+            && self.get_processed_string(mode::ENGLISH).is_empty()
+    }
+
     fn update_last_key_with_shift(&mut self, key_val: u32, state: u32) {
         let key_rune = char::from_u32(key_val).unwrap_or('\0');
         if self.preeditor.can_process_key(key_rune) {
@@ -383,6 +495,13 @@ impl EngineCore {
         } else {
             String::new()
         };
+
+        // #65 mức 1: w ở đầu từ append thô (giữ "w" trong preedit, KHÔNG commit ngay — nếu rơi
+        // xuống handle_non_vn_word thì "word" bị cắt thành "w" + "ord" và 'r' thành dấu hỏi).
+        if is_printable && self.w_suppressed(key_rune) {
+            self.preeditor.process_key(key_rune, mode::ENGLISH);
+            return (format!("{}{}", old_text, key_s), false);
+        }
 
         if is_printable && self.preeditor.can_process_key(key_rune) {
             if state & MOD_LOCK != 0 {
@@ -493,6 +612,12 @@ impl EngineCore {
         if is_modifier_keysym(key_val) {
             return (false, out);
         }
+        // #65: phím này tới engine nghĩa là addon KHÔNG tiêu thụ nó cho double-space → cửa sổ
+        // khép lại (commit sinh ra trong chính sự kiện này có thể mở lại ở commit_text).
+        self.double_space_armed = false;
+        // #65: viết hoa đầu câu — có thể đổi key_val thành chữ hoa; chạy TRƯỚC luồng chính để
+        // cả phím forward (space khi buffer rỗng) cũng đi qua máy trạng thái.
+        let key_val = self.apply_sentence_capitalize(key_val, state);
         let result = self.preedit_process_key_event(key_val, key_code, state, &mut out);
         self.update_last_key_with_shift(key_val, state);
         (result, out)
@@ -555,11 +680,20 @@ impl EngineCore {
 }
 
 fn build_preeditor(config: &Config) -> PinaKeyEngine {
-    let pairs: Vec<(String, String)> = config
+    let mut pairs: Vec<(String, String)> = config
         .input_method_definitions
         .get(&config.input_method)
         .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
         .unwrap_or_default();
+    // #65: w→ư — thêm rule appending `__Ư` vào phím w (biến Telex thành Telex W). Chỉ áp cho
+    // định nghĩa có phím w chưa có phần appending; VNI/VIQR không có "w" nên không đổi.
+    if config.w_shortcut > 0 {
+        for (k, v) in pairs.iter_mut() {
+            if k == "w" && !v.contains("__") {
+                v.push_str("__Ư");
+            }
+        }
+    }
     let im = build_input_method_from_pairs(&config.input_method, &pairs);
     let mut flags = config.flags;
     // Telex đơn giản (#16): tắt gõ-dấu-tự-do để dấu áp ngay, không tự dời.
@@ -682,6 +816,222 @@ mod tests {
         actions.extend(sp);
         // Phím ngắt từ (space) được commit cùng với từ.
         assert!(commits(&actions).iter().any(|c| c.trim() == "tiếng"));
+    }
+
+    #[test]
+    fn w_shortcut_off_keeps_w() {
+        // #65 mức 0 (mặc định): "w" đứng riêng vẫn là "w".
+        let mut core = EngineCore::new(default_cfg());
+        let actions = type_keys(&mut core, "w");
+        assert_eq!(last_preedit(&actions).as_deref(), Some("w"));
+    }
+
+    #[test]
+    fn w_shortcut_everywhere() {
+        // #65 mức 2: "w" ra "ư" ở mọi vị trí; gõ đúp "ww" trả lại "w".
+        let mut cfg = default_cfg();
+        cfg.w_shortcut = 2;
+        let mut core = EngineCore::new(cfg);
+        let actions = type_keys(&mut core, "w");
+        assert_eq!(last_preedit(&actions).as_deref(), Some("ư"), "w → ư");
+        core.reset_preeditor();
+        let actions = type_keys(&mut core, "ww");
+        assert_eq!(last_preedit(&actions).as_deref(), Some("w"), "ww → w");
+        core.reset_preeditor();
+        let actions = type_keys(&mut core, "tw");
+        assert_eq!(last_preedit(&actions).as_deref(), Some("tư"), "tw → tư");
+    }
+
+    #[test]
+    fn w_shortcut_not_at_word_start() {
+        // #65 mức 1: "w" ở ĐẦU TỪ giữ nguyên (www, word…); giữa từ vẫn ra "ư".
+        let mut cfg = default_cfg();
+        cfg.w_shortcut = 1;
+        let mut core = EngineCore::new(cfg);
+        let actions = type_keys(&mut core, "w");
+        assert_eq!(last_preedit(&actions).as_deref(), Some("w"), "đầu từ giữ w");
+        core.reset_preeditor();
+        let actions = type_keys(&mut core, "www");
+        assert_eq!(
+            last_preedit(&actions).as_deref(),
+            Some("www"),
+            "www giữ nguyên"
+        );
+        core.reset_preeditor();
+        let actions = type_keys(&mut core, "tw");
+        assert_eq!(
+            last_preedit(&actions).as_deref(),
+            Some("tư"),
+            "giữa từ tw → tư"
+        );
+        core.reset_preeditor();
+        // Từ tiếng Anh bắt đầu bằng w phải nguyên vẹn — đặc biệt 'r' không được thành dấu hỏi
+        // (nếu w bị commit rời thay vì append, "word" thành "w" + "ỏd").
+        let actions = type_keys(&mut core, "word");
+        assert_eq!(
+            last_preedit(&actions).as_deref(),
+            Some("word"),
+            "word giữ nguyên"
+        );
+    }
+
+    #[test]
+    fn w_shortcut_does_not_break_uw() {
+        // #65: cả 3 mức không được phá "uw" → "ư" chuẩn Telex.
+        for level in [0u8, 1, 2] {
+            let mut cfg = default_cfg();
+            cfg.w_shortcut = level;
+            let mut core = EngineCore::new(cfg);
+            let actions = type_keys(&mut core, "tuw");
+            assert_eq!(
+                last_preedit(&actions).as_deref(),
+                Some("tư"),
+                "mức {level}: tuw → tư"
+            );
+        }
+    }
+
+    #[test]
+    fn capitalize_sentence_after_period_and_space() {
+        // #65: sau "xong." + space (space đi qua engine dù buffer rỗng), chữ cái đầu tiên của
+        // từ kế tiếp tự viết hoa — kể cả khi từ đó có dấu Telex.
+        let mut cfg = default_cfg();
+        cfg.ib_flags |= cfg::IB_CAPITALIZE_SENTENCE;
+        let mut core = EngineCore::new(cfg);
+        type_keys(&mut core, "xong");
+        core.process_key_event('.' as u32, 0, 0); // commit "xong."
+        core.process_key_event(' ' as u32, 0, 0); // buffer rỗng → space forward, engine vẫn thấy
+        let actions = type_keys(&mut core, "vieetj");
+        assert_eq!(last_preedit(&actions).as_deref(), Some("Việt"));
+    }
+
+    #[test]
+    fn capitalize_sentence_off_by_default() {
+        let mut core = EngineCore::new(default_cfg());
+        type_keys(&mut core, "xong");
+        core.process_key_event('.' as u32, 0, 0);
+        core.process_key_event(' ' as u32, 0, 0);
+        let actions = type_keys(&mut core, "vieetj");
+        assert_eq!(last_preedit(&actions).as_deref(), Some("việt"));
+    }
+
+    #[test]
+    fn capitalize_sentence_not_after_comma_or_without_space() {
+        let mut cfg = default_cfg();
+        cfg.ib_flags |= cfg::IB_CAPITALIZE_SENTENCE;
+        let mut core = EngineCore::new(cfg);
+        // Dấu phẩy không kết câu.
+        type_keys(&mut core, "xong");
+        core.process_key_event(',' as u32, 0, 0);
+        core.process_key_event(' ' as u32, 0, 0);
+        let actions = type_keys(&mut core, "va");
+        assert_eq!(
+            last_preedit(&actions).as_deref(),
+            Some("va"),
+            "sau dấu phẩy"
+        );
+        // "." nhưng CHƯA có khoảng trắng → chưa viết hoa (viết tắt, số thập phân…).
+        let mut core = EngineCore::new({
+            let mut c = default_cfg();
+            c.ib_flags |= cfg::IB_CAPITALIZE_SENTENCE;
+            c
+        });
+        type_keys(&mut core, "xong");
+        core.process_key_event('.' as u32, 0, 0);
+        let actions = type_keys(&mut core, "va");
+        assert_eq!(
+            last_preedit(&actions).as_deref(),
+            Some("va"),
+            "chưa có space"
+        );
+    }
+
+    #[test]
+    fn capitalize_sentence_single_shot_and_cleared_by_backspace() {
+        let mut cfg = default_cfg();
+        cfg.ib_flags |= cfg::IB_CAPITALIZE_SENTENCE;
+        let mut core = EngineCore::new(cfg);
+        // Backspace sau ". " (người dùng sửa tay) → huỷ viết hoa chờ.
+        type_keys(&mut core, "xong");
+        core.process_key_event('.' as u32, 0, 0);
+        core.process_key_event(' ' as u32, 0, 0);
+        core.process_key_event(KEY_BACKSPACE, 0, 0);
+        let actions = type_keys(&mut core, "va");
+        assert_eq!(
+            last_preedit(&actions).as_deref(),
+            Some("va"),
+            "backspace huỷ"
+        );
+        // Chỉ viết hoa MỘT chữ đầu: từ thứ hai của câu không bị hoa.
+        let mut core = EngineCore::new({
+            let mut c = default_cfg();
+            c.ib_flags |= cfg::IB_CAPITALIZE_SENTENCE;
+            c
+        });
+        type_keys(&mut core, "xong");
+        core.process_key_event('.' as u32, 0, 0);
+        core.process_key_event(' ' as u32, 0, 0);
+        type_keys(&mut core, "hai");
+        core.process_key_event(' ' as u32, 0, 0); // commit "Hai "
+        let actions = type_keys(&mut core, "ba");
+        assert_eq!(last_preedit(&actions).as_deref(), Some("ba"), "one-shot");
+    }
+
+    #[test]
+    fn double_space_arms_after_word_space_commit() {
+        // #65: sau khi commit "tiếng " (từ + dấu cách), engine "lên đạn" cho double-space.
+        let mut cfg = default_cfg();
+        cfg.ib_flags |= cfg::IB_DOUBLE_SPACE_PERIOD;
+        let mut core = EngineCore::new(cfg);
+        type_keys(&mut core, "tieengs");
+        assert!(!core.double_space_armed(), "chưa commit thì chưa arm");
+        core.process_key_event(' ' as u32, 0, 0);
+        assert!(core.double_space_armed(), "commit 'tiếng ' phải arm");
+    }
+
+    #[test]
+    fn double_space_not_armed_when_off_or_after_punct() {
+        // Cờ tắt (mặc định) → không bao giờ arm.
+        let mut core = EngineCore::new(default_cfg());
+        type_keys(&mut core, "tieengs");
+        core.process_key_event(' ' as u32, 0, 0);
+        assert!(!core.double_space_armed(), "mặc định tắt");
+        // Commit kết thúc ". " (đã có dấu câu) → không arm ("xong.  " thành "xong.. " là vô nghĩa).
+        let mut cfg = default_cfg();
+        cfg.ib_flags |= cfg::IB_DOUBLE_SPACE_PERIOD;
+        let mut core = EngineCore::new(cfg);
+        type_keys(&mut core, "xong");
+        core.process_key_event('.' as u32, 0, 0);
+        core.process_key_event(' ' as u32, 0, 0);
+        assert!(!core.double_space_armed(), "sau dấu câu không arm");
+    }
+
+    #[test]
+    fn double_space_disarmed_by_any_following_key() {
+        let mut cfg = default_cfg();
+        cfg.ib_flags |= cfg::IB_DOUBLE_SPACE_PERIOD;
+        let mut core = EngineCore::new(cfg);
+        type_keys(&mut core, "tieengs");
+        core.process_key_event(' ' as u32, 0, 0);
+        assert!(core.double_space_armed());
+        type_keys(&mut core, "a"); // gõ tiếp → cửa sổ double-space khép lại
+        assert!(!core.double_space_armed());
+    }
+
+    #[test]
+    fn double_space_consume_disarms_and_chains_capitalize() {
+        // Consume (C++ đã xoá space + commit ". ") → hết arm; nếu bật viết-hoa-đầu-câu thì
+        // chữ kế tiếp được hoa luôn (văn bản giờ kết thúc ". ").
+        let mut cfg = default_cfg();
+        cfg.ib_flags |= cfg::IB_DOUBLE_SPACE_PERIOD | cfg::IB_CAPITALIZE_SENTENCE;
+        let mut core = EngineCore::new(cfg);
+        type_keys(&mut core, "tieengs");
+        core.process_key_event(' ' as u32, 0, 0);
+        assert!(core.double_space_armed());
+        core.double_space_consume();
+        assert!(!core.double_space_armed());
+        let actions = type_keys(&mut core, "vieetj");
+        assert_eq!(last_preedit(&actions).as_deref(), Some("Việt"));
     }
 
     /// Dựng engine bật macro với nội dung bảng macro cho trước (ghi file tạm rồi nạp).

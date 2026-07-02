@@ -486,6 +486,31 @@ pub unsafe extern "C" fn pk_engine_surrounding_text_unreliable(e: *const PkEngin
         .unwrap_or(false)
 }
 
+/// #65: dấu cách kế tiếp có nên biến thành ". " không (double-space kết câu nhanh, cần bật
+/// option). C++ hỏi TRƯỚC khi đưa phím space vào engine; nếu `true` và app cho xoá surrounding
+/// text thì C++ tự xoá dấu cách cũ + commit ". " rồi gọi `pk_engine_double_space_consume`.
+///
+/// # Safety
+/// `e` hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_double_space_armed(e: *const PkEngine) -> bool {
+    e.as_ref()
+        .map(|x| x.core.double_space_armed())
+        .unwrap_or(false)
+}
+
+/// #65: báo engine rằng addon đã thực hiện double-space→". " (đóng cửa sổ; nếu bật viết hoa
+/// đầu câu thì chữ cái kế tiếp sẽ tự hoa).
+///
+/// # Safety
+/// `e` hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_double_space_consume(e: *mut PkEngine) {
+    if let Some(x) = e.as_mut() {
+        x.core.double_space_consume();
+    }
+}
+
 /// Đổi kiểu gõ ("Telex" / "VNI" / "VIQR" …) và dựng lại engine biến đổi.
 ///
 /// # Safety
@@ -931,6 +956,27 @@ mod tests {
             assert!(!first_im.is_empty());
             let first_cs = CStr::from_ptr(pk_charset_name_at(0)).to_str().unwrap();
             assert_eq!(first_cs, "Unicode");
+        }
+    }
+
+    #[test]
+    fn double_space_armed_and_consume_via_ffi() {
+        // #65: addon C++ hỏi trạng thái double-space trước khi đưa phím space vào engine.
+        unsafe {
+            let mut cfg = pinakey_config::default_cfg();
+            cfg.ib_flags |= pinakey_config::flags::IB_DOUBLE_SPACE_PERIOD;
+            let e = pk_engine_new_from_json(
+                CString::new(serde_json::to_string(&cfg).unwrap())
+                    .unwrap()
+                    .as_ptr(),
+            );
+            let (_c, _p) = type_str(e, "tieengs");
+            assert!(!pk_engine_double_space_armed(e));
+            pk_engine_process_key(e, ' ' as u32, 0);
+            assert!(pk_engine_double_space_armed(e), "sau 'tiếng ' phải armed");
+            pk_engine_double_space_consume(e);
+            assert!(!pk_engine_double_space_armed(e));
+            pk_engine_free(e);
         }
     }
 

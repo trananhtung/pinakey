@@ -20,7 +20,20 @@ pub fn settings_flags() -> Vec<(u32, &'static str)> {
         (flags::IB_MACRO_ENABLED, "Bật macro"),
         (flags::IB_AUTO_CAPITALIZE_MACRO, "Tự viết hoa macro"),
         (flags::IB_NO_UNDERLINE, "Không gạch chân preedit"),
+        (
+            flags::IB_CAPITALIZE_SENTENCE,
+            "Tự viết hoa đầu câu (sau . ! ?)",
+        ),
+        (
+            flags::IB_DOUBLE_SPACE_PERIOD,
+            "Hai dấu cách liên tiếp → \". \"",
+        ),
     ]
+}
+
+/// #65: nhãn cho 3 mức của tuỳ chọn w→ư (Telex), theo giá trị `WShortcut` 0/1/2.
+pub fn w_shortcut_levels() -> Vec<(u8, &'static str)> {
+    vec![(0, "Tắt"), (1, "Không áp dụng ở đầu từ"), (2, "Mọi nơi")]
 }
 
 /// Bộ điều khiển cho màn hình thiết lập.
@@ -137,6 +150,18 @@ impl SettingsController {
         self.set_flag(flag, !self.flag_enabled(flag));
     }
 
+    pub fn w_shortcut(&self) -> u8 {
+        self.config.w_shortcut
+    }
+
+    /// #65: đổi mức w→ư (0 tắt / 1 không ở đầu từ / 2 mọi nơi); ngoài phạm vi bị bỏ qua.
+    pub fn set_w_shortcut(&mut self, level: u8) {
+        if level <= 2 && level != self.config.w_shortcut {
+            self.config.w_shortcut = level;
+            self.dirty = true;
+        }
+    }
+
     pub fn macro_date_format(&self) -> &str {
         &self.config.macro_date_format
     }
@@ -245,6 +270,28 @@ mod tests {
         c.toggle_flag(flags::IB_SPELL_CHECK_WITH_DICTS);
         assert_eq!(c.flag_enabled(flags::IB_SPELL_CHECK_WITH_DICTS), !was);
         assert!(c.is_dirty());
+    }
+
+    #[test]
+    fn w_shortcut_levels_and_dirty() {
+        // #65: 3 mức w→ư; giá trị ngoài 0..=2 bị bỏ qua.
+        let mut c = ctrl();
+        assert_eq!(c.w_shortcut(), 0);
+        c.set_w_shortcut(2);
+        assert_eq!(c.w_shortcut(), 2);
+        assert!(c.is_dirty());
+        let mut c = ctrl();
+        c.set_w_shortcut(9); // ngoài phạm vi → giữ nguyên, không dirty
+        assert_eq!(c.w_shortcut(), 0);
+        assert!(!c.is_dirty());
+    }
+
+    #[test]
+    fn typing_convenience_flags_listed() {
+        // #65: 2 cờ mới phải có mặt trong danh sách checkbox của GUI.
+        let flags_listed: Vec<u32> = settings_flags().into_iter().map(|(f, _)| f).collect();
+        assert!(flags_listed.contains(&flags::IB_CAPITALIZE_SENTENCE));
+        assert!(flags_listed.contains(&flags::IB_DOUBLE_SPACE_PERIOD));
     }
 
     #[test]

@@ -38,7 +38,9 @@ cho Alexandre de Rhodes và thường bị lãng quên sau cái bóng của họ
   dùng** hiện ngay khi mở `:` (chọn bằng phím số), và **nhập Unicode hex** (`:u<hex>`).
 - **Menu** trên khay trạng thái: đổi kiểu gõ + bảng mã.
 - **Từ điển chính tả** "giải oan" cho từ mượn (+ từ điển người dùng `~/.config/pinakey/dict.txt`).
-- **Gõ tắt (macro)**, **loại trừ app tiếng Anh** (terminal/IDE…), **tự bỏ qua ô mật khẩu**.
+- **Gõ tắt (macro)** (kèm `$DATE`/`$TIME` động), **loại trừ app tiếng Anh** (terminal/IDE…),
+  **tự bỏ qua ô mật khẩu**.
+- **Tiện ích gõ tuỳ chọn** (mặc định tắt): w→ư 3 mức, tự viết hoa đầu câu, double-space → `. `.
 - **Live-reload** file macro/dict khi sửa (không cần khởi động lại).
 - **Giao diện thiết lập** đồ họa thuần Rust (egui).
 
