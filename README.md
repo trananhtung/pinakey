@@ -34,7 +34,8 @@ cho Alexandre de Rhodes và thường bị lãng quên sau cái bóng của họ
 - **Gõ không gạch chân**: với app hỗ trợ *Surrounding Text* (đa số GTK/Qt) commit thẳng + sửa tại
   chỗ; với app khác (terminal…) tự lùi về **preedit** (ổn định). Có chế độ **uinput thử nghiệm**
   (opt-in, không ổn định trên GNOME Wayland) — xem USAGE mục 9.
-- **Bảng tra emoji** (`:tên`) và **nhập Unicode hex** (`:u<hex>`), chọn bằng số/Enter.
+- **Bảng tra emoji** (`:tên`, tìm **fuzzy** — `:heye` ra `heart_eyes`), **lịch sử 9 emoji gần
+  dùng** hiện ngay khi mở `:` (chọn bằng phím số), và **nhập Unicode hex** (`:u<hex>`).
 - **Menu** trên khay trạng thái: đổi kiểu gõ + bảng mã.
 - **Từ điển chính tả** "giải oan" cho từ mượn (+ từ điển người dùng `~/.config/pinakey/dict.txt`).
 - **Gõ tắt (macro)**, **loại trừ app tiếng Anh** (terminal/IDE…), **tự bỏ qua ô mật khẩu**.
@@ -47,7 +48,7 @@ cho Alexandre de Rhodes và thường bị lãng quên sau cái bóng của họ
 |-------|-------------|
 | `pinakey-core` | Biến đổi Telex/VNI/VIQR, kiểm tra chính tả, từ điển, mã hóa charset. Logic thuần, không I/O. |
 | `pinakey-config` | Cấu hình JSON, feature flag, đường dẫn cấu hình. |
-| `pinakey-emoji` | Trie emoji + bảng macro. |
+| `pinakey-emoji` | Tra emoji (fuzzy + trie), lịch sử gần dùng + bảng macro. |
 | `pinakey-engine` | **Lõi engine trung lập transport**: `process_key → (handled, Vec<Action>)`, không I/O. |
 | `pinakey-ffi` | **C-ABI** (cbindgen) bọc `pinakey-engine` để addon fcitx5 C++ dùng lại lõi Rust. |
 | `pinakey-settings` | Giao diện thiết lập đồ họa (egui, feature `gui`). |

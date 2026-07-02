@@ -85,6 +85,11 @@ pub fn get_dict_path() -> PathBuf {
     get_config_dir().join("dict.txt")
 }
 
+/// `~/.config/pinakey/emoji-recent.txt` — lịch sử emoji gần dùng (issue #63), mỗi dòng một emoji.
+pub fn get_emoji_recent_path() -> PathBuf {
+    get_config_dir().join("emoji-recent.txt")
+}
+
 pub fn get_config_path(engine_name: &str) -> PathBuf {
     get_config_dir().join(format!("ibus-{}.config.json", engine_name))
 }

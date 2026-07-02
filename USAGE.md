@@ -119,9 +119,15 @@ Khác bộ gõ truyền thống (hiện chữ gạch chân rồi mới “chốt
 
 Khi không đang gõ dở một từ, gõ dấu **`:`** để mở bảng tra:
 
-- **Emoji theo tên:** `:grin`, `:smile`, `:heart` … → chọn bằng phím **số 1–9** hoặc **Enter**.
+- **Emoji gần dùng:** vừa mở `:` (chưa gõ gì) → hiện tối đa **9 emoji dùng gần nhất**, chọn bằng
+  phím **số 1–9** hoặc click. (Enter/Space lúc này vẫn ra dấu `:` bình thường — không sợ chọn nhầm
+  emoji khi gõ `: ` trong câu.)
+- **Emoji theo tên (tìm fuzzy):** `:grin`, `:heart_eyes` … — không cần gõ đủ hay gõ đúng liền
+  mạch, `:heye` vẫn ra `heart_eyes`. Chọn bằng phím **số 1–9** hoặc **Enter**.
 - **Ký tự Unicode theo mã hex:** `:u1f600` → 😀, `:u00e9` → é. (Gõ `:u` rồi mã hex, Enter.)
 - **Esc** để huỷ, **Backspace** để xoá bớt.
+
+Lịch sử gần dùng lưu ở `~/.config/pinakey/emoji-recent.txt` (xoá file này để xoá lịch sử).
 
 ---
 
