@@ -116,6 +116,24 @@ int main() {
             testfrontend->call<ITestFrontend::sendKeyEvent>(uuid, Key("space"), false);
         FCITX_ASSERT(!spaceHandled) << "dấu cách sau ':' phải được forward (không bị nuốt)";
 
+        // 11) ":u<hex>" trỏ vào surrogate (U+D800–DFFF) → KHÔNG được sinh ứng viên (mã hoá ra
+        //     UTF-8 không hợp lệ); Enter khi không có ứng viên chốt literal ":ud800".
+        testfrontend->call<ITestFrontend::pushCommitExpectation>(":ud800");
+        sendKey(testfrontend, uuid, "colon");
+        typeAscii(testfrontend, uuid, "ud800");
+        sendKey(testfrontend, uuid, "Return");
+
+        // 12) Trạng thái emoji phải bị dọn khi mất focus: ':' rồi focusOut → deactivate chốt
+        //     literal ":" (không mất chữ đã gõ); sau khi focusIn lại, phím gõ tiếp phải được xử
+        //     lý tiếng Việt bình thường chứ không bị nuốt vào query emoji vô hình cũ.
+        testfrontend->call<ITestFrontend::pushCommitExpectation>(":");
+        sendKey(testfrontend, uuid, "colon");
+        ic->focusOut();
+        ic->focusIn();
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("á ");
+        typeAscii(testfrontend, uuid, "as");
+        sendKey(testfrontend, uuid, "space");
+
         instance.exit();
     });
 
