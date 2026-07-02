@@ -702,7 +702,9 @@ void PinaKeyState::updateEmojiUI() {
         }
     }
 
-    if (!query.empty()) {
+    // #63: query có chữ → tra fuzzy; query RỖNG (vừa mở ':') → pk_emoji_query trả lịch sử emoji
+    // gần dùng làm candidate (chọn bằng phím số/click; Space/Enter vẫn chốt literal ':').
+    {
         const char *res = pk_emoji_query(query.c_str());
         std::string s = res ? res : "";
         size_t pos = 0;
@@ -750,6 +752,8 @@ void PinaKeyState::updateEmojiUI() {
 void PinaKeyState::emojiSelect(int index) {
     if (index >= 0 && index < static_cast<int>(emojiCandidates_.size())) {
         ic_->commitString(emojiCandidates_[index]);
+        // #63: ghi vào lịch sử gần dùng — lần mở ':' sau, query rỗng sẽ hiện lại emoji này.
+        pk_emoji_record_use(emojiCandidates_[index].c_str());
     }
     emojiMode_ = false;
     emojiQuery_.clear();
@@ -797,8 +801,11 @@ bool PinaKeyState::handleEmojiKey(KeyEvent &keyEvent) {
             return true;
         }
     }
+    // #63: candidate lịch sử (query rỗng) KHÔNG auto-chọn bằng Enter/Space — ':' + Enter/Space
+    // trong văn bản thường phải tiếp tục ra literal ':'; lịch sử chỉ chọn bằng phím số / click.
+    const bool hasQuery = emojiQuery_.size() > 1;
     if (sym == FcitxKey_Return || sym == FcitxKey_KP_Enter) {
-        if (!emojiCandidates_.empty()) {
+        if (hasQuery && !emojiCandidates_.empty()) {
             emojiSelect(0);
             keyEvent.filterAndAccept();
             return true;
@@ -808,7 +815,7 @@ bool PinaKeyState::handleEmojiKey(KeyEvent &keyEvent) {
         return false;
     }
     if (sym == FcitxKey_space) {
-        if (!emojiCandidates_.empty()) {
+        if (hasQuery && !emojiCandidates_.empty()) {
             emojiSelect(0);
             keyEvent.filterAndAccept();
             return true;

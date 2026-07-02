@@ -30,7 +30,7 @@ addon C++ chỉ là lớp tích hợp mỏng (mô hình fcitx5-cskk).
 |-------|-------------|-----------------|
 | `pinakey-core` | Biến đổi Telex/VNI/VIQR, kiểm tra chính tả, từ điển, charset. Logic thuần, đơn luồng, không I/O. | `once_cell`, `regex` |
 | `pinakey-config` | Đọc/ghi cấu hình JSON, feature flag, đường dẫn. | `pinakey-core`, `serde`, `dirs` |
-| `pinakey-emoji` | Trie emoji + bảng macro. | `serde` |
+| `pinakey-emoji` | Tra emoji (fuzzy + trie), lịch sử gần dùng + bảng macro. | `serde` |
 | `pinakey-engine` | **Lõi engine trung lập transport**: `EngineCore::process_key_event → (handled, Vec<Action>)`, không I/O. Keysym/modifier X11 trung lập (`keysym`). | core, config, emoji |
 | `pinakey-ffi` | **C-ABI** (con trỏ mờ + con trỏ mượn) bọc `pinakey-engine`; header sinh bằng cbindgen. | `pinakey-engine`, `pinakey-emoji`, `serde_json` |
 | `pinakey-settings` | Giao diện thiết lập đồ họa (egui, feature `gui`); controller logic luôn được test. | `pinakey-config`, `pinakey-core`, `eframe?` |

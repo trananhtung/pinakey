@@ -18,6 +18,8 @@
 #include <fcitx/inputmethodmanager.h>
 #include <fcitx/instance.h>
 
+#include <cstdlib>
+#include <filesystem>
 #include <string>
 
 using namespace fcitx;
@@ -38,6 +40,12 @@ void sendKey(AddonInstance *testfrontend, ICUUID uuid, const char *keyName) {
 } // namespace
 
 int main() {
+    // Cách ly config/persist khỏi máy người chạy test: XDG_CONFIG_HOME trỏ vào build dir và được
+    // dọn sạch mỗi lần chạy — engine dùng config mặc định, lịch sử emoji (#63) bắt đầu rỗng.
+    const std::string xdgDir = std::string(TESTING_BINARY_DIR) + "/testpinakey-xdg";
+    std::filesystem::remove_all(xdgDir);
+    setenv("XDG_CONFIG_HOME", xdgDir.c_str(), 1);
+
     setupTestingEnvironment(TESTING_BINARY_DIR,
                             {PINAKEY_ADDON_SO_DIR},
                             {PINAKEY_TEST_DATA_DIR, FCITX_SYS_PKGDATADIR});
@@ -133,6 +141,25 @@ int main() {
         testfrontend->call<ITestFrontend::pushCommitExpectation>("á ");
         typeAscii(testfrontend, uuid, "as");
         sendKey(testfrontend, uuid, "space");
+
+        // 13) #63 lịch sử gần dùng: 😀 đã được commit ở bước 8 → mở ':' với query rỗng phải hiện
+        //     lịch sử làm candidate; phím '1' chọn emoji gần nhất. (Space/Enter với query rỗng
+        //     vẫn chốt literal ':' như bước 10 — lịch sử chỉ chọn bằng phím số / click.)
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("\xF0\x9F\x98\x80"); // 😀
+        sendKey(testfrontend, uuid, "colon");
+        sendKey(testfrontend, uuid, "1");
+
+        // 14) #63 fuzzy shortname: ":heart_eyes" + Enter → 😍 (trước đây shortname không được
+        //     index nên không match).
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("\xF0\x9F\x98\x8D"); // 😍
+        sendKey(testfrontend, uuid, "colon");
+        typeAscii(testfrontend, uuid, "heart_eyes");
+        sendKey(testfrontend, uuid, "Return");
+
+        // 15) #63 thứ tự lịch sử: giờ là [😍, 😀] (mới nhất trước) → ':' + phím '2' chọn 😀.
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("\xF0\x9F\x98\x80"); // 😀
+        sendKey(testfrontend, uuid, "colon");
+        sendKey(testfrontend, uuid, "2");
 
         instance.exit();
     });

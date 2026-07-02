@@ -276,14 +276,24 @@ uint32_t pk_charset_count(void);
 const char *pk_charset_name_at(uint32_t i);
 
 /**
- * Tra emoji theo `query` (tiền tố keyword như "smile" hoặc ascii như ":)"). Trả về danh sách emoji
- * khớp, mỗi dòng một emoji, phân tách bằng `\n` (tối đa 60). Con trỏ trả về hợp lệ tới lần gọi
- * `pk_emoji_query` kế tiếp TRÊN CÙNG THREAD; C++ phải sao chép ngay.
+ * Tra emoji theo `query` — fuzzy trên shortname (`heart_eyes`, gõ tắt `heye` vẫn khớp), keyword
+ * và ascii (":)"), kết quả xếp theo độ khớp. **Query rỗng → danh sách emoji gần dùng** (mới nhất
+ * trước). Trả về mỗi dòng một emoji, phân tách bằng `\n` (tối đa 60). Con trỏ trả về hợp lệ tới
+ * lần gọi `pk_emoji_query` kế tiếp TRÊN CÙNG THREAD; C++ phải sao chép ngay.
  *
  * # Safety
  * `query` là chuỗi C hợp lệ hoặc null.
  */
 const char *pk_emoji_query(const char *query);
+
+/**
+ * Ghi nhận một emoji vừa được commit (#63): đưa lên đầu lịch sử gần dùng và persist best-effort
+ * (lỗi ghi đĩa chỉ cảnh báo ra stderr, không làm hỏng phiên gõ).
+ *
+ * # Safety
+ * `emoji` là chuỗi C hợp lệ hoặc null.
+ */
+void pk_emoji_record_use(const char *emoji);
 
 #ifdef __cplusplus
 }  // extern "C"

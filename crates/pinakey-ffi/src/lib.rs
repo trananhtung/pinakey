@@ -604,17 +604,34 @@ pub unsafe extern "C" fn pk_charset_name_at(i: u32) -> *const c_char {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Tra cứu emoji (issue #11/#26). Trie EmojiOne đóng kèm binary; truy vấn theo tiền tố keyword/ascii.
+// Tra cứu emoji (issue #11/#26/#63). Chỉ mục EmojiOne đóng kèm binary; truy vấn fuzzy theo
+// shortname/keyword/ascii; query rỗng trả về lịch sử emoji gần dùng (persist trong config dir).
 // ------------------------------------------------------------------------------------------------
 
-static EMOJI_TRIE: OnceLock<pinakey_emoji::TrieNode> = OnceLock::new();
+static EMOJI_INDEX: OnceLock<pinakey_emoji::EmojiIndex> = OnceLock::new();
 
-fn emoji_trie() -> &'static pinakey_emoji::TrieNode {
-    EMOJI_TRIE.get_or_init(|| {
-        pinakey_emoji::load_emojione_from_str(include_str!(
+fn emoji_index() -> &'static pinakey_emoji::EmojiIndex {
+    EMOJI_INDEX.get_or_init(|| {
+        pinakey_emoji::EmojiIndex::from_emojione_str(include_str!(
             "../../pinakey-emoji/data/emojione.json"
         ))
         .unwrap_or_default()
+    })
+}
+
+/// Lịch sử emoji gần dùng (#63): nạp từ đĩa đúng một lần, sau đó sống trong bộ nhớ; mỗi lần
+/// ghi nhận sẽ save best-effort. Mutex vì fcitx5 gọi từ một thread nhưng C-ABI không hứa vậy.
+static EMOJI_RECENT: OnceLock<std::sync::Mutex<pinakey_emoji::RecentEmoji>> = OnceLock::new();
+
+/// Tối đa 9 emoji gần dùng — khớp một trang candidate (chọn bằng phím số 1–9) bên addon.
+const EMOJI_RECENT_CAP: usize = 9;
+
+fn emoji_recent() -> &'static std::sync::Mutex<pinakey_emoji::RecentEmoji> {
+    EMOJI_RECENT.get_or_init(|| {
+        std::sync::Mutex::new(pinakey_emoji::RecentEmoji::load_from_file(
+            &pinakey_config::get_emoji_recent_path(),
+            EMOJI_RECENT_CAP,
+        ))
     })
 }
 
@@ -622,30 +639,46 @@ thread_local! {
     static EMOJI_RESULT: RefCell<CString> = RefCell::new(CString::default());
 }
 
-/// Tra emoji theo `query` (tiền tố keyword như "smile" hoặc ascii như ":)"). Trả về danh sách emoji
-/// khớp, mỗi dòng một emoji, phân tách bằng `\n` (tối đa 60). Con trỏ trả về hợp lệ tới lần gọi
-/// `pk_emoji_query` kế tiếp TRÊN CÙNG THREAD; C++ phải sao chép ngay.
+/// Tra emoji theo `query` — fuzzy trên shortname (`heart_eyes`, gõ tắt `heye` vẫn khớp), keyword
+/// và ascii (":)"), kết quả xếp theo độ khớp. **Query rỗng → danh sách emoji gần dùng** (mới nhất
+/// trước). Trả về mỗi dòng một emoji, phân tách bằng `\n` (tối đa 60). Con trỏ trả về hợp lệ tới
+/// lần gọi `pk_emoji_query` kế tiếp TRÊN CÙNG THREAD; C++ phải sao chép ngay.
 ///
 /// # Safety
 /// `query` là chuỗi C hợp lệ hoặc null.
 #[no_mangle]
 pub unsafe extern "C" fn pk_emoji_query(query: *const c_char) -> *const c_char {
     let q = opt_str(query).unwrap_or("");
-    let engine = pinakey_emoji::EmojiEngine::new(emoji_trie());
-    let mut seen = std::collections::HashSet::new();
-    let mut out: Vec<String> = Vec::new();
-    for emoji in engine.filter(q) {
-        if seen.insert(emoji.clone()) {
-            out.push(emoji);
-            if out.len() >= 60 {
-                break;
-            }
+    let out: Vec<String> = if q.is_empty() {
+        match emoji_recent().lock() {
+            Ok(r) => r.items().to_vec(),
+            Err(_) => Vec::new(),
         }
-    }
+    } else {
+        emoji_index().fuzzy_query(q, 60)
+    };
     let joined = to_cstring(&out.join("\n"));
     let ptr = joined.as_ptr();
     EMOJI_RESULT.with(|cell| *cell.borrow_mut() = joined);
     ptr
+}
+
+/// Ghi nhận một emoji vừa được commit (#63): đưa lên đầu lịch sử gần dùng và persist best-effort
+/// (lỗi ghi đĩa chỉ cảnh báo ra stderr, không làm hỏng phiên gõ).
+///
+/// # Safety
+/// `emoji` là chuỗi C hợp lệ hoặc null.
+#[no_mangle]
+pub unsafe extern "C" fn pk_emoji_record_use(emoji: *const c_char) {
+    let Some(e) = opt_str(emoji).filter(|s| !s.is_empty()) else {
+        return;
+    };
+    if let Ok(mut r) = emoji_recent().lock() {
+        r.record(e);
+        if let Err(err) = r.save_to_file(&pinakey_config::get_emoji_recent_path()) {
+            eprintln!("pinakey: không ghi được lịch sử emoji ({err})");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -898,6 +931,46 @@ mod tests {
             assert!(!first_im.is_empty());
             let first_cs = CStr::from_ptr(pk_charset_name_at(0)).to_str().unwrap();
             assert_eq!(first_cs, "Unicode");
+        }
+    }
+
+    #[test]
+    fn emoji_recent_and_fuzzy() {
+        unsafe {
+            // Cách ly persist: trỏ XDG_CONFIG_HOME vào thư mục tạm TRƯỚC lần chạm đầu tiên vào
+            // kho recents (OnceLock nạp từ đĩa đúng một lần) — không đụng config thật.
+            let dir =
+                std::env::temp_dir().join(format!("pinakey_ffi_recent_{}", std::process::id()));
+            std::env::set_var("XDG_CONFIG_HOME", &dir);
+
+            // Fuzzy (#63): "heye" phải ra 😍 (shortname heart_eyes) trong top kết quả.
+            let q = CString::new("heye").unwrap();
+            let res = CStr::from_ptr(pk_emoji_query(q.as_ptr())).to_str().unwrap();
+            assert!(
+                res.lines().take(5).any(|l| l == "😍"),
+                "heye phải ra 😍 trong top 5: {res:?}"
+            );
+
+            // Chưa dùng emoji nào → query rỗng trả rỗng.
+            let empty = CString::new("").unwrap();
+            let res = CStr::from_ptr(pk_emoji_query(empty.as_ptr()))
+                .to_str()
+                .unwrap();
+            assert_eq!(res, "", "chưa có lịch sử mà trả: {res:?}");
+
+            // Ghi nhận 2 lần dùng → query rỗng trả lịch sử, mới nhất trước; file được persist.
+            let e1 = CString::new("😀").unwrap();
+            let e2 = CString::new("👍").unwrap();
+            pk_emoji_record_use(e1.as_ptr());
+            pk_emoji_record_use(e2.as_ptr());
+            let res = CStr::from_ptr(pk_emoji_query(empty.as_ptr()))
+                .to_str()
+                .unwrap();
+            assert_eq!(res, "👍\n😀");
+            let on_disk = std::fs::read_to_string(dir.join("pinakey/emoji-recent.txt")).unwrap();
+            assert_eq!(on_disk, "👍\n😀\n");
+
+            std::fs::remove_dir_all(&dir).ok();
         }
     }
 

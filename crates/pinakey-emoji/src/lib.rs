@@ -1,11 +1,15 @@
 //! Tra cứu emoji bằng trie và bảng macro — bản chuyển sang Rust của `emoji.go`, `trie.go`, `mactab.go`.
 
 mod emoji;
+mod fuzzy;
 mod mactab;
+mod recent;
 mod trie;
 
 pub use emoji::{load_emojione, load_emojione_from_str, EmojiEngine};
+pub use fuzzy::{fuzzy_score, EmojiIndex};
 pub use mactab::MacroTable;
+pub use recent::RecentEmoji;
 pub use trie::TrieNode;
 
 #[cfg(test)]
