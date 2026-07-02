@@ -207,7 +207,7 @@ int main(int argc, char *argv[]) {
                         exe[n] = '\0';
                         // #72: binary fcitx5 ở các prefix cài đặt chuẩn — so ĐƯỜNG DẪN THẬT
                         // của tiến trình (readlink /proc/<pid>/exe, không tin argv[0]/cmdline).
-                        static const char *kAllowedExes[] = {
+                        static constexpr const char *const kAllowedExes[] = {
                             "/usr/bin/fcitx5",
                             "/usr/local/bin/fcitx5",
                         };
