@@ -108,6 +108,16 @@ PINAKEY_E2E_DATA_HOME="$HOME/.local/share" bash tools/run-e2e.sh
 Thêm ca kiểm thử: sửa danh sách `CASES` trong `pinakey_e2e.py` (mỗi ca: nhãn, có SurroundingText?,
 chuỗi phím, chuỗi mong đợi).
 
+## Phong cách phản hồi issue
+
+Cam kết của người duy trì với người báo lỗi (#73):
+
+- **Thân thiện, không đổ lỗi môi trường**: "app snap thiếu immodule" là chẩn đoán kèm cách xử
+  lý, không phải câu đóng issue. Người dùng bỏ công báo lỗi là đang giúp dự án.
+- **Phản hồi đầu tiên nhanh** — kể cả khi chưa có lời giải, xác nhận đã đọc + hỏi thông tin
+  còn thiếu.
+- Lỗi tái hiện được luôn đi kèm **test chống tái diễn** khi sửa (xem mục Test).
+
 ## Ghi nhận đóng góp
 
 PinaKey dùng [all-contributors](https://allcontributors.org/) — **mọi loại đóng góp** đều được ghi

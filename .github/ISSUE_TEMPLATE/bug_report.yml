@@ -1,0 +1,80 @@
+name: "🐛 Báo lỗi"
+description: "Gõ sai, mất chữ, crash… — form này giúp chúng tôi tái hiện và sửa nhanh."
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cảm ơn bạn đã báo lỗi! Bug bộ gõ phụ thuộc mạnh vào môi trường, nên vài trường dưới đây
+        là bắt buộc — điền đủ giúp chúng tôi sửa nhanh hơn nhiều. Trước khi mở issue, bạn có thể
+        xem nhanh mục [Khắc phục sự cố trong USAGE](https://github.com/trananhtung/pinakey/blob/main/USAGE.md#12-khắc-phục-sự-cố).
+  - type: input
+    id: distro
+    attributes:
+      label: Distro & phiên bản
+      placeholder: "Ubuntu 24.04 / Fedora 42 / Arch…"
+    validations:
+      required: true
+  - type: dropdown
+    id: session
+    attributes:
+      label: Môi trường đồ hoạ
+      options:
+        - GNOME Wayland
+        - GNOME X11
+        - KDE Wayland
+        - KDE X11
+        - DE khác trên Wayland
+        - DE khác trên X11
+        - Không rõ (echo $XDG_SESSION_TYPE để xem X11/Wayland)
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: Ứng dụng xảy ra lỗi + cách cài
+      description: "Lỗi bộ gõ thường chỉ xảy ra ở một số app. Snap/flatpak hành xử khác bản .deb/native!"
+      placeholder: "LibreOffice Writer (snap) / Firefox (.deb) / gnome-terminal / mọi app…"
+    validations:
+      required: true
+  - type: dropdown
+    id: input-method
+    attributes:
+      label: Kiểu gõ
+      options:
+        - Telex
+        - VNI
+        - VIQR
+        - Khác (ghi rõ ở phần chuỗi phím bên dưới)
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Chuỗi phím đã gõ → kết quả mong đợi vs thực tế
+      description: "Càng chính xác từng phím càng tốt — đây là phần quan trọng nhất."
+      placeholder: |
+        Gõ: vieetj tieengs (gõ nhanh)
+        Mong đợi: việt tiếng
+        Thực tế: vieetjtieengs
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Phiên bản PinaKey + cách cài
+      placeholder: "v1.1.0 (.deb) / build từ nguồn commit abc1234"
+    validations:
+      required: true
+  - type: textarea
+    id: diagnose
+    attributes:
+      label: Output `fcitx5-diagnose`
+      description: "Chạy `fcitx5-diagnose` trong terminal và dán output (tự động thu gọn)."
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: Log chi tiết (nếu có)
+      description: "Chạy foreground trong terminal: `fcitx5 -r --verbose 'pinakey=4' 2>&1 | tee /tmp/pinakey.log` rồi tái hiện lỗi; dán phần log liên quan. (Đừng thêm `-d` — daemonize sẽ đóng stderr, mất log.) KHÔNG dán nội dung nhạy cảm bạn đã gõ."
+      render: text

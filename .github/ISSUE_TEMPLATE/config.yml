@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Hướng dẫn sử dụng & khắc phục sự cố (USAGE)
+    url: https://github.com/trananhtung/pinakey/blob/main/USAGE.md
+    about: "Cài đặt, gõ không gạch chân, emoji, gõ tắt, per-app, và mục Khắc phục sự cố — nhiều lỗi hay gặp có sẵn cách xử lý ở đây."
+  - name: 🔒 Báo lỗ hổng bảo mật (kênh riêng)
+    url: https://github.com/trananhtung/pinakey/security/advisories/new
+    about: "Đừng mở issue công khai cho lỗ hổng bảo mật — dùng kênh báo cáo riêng này (xem SECURITY.md)."
