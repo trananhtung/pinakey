@@ -57,12 +57,16 @@ impl eframe::App for SettingsApp {
             .collect();
         let is_dirty = self.controller.is_dirty();
         let status = self.status.clone();
+        let mut date_fmt = self.controller.macro_date_format().to_string();
+        let mut time_fmt = self.controller.macro_time_format().to_string();
 
         // Các thay đổi do người dùng tạo, áp dụng sau khi vẽ.
         let mut set_im: Option<String> = None;
         let mut set_cs: Option<String> = None;
         let mut set_mode: Option<i32> = None;
         let mut set_flags: Vec<(u32, bool)> = Vec::new();
+        let mut set_date_fmt: Option<String> = None;
+        let mut set_time_fmt: Option<String> = None;
         let mut do_save = false;
         let mut do_reset = false;
 
@@ -123,6 +127,25 @@ impl eframe::App for SettingsApp {
 
             ui.add_space(8.0);
             ui.separator();
+            ui.label("Macro: placeholder $DATE / $TIME (format strftime, ví dụ %d/%m/%Y, %H:%M)");
+            egui::Grid::new("macro_fmt_grid")
+                .num_columns(2)
+                .spacing([12.0, 6.0])
+                .show(ui, |ui| {
+                    ui.label("Format $DATE");
+                    if ui.text_edit_singleline(&mut date_fmt).changed() {
+                        set_date_fmt = Some(date_fmt.clone());
+                    }
+                    ui.end_row();
+                    ui.label("Format $TIME");
+                    if ui.text_edit_singleline(&mut time_fmt).changed() {
+                        set_time_fmt = Some(time_fmt.clone());
+                    }
+                    ui.end_row();
+                });
+
+            ui.add_space(8.0);
+            ui.separator();
             ui.horizontal(|ui| {
                 if ui.button("Lưu").clicked() {
                     do_save = true;
@@ -151,6 +174,12 @@ impl eframe::App for SettingsApp {
         }
         for (flag, on) in set_flags {
             self.controller.set_flag(flag, on);
+        }
+        if let Some(f) = set_date_fmt {
+            self.controller.set_macro_date_format(&f);
+        }
+        if let Some(f) = set_time_fmt {
+            self.controller.set_macro_time_format(&f);
         }
         if do_reset {
             self.controller.reset_to_default();

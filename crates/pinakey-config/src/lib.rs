@@ -32,6 +32,20 @@ pub struct Config {
     /// tiếng Anh (issue #9). So khớp không phân biệt hoa/thường: khớp khi bằng đúng hoặc là chuỗi con.
     #[serde(rename = "EnglishExclude", default)]
     pub english_exclude: Vec<String>,
+    /// Format strftime cho placeholder `$DATE` trong macro (issue #64).
+    #[serde(rename = "MacroDateFormat", default = "default_macro_date_format")]
+    pub macro_date_format: String,
+    /// Format strftime cho placeholder `$TIME` trong macro (issue #64).
+    #[serde(rename = "MacroTimeFormat", default = "default_macro_time_format")]
+    pub macro_time_format: String,
+}
+
+fn default_macro_date_format() -> String {
+    "%d/%m/%Y".to_string()
+}
+
+fn default_macro_time_format() -> String {
+    "%H:%M".to_string()
 }
 
 impl Default for Config {
@@ -52,6 +66,8 @@ pub fn default_cfg() -> Config {
         default_input_mode: flags::PREEDIT_IM,
         input_mode_mapping: HashMap::new(),
         english_exclude: Vec::new(),
+        macro_date_format: default_macro_date_format(),
+        macro_time_format: default_macro_time_format(),
     }
 }
 
@@ -195,6 +211,22 @@ mod tests {
         assert_eq!(c.output_charset, "Unicode");
         assert_eq!(c.flags, core_flag::STD_FLAGS);
         assert!(c.input_method_definitions.contains_key("Telex"));
+    }
+
+    #[test]
+    fn macro_formats_default_and_roundtrip() {
+        // #64: file config cũ (không có 2 trường format) nạp ra format mặc định…
+        let c: Config = serde_json::from_str(r#"{"InputMethod":"VNI"}"#).unwrap();
+        assert_eq!(c.macro_date_format, "%d/%m/%Y");
+        assert_eq!(c.macro_time_format, "%H:%M");
+        // …và giá trị tuỳ chỉnh sống sót qua serialize/deserialize.
+        let mut c = default_cfg();
+        c.macro_date_format = "%Y-%m-%d".to_string();
+        c.macro_time_format = "%H:%M:%S".to_string();
+        let json = serde_json::to_string(&c).unwrap();
+        let back: Config = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.macro_date_format, "%Y-%m-%d");
+        assert_eq!(back.macro_time_format, "%H:%M:%S");
     }
 
     #[test]

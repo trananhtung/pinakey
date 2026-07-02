@@ -146,6 +146,9 @@ Bấm vào biểu tượng PinaKey trên khay (hoặc menu trạng thái của f
   để PinaKey không “sửa nhầm” chúng về tiếng Anh.
 - **Gõ tắt (macro):** tạo `~/.config/pinakey/ibus-PinaKey.macro.text`, mỗi dòng `khoá:nội dung`
   (ví dụ `vn:Việt Nam`). Gõ `vn` rồi phím chốt → bung thành “Việt Nam”.
+- **Ngày/giờ động trong macro:** nội dung chứa `$DATE` / `$TIME` được thay bằng ngày/giờ **tại lúc
+  gõ** — ví dụ `hnay:hôm nay $DATE` → “hôm nay 02/07/2026”. Format đổi được trong GUI thiết lập
+  (chuẩn strftime; mặc định `%d/%m/%Y` và `%H:%M`). Muốn ra chữ `$TIME` thật, viết `$$TIME`.
 - **Sửa nóng:** PinaKey **tự nạp lại** file dict/macro khi bạn sửa — không cần khởi động lại.
 
 ---
