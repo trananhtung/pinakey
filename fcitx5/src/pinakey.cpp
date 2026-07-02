@@ -597,9 +597,13 @@ void PinaKeyEngine::checkReload() {
 }
 
 void PinaKeyEngine::reloadConfig() {
-    // Cập nhật mtime cache để watcher không nạp lại lần nữa ngay sau lời gọi D-Bus.
+    // Cập nhật mtime cache (cả config lẫn macro/dict — pk_engine_reload_config nạp lại tất) để
+    // watcher không nạp lại lần nữa ngay sau lời gọi D-Bus.
     if (!configFile_.empty()) {
         configMtime_ = fileMtime(configFile_);
+    }
+    for (size_t i = 0; i < reloadFiles_.size(); ++i) {
+        reloadMtimes_[i] = fileMtime(reloadFiles_[i]);
     }
     instance_->inputContextManager().foreach([this](InputContext *ic) {
         pk_engine_reload_config(state(ic)->core());

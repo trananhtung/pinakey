@@ -75,14 +75,7 @@ const ENGINE_NAME: &str = "PinaKey";
 impl EngineCore {
     pub fn new(config: Config) -> EngineCore {
         let preeditor = build_preeditor(&config);
-        let mut macro_table = MacroTable::new(config.ib_flags & cfg::IB_AUTO_CAPITALIZE_MACRO != 0);
-        // #7: nạp file gõ tắt (macro) khi người dùng bật IB_MACRO_ENABLED; thiếu file thì bỏ qua.
-        if config.ib_flags & cfg::IB_MACRO_ENABLED != 0 {
-            if let Some(path) = pinakey_config::get_macro_path(ENGINE_NAME).to_str() {
-                let _ = macro_table.load_from_file(path);
-            }
-            macro_table.set_enabled(true);
-        }
+        let macro_table = build_macro_table(&config);
         let dictionary = load_dictionary(&config);
         EngineCore {
             preeditor,
@@ -175,9 +168,10 @@ impl EngineCore {
     pub fn reload_config(&mut self) {
         self.config = pinakey_config::load_config(ENGINE_NAME);
         self.rebuild_preeditor();
-        self.macro_table
-            .set_auto_capitalize(self.config.ib_flags & cfg::IB_AUTO_CAPITALIZE_MACRO != 0);
-        self.reload_data();
+        // Dựng lại bảng macro TỪ ĐẦU theo cờ mới — cờ tắt thì bảng cũ (đầy dữ liệu, còn
+        // enabled) phải được thay bằng bảng rỗng, không giữ lại trong bộ nhớ.
+        self.macro_table = build_macro_table(&self.config);
+        self.dictionary = load_dictionary(&self.config);
         self.transport_rules = load_transport_rules();
         self.reset_preeditor();
     }
@@ -186,12 +180,7 @@ impl EngineCore {
     /// chạy (kiểu gõ/bảng mã/flags giữ nguyên). Gọi khi phát hiện file thay đổi.
     pub fn reload_data(&mut self) {
         if self.config.ib_flags & cfg::IB_MACRO_ENABLED != 0 {
-            let mut mt = MacroTable::new(self.config.ib_flags & cfg::IB_AUTO_CAPITALIZE_MACRO != 0);
-            if let Some(path) = pinakey_config::get_macro_path(ENGINE_NAME).to_str() {
-                let _ = mt.load_from_file(path);
-            }
-            mt.set_enabled(true);
-            self.macro_table = mt;
+            self.macro_table = build_macro_table(&self.config);
         }
         self.dictionary = load_dictionary(&self.config);
     }
@@ -732,6 +721,20 @@ fn load_transport_rules() -> crate::transport::TransportRules {
         rules.append_layer(&text);
     }
     rules
+}
+
+/// Dựng bảng macro theo config: cờ `IB_MACRO_ENABLED` bật → nạp file gõ tắt (thiếu file bỏ qua)
+/// và enable; cờ tắt → bảng rỗng disable. Dùng chung cho khởi tạo (#7), live-reload (#20) và
+/// reload config (#69).
+fn build_macro_table(config: &Config) -> MacroTable {
+    let mut mt = MacroTable::new(config.ib_flags & cfg::IB_AUTO_CAPITALIZE_MACRO != 0);
+    if config.ib_flags & cfg::IB_MACRO_ENABLED != 0 {
+        if let Some(path) = pinakey_config::get_macro_path(ENGINE_NAME).to_str() {
+            let _ = mt.load_from_file(path);
+        }
+        mt.set_enabled(true);
+    }
+    mt
 }
 
 /// Nạp từ điển chính tả khi bật `IB_SPELL_CHECK_WITH_DICTS` (issue #18): bộ từ khởi đầu đóng kèm
