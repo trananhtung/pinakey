@@ -13,23 +13,24 @@ use std::collections::HashMap;
 /// Khớp greedy trái→phải: không tối ưu tuyệt đối nhưng đủ đúng cho khóa emoji ngắn và O(len).
 pub fn fuzzy_score(query: &str, key: &str) -> Option<i32> {
     let q: Vec<char> = query.chars().flat_map(char::to_lowercase).collect();
-    score_prepared(&q, key)
+    let key_lower = key.to_lowercase();
+    let key_len = key_lower.chars().count() as i32;
+    score_prepared(&q, &key_lower, key_len)
 }
 
-/// Lõi chấm điểm với query đã chuẩn hoá sẵn — [`EmojiIndex::fuzzy_query`] gọi hàm này để không
-/// cấp phát lại query cho từng khóa (~11k lần mỗi truy vấn, hot path theo từng phím gõ).
-fn score_prepared(q: &[char], key: &str) -> Option<i32> {
+/// Lõi chấm điểm với query + key đã chuẩn hoá chữ thường sẵn và `key_len` đếm trước —
+/// [`EmojiIndex::fuzzy_query`] gọi hàm này trên ~11k khóa mỗi phím gõ (hot path): không cấp phát,
+/// không case-mapping, và thoát sớm ngay khi query khớp hết (điểm không đổi ở phần đuôi key).
+fn score_prepared(q: &[char], key_lower: &str, key_len: i32) -> Option<i32> {
     if q.is_empty() {
         return None; // query rỗng do lịch sử gần dùng xử lý, không fuzzy.
     }
     let mut score = 0i32;
     let mut qi = 0usize;
-    let mut key_len = 0i32;
     let mut prev_matched = false; // ký tự key NGAY TRƯỚC có khớp không (thưởng liền mạch)
     let mut prev_char = '\0';
-    for (ki, kc) in key.chars().flat_map(char::to_lowercase).enumerate() {
-        key_len += 1;
-        if qi >= q.len() || kc != q[qi] {
+    for (ki, kc) in key_lower.chars().enumerate() {
+        if kc != q[qi] {
             prev_matched = false;
             prev_char = kc;
             continue;
@@ -46,13 +47,12 @@ fn score_prepared(q: &[char], key: &str) -> Option<i32> {
         prev_matched = true;
         prev_char = kc;
         qi += 1;
+        if qi == q.len() {
+            // Khớp xong: phần đuôi key không đổi điểm nữa (phạt độ dài dùng key_len đếm sẵn).
+            return Some(score - key_len);
+        }
     }
-    // Vòng lặp cố ý chạy hết key kể cả khi query đã khớp xong: `key_len` phải là độ dài thật
-    // thì phạt độ dài mới công bằng giữa các khóa.
-    if qi < q.len() {
-        return None;
-    }
-    Some(score - key_len)
+    None // duyệt hết key mà query chưa khớp đủ
 }
 
 /// Một entry EmojiOne — chỉ các trường cần cho chỉ mục tìm kiếm. Khác loader trie (chỉ lấy
@@ -70,11 +70,12 @@ struct EmojiOneEntry {
     ascii: Vec<String>,
 }
 
-/// Chỉ mục phẳng `(khóa tìm kiếm, emoji)` cho fuzzy search — ~11k cặp với bảng EmojiOne đầy đủ,
-/// quét tuyến tính mỗi truy vấn vẫn dưới mili-giây.
+/// Chỉ mục phẳng `(khóa đã lowercase, emoji, số ký tự của khóa)` cho fuzzy search — ~11k mục với
+/// bảng EmojiOne đầy đủ, quét tuyến tính mỗi truy vấn vẫn dưới mili-giây. Lowercase + độ dài
+/// tính sẵn lúc dựng để hot path không case-mapping / không đếm lại.
 #[derive(Default)]
 pub struct EmojiIndex {
-    entries: Vec<(String, String)>,
+    entries: Vec<(String, String, i32)>,
 }
 
 impl EmojiIndex {
@@ -94,17 +95,19 @@ impl EmojiIndex {
             if emoji.is_empty() {
                 continue;
             }
+            let mut push = |key: &str| {
+                if !key.is_empty() {
+                    let lower = key.to_lowercase();
+                    let len = lower.chars().count() as i32;
+                    entries.push((lower, emoji.clone(), len));
+                }
+            };
             let shortnames = std::iter::once(&e.shortname).chain(&e.shortname_alternates);
             for s in shortnames {
-                let s = s.trim_matches(':');
-                if !s.is_empty() {
-                    entries.push((s.to_string(), emoji.clone()));
-                }
+                push(s.trim_matches(':'));
             }
             for k in e.keywords.iter().chain(&e.ascii) {
-                if !k.is_empty() {
-                    entries.push((k.clone(), emoji.clone()));
-                }
+                push(k);
             }
         }
         Ok(EmojiIndex { entries })
@@ -118,8 +121,8 @@ impl EmojiIndex {
         }
         let q: Vec<char> = query.chars().flat_map(char::to_lowercase).collect();
         let mut scored: Vec<(i32, &str, &str)> = Vec::new();
-        for (key, emoji) in &self.entries {
-            if let Some(s) = score_prepared(&q, key) {
+        for (key, emoji, key_len) in &self.entries {
+            if let Some(s) = score_prepared(&q, key, *key_len) {
                 scored.push((s, key, emoji));
             }
         }
