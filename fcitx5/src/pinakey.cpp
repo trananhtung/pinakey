@@ -205,9 +205,11 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
         return;
     }
 
-    // Gõ không gạch chân #1: app hỗ trợ SurroundingText → xoá-chèn tại chỗ.
+    // Gõ không gạch chân #1: app hỗ trợ SurroundingText → xoá-chèn tại chỗ. Riêng app báo
+    // surrounding text không đáng tin (LibreOffice, #66) thì bỏ qua → rơi xuống preedit ở dưới.
     if (pk_engine_no_underline(core_) &&
-        ic_->capabilityFlags().test(CapabilityFlag::SurroundingText)) {
+        ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
+        !pk_engine_surrounding_text_unreliable(core_)) {
         resetIfDocumentDiverged(); // #7: con trỏ nhảy → quên segment cũ, không xoá nhầm.
         const bool handled = pk_engine_process_key_replace(core_, sym, state);
         applyReplaceResult();
@@ -237,11 +239,14 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
 }
 
 /// Có dùng diff-and-replace (gõ không gạch chân) không — qua SurroundingText hoặc qua uinput.
+/// App có surrounding text không đáng tin (LibreOffice, #66) không tính: nó dùng preedit.
 bool PinaKeyState::wantReplaceMode() const {
     if (!pk_engine_no_underline(core_)) {
         return false;
     }
-    return ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) || useUinput();
+    return (ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
+            !pk_engine_surrounding_text_unreliable(core_)) ||
+           useUinput();
 }
 
 /// Có dùng chế độ uinput+ACK (xoá-bằng-Backspace) cho app KHÔNG có SurroundingText không.

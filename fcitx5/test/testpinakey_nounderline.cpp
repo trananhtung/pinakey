@@ -140,7 +140,71 @@ private:
     size_t cursor_ = 0;
 };
 
-void sendKeys(DocInputContext *ic, const std::string &keys) {
+/// InputContext giả lập LibreOffice Writer (issue #66): CÓ khả năng SurroundingText nhưng báo cáo
+/// KHÔNG đáng tin — khi gõ nhanh, surrounding text gửi cho IM là ảnh CŨ của tài liệu (chậm một
+/// nhịp) và thiếu dấu cách. Addon phải nhận diện qua program ("soffice") và rơi về preedit;
+/// nếu vẫn dùng diff-replace, phép kiểm con-trỏ-nhảy (#7) sẽ misfire giữa từ và nát chữ.
+class LibreOfficeLikeInputContext : public InputContext {
+public:
+    explicit LibreOfficeLikeInputContext(InputContextManager &mgr)
+        : InputContext(mgr, "soffice") {
+        setCapabilityFlags(
+            CapabilityFlags{CapabilityFlag::SurroundingText, CapabilityFlag::Preedit});
+        created();
+    }
+    ~LibreOfficeLikeInputContext() override { destroy(); }
+
+    const char *frontend() const override { return "doc"; }
+
+    void commitStringImpl(const std::string &text) override {
+        auto u = fromUtf8(text);
+        doc_.insert(cursor_, u);
+        cursor_ += u.size();
+        publishStaleSurrounding();
+    }
+    void deleteSurroundingTextImpl(int offset, unsigned int size) override {
+        long start = static_cast<long>(cursor_) + offset;
+        if (start < 0) {
+            start = 0;
+        }
+        if (static_cast<size_t>(start) > doc_.size()) {
+            start = static_cast<long>(doc_.size());
+        }
+        size_t n = size;
+        if (static_cast<size_t>(start) + n > doc_.size()) {
+            n = doc_.size() - static_cast<size_t>(start);
+        }
+        doc_.erase(static_cast<size_t>(start), n);
+        cursor_ = static_cast<size_t>(start);
+        publishStaleSurrounding();
+    }
+    void forwardKeyImpl(const ForwardKeyEvent & /*key*/) override {}
+    void updatePreeditImpl() override {}
+
+    std::string text() const { return toUtf8(doc_); }
+
+private:
+    /// Công bố snapshot TRƯỚC ĐÓ của tài liệu (chậm một nhịp so với thực tế) và bỏ hết dấu cách —
+    /// đúng hai tật của LO Writer khi gõ nhanh mà issue #66 mô tả.
+    void publishStaleSurrounding() {
+        std::u32string stale;
+        for (char32_t c : lastSnapshot_) {
+            if (c != U' ') {
+                stale.push_back(c);
+            }
+        }
+        surroundingText().setText(toUtf8(stale), static_cast<unsigned int>(stale.size()),
+                                  static_cast<unsigned int>(stale.size()));
+        updateSurroundingText();
+        lastSnapshot_ = doc_;
+    }
+
+    std::u32string doc_;
+    std::u32string lastSnapshot_;
+    size_t cursor_ = 0;
+};
+
+void sendKeys(InputContext *ic, const std::string &keys) {
     for (char c : keys) {
         Key key = (c == ' ') ? Key("space") : Key(std::string(1, c));
         KeyEvent ke(ic, key, false);
@@ -208,6 +272,17 @@ int main() {
         FCITX_ASSERT(ic->text() == "jvie")
             << "con trỏ nhảy rồi gõ tiếp bị xoá nhầm ký tự: doc=\"" << ic->text()
             << "\", mong đợi \"jvie\" (giữ nguyên \"vie\")";
+
+        // #66: LibreOffice Writer — app CÓ SurroundingText nhưng báo cáo không đáng tin (lạc hậu
+        // khi gõ nhanh, thiếu dấu cách). Addon phải nhận diện program "soffice" → dùng preedit
+        // thay vì diff-replace, nên gõ nhanh đoạn dài vẫn ra đúng chữ.
+        auto lo = std::make_unique<LibreOfficeLikeInputContext>(instance.inputContextManager());
+        lo->focusIn();
+        instance.setCurrentInputMethod(lo.get(), "pinakey", true);
+        sendKeys(lo.get(), "vieetj tieengs ");
+        FCITX_ASSERT(lo->text() == "việt tiếng ")
+            << "LibreOffice giả lập: gõ \"vieetj tieengs \" => \"" << lo->text()
+            << "\", mong đợi \"việt tiếng \" (phải rơi về preedit, không diff-replace)";
 
         instance.exit();
     });

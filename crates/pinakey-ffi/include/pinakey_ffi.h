@@ -207,6 +207,17 @@ void pk_engine_set_program(PkEngine *e,
 bool pk_engine_program_excluded(const PkEngine *e);
 
 /**
+ * Surrounding text của chương trình đang focus (đặt qua `pk_engine_set_program`) có KHÔNG đáng
+ * tin không (issue #66). LibreOffice (soffice) báo surrounding text lạc hậu/thiếu dấu cách khi gõ
+ * nhanh → C++ phải bỏ qua đường diff-replace và dùng preedit cho các app này dù chúng quảng cáo
+ * khả năng SurroundingText.
+ *
+ * # Safety
+ * `e` hợp lệ.
+ */
+bool pk_engine_surrounding_text_unreliable(const PkEngine *e);
+
+/**
  * Đổi kiểu gõ ("Telex" / "VNI" / "VIQR" …) và dựng lại engine biến đổi.
  *
  * # Safety
