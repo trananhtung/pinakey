@@ -98,9 +98,9 @@ impl EngineCore {
         if self.wm_class.is_empty() {
             return false;
         }
-        let w = self.wm_class.to_lowercase();
+        let w = self.wm_class.to_ascii_lowercase();
         self.config.english_exclude.iter().any(|p| {
-            let p = p.trim().to_lowercase();
+            let p = p.trim().to_ascii_lowercase();
             !p.is_empty() && (w == p || w.contains(&p))
         })
     }
@@ -115,7 +115,7 @@ impl EngineCore {
         if self.wm_class.is_empty() {
             return false;
         }
-        let w = self.wm_class.to_lowercase();
+        let w = self.wm_class.to_ascii_lowercase();
         BROKEN_SURROUNDING.iter().any(|p| w.contains(p))
     }
 
