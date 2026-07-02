@@ -243,7 +243,24 @@ Rồi `fcitx5 -r -d` (hoặc đăng nhập lại).
 | Trình duyệt/editor hiện gạch chân | App đó chưa cấp Surrounding Text, hoặc cờ "Không gạch chân preedit" đang tắt → bật lại trong công cụ thiết lập PinaKey. |
 | **Không gõ được tiếng Việt trong Slack / Discord / VS Code… (app cài bằng snap/flatpak)** | App chạy trong sandbox **thiếu GTK immodule `fcitx5`** → mọi bộ gõ đều chết, không riêng PinaKey. Cài bản **`.deb`/native** thay cho snap/flatpak (xem mục **“App snap/flatpak”** bên dưới). |
 | Gõ tắt/từ điển không ăn | Kiểm tra đường dẫn file trong `~/.config/pinakey/`. |
+| Không gõ được ở ô mật khẩu | **Cố ý**: PinaKey tự tắt ở ô mật khẩu (an toàn). Gõ trực tiếp không qua bộ gõ. |
+| Thanh địa chỉ trình duyệt thi thoảng sai ký tự đầu (`đ` → `dđ`) | Lỗi đã biết với **autocomplete/autofill** của Chromium (issue #60): gợi ý được chọn sẵn làm lệch vùng sửa chữ. Tạm thời: gõ chậm ký tự đầu, hoặc tắt inline autocomplete của trình duyệt. |
 | Chẩn đoán chung | `fcitx5-diagnose` để xem fcitx5 có nhận PinaKey không. |
+
+### Thu log để báo lỗi
+
+Khi [mở issue](https://github.com/trananhtung/pinakey/issues/new/choose), đính kèm:
+
+1. **`fcitx5-diagnose`** — chạy trong terminal, dán toàn bộ output (form báo lỗi có ô riêng).
+2. **Log chi tiết của addon** khi tái hiện được lỗi:
+   ```sh
+   fcitx5 -r -d --verbose 'pinakey=4'   # khởi động lại fcitx5 với log mức 4 cho pinakey
+   journalctl --user -f | grep -i pinakey   # hoặc xem log qua journal
+   ```
+   Tái hiện lỗi rồi copy phần log quanh thời điểm đó. **Lưu ý:** log không chứa nội dung bạn
+   gõ, nhưng vẫn nên rà lại trước khi dán.
+3. Môi trường: distro, DE, X11/Wayland (`echo $XDG_SESSION_TYPE`), app xảy ra lỗi **kèm cách
+   cài** (deb/snap/flatpak — hành xử rất khác nhau).
 
 ### App snap/flatpak không gõ được tiếng Việt (Slack, Discord, VS Code…)
 

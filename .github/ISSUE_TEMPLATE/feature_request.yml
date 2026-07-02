@@ -1,0 +1,24 @@
+name: "💡 Đề xuất tính năng"
+description: "Ý tưởng cải thiện PinaKey — tính năng gõ, tiện ích, tích hợp…"
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Vấn đề bạn muốn giải quyết
+      description: "Kể theo trải nghiệm thật: bạn đang định làm gì và vướng chỗ nào?"
+      placeholder: "Khi tôi gõ… tôi mong… nhưng hiện tại…"
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Giải pháp bạn hình dung
+      description: "Không cần chi tiết kỹ thuật — mô tả hành vi mong muốn là đủ."
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Cách bạn đang xoay xở hiện tại (nếu có)
+      description: "Workaround, bộ gõ/công cụ khác đáp ứng được ra sao…"
