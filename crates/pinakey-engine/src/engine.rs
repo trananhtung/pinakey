@@ -468,6 +468,9 @@ impl EngineCore {
         if state & MOD_RELEASE != 0 {
             return (false, out);
         }
+        if is_modifier_keysym(key_val) {
+            return (false, out);
+        }
         let result = self.preedit_process_key_event(key_val, key_code, state, &mut out);
         self.update_last_key_with_shift(key_val, state);
         (result, out)
@@ -619,6 +622,25 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn bare_modifier_press_mid_word_does_not_commit() {
+        // Nhấn Shift/Ctrl đơn lẻ giữa từ không được ép commit từ đang gõ
+        // (trước đây "vieet" + Shift + "j" cho ra "viêtj" thay vì "việt").
+        let mut core = EngineCore::new(default_cfg());
+        type_keys(&mut core, "vieet"); // preedit "viêt"
+        for sym in [0xffe1_u32, 0xffe3, 0xfe03] {
+            // Shift_L, Control_L, ISO_Level3_Shift (AltGr)
+            let (handled, actions) = core.process_key_event(sym, 0, 0);
+            assert!(!handled, "keysym modifier {sym:#x} phải được cho đi qua");
+            assert!(
+                commits(&actions).is_empty(),
+                "keysym modifier {sym:#x} không được commit preedit"
+            );
+        }
+        let actions = type_keys(&mut core, "j");
+        assert_eq!(last_preedit(&actions).as_deref(), Some("việt"));
     }
 
     #[test]

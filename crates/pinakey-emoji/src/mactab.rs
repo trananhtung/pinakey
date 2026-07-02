@@ -60,10 +60,15 @@ impl MacroTable {
     }
 
     pub fn has_prefix(&self, key: &str) -> bool {
-        if self.m_table.get(key).is_some_and(|v| !v.is_empty()) {
+        let k = if self.auto_capitalize_macro {
+            key.to_lowercase()
+        } else {
+            key.to_string()
+        };
+        if self.m_table.get(&k).is_some_and(|v| !v.is_empty()) {
             return true;
         }
-        self.m_table.keys().any(|k| k.starts_with(key))
+        self.m_table.keys().any(|t| t.starts_with(&k))
     }
 
     pub fn is_enabled(&self) -> bool {

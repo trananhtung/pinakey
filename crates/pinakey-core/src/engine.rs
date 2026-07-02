@@ -200,6 +200,11 @@ impl IEngine for PinaKeyEngine {
                     let t = tnx.borrow();
                     (t.rule.key, t.is_upper_case)
                 };
+                // Bỏ qua phím ảo (refresh dấu, uow, undo) — như break_composition; replay chúng
+                // sẽ sinh appending '\0' rác đóng vai "phụ âm cuối ma" làm dấu nhảy sai chỗ.
+                if key == '\0' {
+                    continue;
+                }
                 new_comp = self.new_composition(&new_comp, key, is_upper);
             }
             previous.extend(new_comp);
@@ -218,7 +223,13 @@ impl IEngine for PinaKeyEngine {
         };
         let last_key = last_appending.borrow().rule.key;
         if !self.can_process_key(last_key) {
-            self.composition.pop();
+            // Xoá đúng trans vừa tìm thấy (và các trans trỏ tới nó) theo định danh — phần tử cuối
+            // của composition có thể là trans refresh dấu chứ không phải appending này.
+            self.composition.retain(|t| {
+                let targets_it =
+                    matches!(&t.borrow().target, Some(x) if Rc::ptr_eq(x, &last_appending));
+                !targets_it && !Rc::ptr_eq(t, &last_appending)
+            });
             return;
         }
         let (mut previous, last_comb) =

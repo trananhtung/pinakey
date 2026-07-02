@@ -65,4 +65,19 @@ mod tests {
         assert!(m.has_prefix("he"));
         assert!(!m.has_prefix("zzz"));
     }
+
+    #[test]
+    fn test_macro_prefix_uppercase_when_auto_capitalize() {
+        // Gõ hoa ("AA") để bung macro "aa" dạng ALL-CAPS: has_prefix phải chuẩn hoá
+        // chữ thường giống has_key/get_text, nếu không engine chặn nhánh giữ-nguyên-phím
+        // và Telex biến "AA" thành "Â" trước khi macro kịp khớp.
+        let dir = std::env::temp_dir();
+        let path = dir.join("pinakey_macro_prefix_test.txt");
+        std::fs::write(&path, "aa : anh ấy\n").unwrap();
+        let mut m = MacroTable::new(true);
+        m.load_from_file(path.to_str().unwrap()).unwrap();
+        assert!(m.has_prefix("A"));
+        assert!(m.has_prefix("AA"));
+        assert!(m.has_key("AA"));
+    }
 }
