@@ -218,6 +218,25 @@ bool pk_engine_program_excluded(const PkEngine *e);
 bool pk_engine_surrounding_text_unreliable(const PkEngine *e);
 
 /**
+ * #65: dấu cách kế tiếp có nên biến thành ". " không (double-space kết câu nhanh, cần bật
+ * option). C++ hỏi TRƯỚC khi đưa phím space vào engine; nếu `true` và app cho xoá surrounding
+ * text thì C++ tự xoá dấu cách cũ + commit ". " rồi gọi `pk_engine_double_space_consume`.
+ *
+ * # Safety
+ * `e` hợp lệ.
+ */
+bool pk_engine_double_space_armed(const PkEngine *e);
+
+/**
+ * #65: báo engine rằng addon đã thực hiện double-space→". " (đóng cửa sổ; nếu bật viết hoa
+ * đầu câu thì chữ cái kế tiếp sẽ tự hoa).
+ *
+ * # Safety
+ * `e` hợp lệ.
+ */
+void pk_engine_double_space_consume(PkEngine *e);
+
+/**
  * Đổi kiểu gõ ("Telex" / "VNI" / "VIQR" …) và dựng lại engine biến đổi.
  *
  * # Safety

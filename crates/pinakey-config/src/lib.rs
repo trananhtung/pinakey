@@ -32,6 +32,9 @@ pub struct Config {
     /// tiếng Anh (issue #9). So khớp không phân biệt hoa/thường: khớp khi bằng đúng hoặc là chuỗi con.
     #[serde(rename = "EnglishExclude", default)]
     pub english_exclude: Vec<String>,
+    /// #65: gõ `w` ra `ư` (Telex). 0 = tắt (mặc định), 1 = không áp dụng ở đầu từ, 2 = mọi nơi.
+    #[serde(rename = "WShortcut", default)]
+    pub w_shortcut: u8,
     /// Format strftime cho placeholder `$DATE` trong macro (issue #64).
     #[serde(rename = "MacroDateFormat", default = "default_macro_date_format")]
     pub macro_date_format: String,
@@ -66,6 +69,7 @@ pub fn default_cfg() -> Config {
         default_input_mode: flags::PREEDIT_IM,
         input_mode_mapping: HashMap::new(),
         english_exclude: Vec::new(),
+        w_shortcut: 0,
         macro_date_format: default_macro_date_format(),
         macro_time_format: default_macro_time_format(),
     }
@@ -211,6 +215,21 @@ mod tests {
         assert_eq!(c.output_charset, "Unicode");
         assert_eq!(c.flags, core_flag::STD_FLAGS);
         assert!(c.input_method_definitions.contains_key("Telex"));
+    }
+
+    #[test]
+    fn typing_convenience_defaults_off() {
+        // #65: 3 tiện ích gõ mặc định TẮT — file config cũ không có trường/bit mới vẫn giữ
+        // nguyên hành vi hiện tại.
+        let c: Config = serde_json::from_str(r#"{"InputMethod":"VNI"}"#).unwrap();
+        assert_eq!(c.w_shortcut, 0);
+        assert_eq!(default_cfg().ib_flags & flags::IB_CAPITALIZE_SENTENCE, 0);
+        assert_eq!(default_cfg().ib_flags & flags::IB_DOUBLE_SPACE_PERIOD, 0);
+        // Giá trị tuỳ chỉnh round-trip được.
+        let mut c = default_cfg();
+        c.w_shortcut = 2;
+        let back: Config = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
+        assert_eq!(back.w_shortcut, 2);
     }
 
     #[test]

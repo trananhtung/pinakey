@@ -20,6 +20,9 @@
 #include <fcitx/inputmethodmanager.h>
 #include <fcitx/instance.h>
 
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 using namespace fcitx;
@@ -222,6 +225,20 @@ void expectType(DocInputContext *ic, const std::string &keys,
 } // namespace
 
 int main() {
+    // Cách ly config khỏi máy chạy test + bật cờ IB_DOUBLE_SPACE_PERIOD cho kịch bản #65.
+    // IBflags = IB_STD_FLAGS (1081840) | IB_DOUBLE_SPACE_PERIOD (1<<22 = 4194304) = 5276144;
+    // các trường khác giữ mặc định qua serde. Double-space chỉ kích hoạt khi gõ 2 dấu cách
+    // liên tiếp nên không ảnh hưởng các kịch bản còn lại.
+    const std::string xdgDir =
+        std::string(TESTING_BINARY_DIR) + "/testpinakey-nounderline-xdg";
+    std::filesystem::remove_all(xdgDir);
+    std::filesystem::create_directories(xdgDir + "/pinakey");
+    {
+        std::ofstream cfg(xdgDir + "/pinakey/ibus-PinaKey.config.json");
+        cfg << "{\"IBflags\":5276144}";
+    }
+    setenv("XDG_CONFIG_HOME", xdgDir.c_str(), 1);
+
     setupTestingEnvironment(TESTING_BINARY_DIR,
                             {PINAKEY_ADDON_SO_DIR},
                             {PINAKEY_TEST_DATA_DIR, FCITX_SYS_PKGDATADIR});
@@ -272,6 +289,18 @@ int main() {
         FCITX_ASSERT(ic->text() == "jvie")
             << "con trỏ nhảy rồi gõ tiếp bị xoá nhầm ký tự: doc=\"" << ic->text()
             << "\", mong đợi \"jvie\" (giữ nguyên \"vie\")";
+
+        // #65: double-space → ". " (bật qua config ở đầu main): từ + 2 dấu cách liên tiếp →
+        // dấu cách cũ bị xoá (deleteSurroundingText) và ". " được commit; gõ tiếp bình thường.
+        ic->reset();
+        ic->clearDoc();
+        sendKeys(ic.get(), "tieengs  ");
+        FCITX_ASSERT(ic->text() == "tiếng. ")
+            << "double-space: gõ \"tieengs␣␣\" => \"" << ic->text()
+            << "\", mong đợi \"tiếng. \"";
+        sendKeys(ic.get(), "hai ");
+        FCITX_ASSERT(ic->text() == "tiếng. hai ")
+            << "sau double-space gõ tiếp: doc=\"" << ic->text() << "\"";
 
         // #66: LibreOffice Writer — app CÓ SurroundingText nhưng báo cáo không đáng tin (lạc hậu
         // khi gõ nhanh, thiếu dấu cách). Addon phải nhận diện program "soffice" → dùng preedit

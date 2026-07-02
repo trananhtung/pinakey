@@ -102,6 +102,17 @@ PinaKey hỗ trợ **Telex / VNI / VIQR**. Mặc định là **Telex**.
 
 **Đổi kiểu gõ:** xem mục [6. Menu khay](#6-menu-khay-đổi-kiểu-gõ--bảng-mã).
 
+### Tiện ích gõ tuỳ chọn (mặc định tắt)
+
+Bật trong [Giao diện thiết lập](#10-giao-diện-thiết-lập-tuỳ-chọn):
+
+- **Gõ w ra ư (Telex):** 3 mức — *Tắt* / *Không áp dụng ở đầu từ* (gõ `tw` → `tư` nhưng `www`,
+  `word` giữ nguyên) / *Mọi nơi* (`w` → `ư`, gõ đúp `ww` trả lại `w`).
+- **Tự viết hoa đầu câu:** sau `.` `!` `?` và khoảng trắng (hoặc Enter), chữ cái đầu tiên tự
+  thành hoa.
+- **Hai dấu cách liên tiếp → `. `:** kết câu nhanh kiểu bàn phím điện thoại — gõ từ + 2 dấu cách
+  ra `từ. `. (Cần app hỗ trợ *Surrounding Text*; kết hợp được với tự viết hoa đầu câu.)
+
 ---
 
 ## 4. Gõ không gạch chân (mặc định)

@@ -205,6 +205,20 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
         return;
     }
 
+    // #65: double-space → ". " (option, mặc định tắt — engine chỉ "arm" khi cờ bật). Dấu cách
+    // thứ hai ngay sau khi commit "từ ": xoá dấu cách cũ + commit ". ". Cần app cho xoá
+    // surrounding text; app báo cáo không đáng tin (#66) thì thôi — engine tự disarm khi
+    // thấy phím space đi qua như thường.
+    if (sym == FcitxKey_space && state == 0 && pk_engine_double_space_armed(core_) &&
+        ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
+        !pk_engine_surrounding_text_unreliable(core_)) {
+        ic_->deleteSurroundingText(-1, 1);
+        ic_->commitString(". ");
+        pk_engine_double_space_consume(core_);
+        keyEvent.filterAndAccept();
+        return;
+    }
+
     // Gõ không gạch chân #1: app hỗ trợ SurroundingText → xoá-chèn tại chỗ. Riêng app báo
     // surrounding text không đáng tin (LibreOffice, #66) thì bỏ qua → rơi xuống preedit ở dưới.
     if (pk_engine_no_underline(core_) &&

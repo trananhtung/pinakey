@@ -61,6 +61,10 @@ pub const IB_AUTO_CAPITALIZE_MACRO: u32 = 1 << 15;
 // 1<<16, 1<<17, 1<<18 đã lỗi thời
 pub const IB_WORKAROUND_FOR_FB_MESSENGER: u32 = 1 << 19;
 pub const IB_WORKAROUND_FOR_WPS: u32 = 1 << 20;
+/// #65: tự viết hoa chữ cái đầu câu (sau `.` `!` `?` + khoảng trắng). Mặc định tắt.
+pub const IB_CAPITALIZE_SENTENCE: u32 = 1 << 21;
+/// #65: hai dấu cách liên tiếp sau một từ → ". " (kết câu nhanh kiểu mobile). Mặc định tắt.
+pub const IB_DOUBLE_SPACE_PERIOD: u32 = 1 << 22;
 
 pub const IB_STD_FLAGS: u32 = IB_SPELL_CHECK_ENABLED
     | IB_SPELL_CHECK_WITH_RULES
