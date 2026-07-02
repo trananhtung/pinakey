@@ -205,8 +205,17 @@ int main(int argc, char *argv[]) {
                     ssize_t n = readlink(link, exe, sizeof(exe) - 1);
                     if (n > 0) {
                         exe[n] = '\0';
-                        if (std::strcmp(exe, "/usr/bin/fcitx5") == 0) {
-                            ok = true;
+                        // #72: binary fcitx5 ở các prefix cài đặt chuẩn — so ĐƯỜNG DẪN THẬT
+                        // của tiến trình (readlink /proc/<pid>/exe, không tin argv[0]/cmdline).
+                        static const char *kAllowedExes[] = {
+                            "/usr/bin/fcitx5",
+                            "/usr/local/bin/fcitx5",
+                        };
+                        for (const char *allowed : kAllowedExes) {
+                            if (std::strcmp(exe, allowed) == 0) {
+                                ok = true;
+                                break;
+                            }
                         }
                     }
                 }
