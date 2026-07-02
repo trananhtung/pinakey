@@ -42,7 +42,9 @@ cho Alexandre de Rhodes và thường bị lãng quên sau cái bóng của họ
   **tự bỏ qua ô mật khẩu**.
 - **Tiện ích gõ tuỳ chọn** (mặc định tắt): w→ư 3 mức, tự viết hoa đầu câu, double-space → `. `.
 - **Live-reload** file macro/dict khi sửa (không cần khởi động lại).
-- **Giao diện thiết lập** đồ họa thuần Rust (egui).
+- **Giao diện thiết lập** đồ họa thuần Rust (egui) — lưu là **áp dụng ngay**, không cần restart.
+- **Nhanh đo được**: ~14 µs/phím trên lõi Rust (không GC) — xem [benchmark tự chạy lại
+  được](docs/BENCHMARK.md).
 
 ## Bố cục workspace
 
