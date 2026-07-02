@@ -159,6 +159,9 @@ lượng (fmt/clippy/test/e2e) mà CI bắt buộc. Mọi PR đều được CI 
 Một vài hướng dễ bắt đầu: thêm/đối chiếu test gõ Telex/VNI/VIQR, mở rộng từ điển chính tả, viết tài
 liệu, hoặc đóng gói cho thêm distro. Cứ mở issue/PR — chúng tôi sẵn lòng hỗ trợ!
 
+Báo **lỗ hổng bảo mật** theo kênh riêng trong [SECURITY.md](SECURITY.md) (mô hình an toàn của từng
+thành phần cũng ở đó) — đừng mở issue công khai.
+
 ## Người đóng góp
 
 Cảm ơn những người tuyệt vời ✨ đã đóng góp cho PinaKey ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
