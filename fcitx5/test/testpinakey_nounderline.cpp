@@ -302,6 +302,18 @@ int main() {
         FCITX_ASSERT(ic->text() == "tiếng. hai ")
             << "sau double-space gõ tiếp: doc=\"" << ic->text() << "\"";
 
+        // #65 an toàn: click chuột dời con trỏ khi cửa sổ double-space đang mở (app không gửi
+        // reset) rồi bấm space → KHÔNG được xoá ký tự ở vị trí mới / chèn ". ". Văn bản trước
+        // con trỏ mới không kết thúc bằng "từ + dấu cách" → addon phải bỏ qua.
+        ic->reset();
+        ic->clearDoc();
+        sendKeys(ic.get(), "tieengs "); // doc="tiếng ", cửa sổ double-space mở
+        ic->clickAt(0);                 // người dùng click về đầu ô (không reset engine)
+        sendKeys(ic.get(), " ");        // space tại vị trí mới
+        FCITX_ASSERT(ic->text() == "tiếng ")
+            << "double-space sau khi click chuột phá văn bản: doc=\"" << ic->text()
+            << "\", mong đợi \"tiếng \" (nguyên vẹn)";
+
         // #66: LibreOffice Writer — app CÓ SurroundingText nhưng báo cáo không đáng tin (lạc hậu
         // khi gõ nhanh, thiếu dấu cách). Addon phải nhận diện program "soffice" → dùng preedit
         // thay vì diff-replace, nên gõ nhanh đoạn dài vẫn ra đúng chữ.

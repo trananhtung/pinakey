@@ -21,6 +21,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <cctype>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -208,10 +209,12 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
     // #65: double-space → ". " (option, mặc định tắt — engine chỉ "arm" khi cờ bật). Dấu cách
     // thứ hai ngay sau khi commit "từ ": xoá dấu cách cũ + commit ". ". Cần app cho xoá
     // surrounding text; app báo cáo không đáng tin (#66) thì thôi — engine tự disarm khi
-    // thấy phím space đi qua như thường.
+    // thấy phím space đi qua như thường. surroundingEndsWithWordSpace() chống trường hợp
+    // người dùng click dời con trỏ mà app không gửi reset: vị trí mới không kết thúc bằng
+    // "từ + dấu cách" thì tuyệt đối không xoá-chèn.
     if (sym == FcitxKey_space && state == 0 && pk_engine_double_space_armed(core_) &&
         ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
-        !pk_engine_surrounding_text_unreliable(core_)) {
+        !pk_engine_surrounding_text_unreliable(core_) && surroundingEndsWithWordSpace()) {
         ic_->deleteSurroundingText(-1, 1);
         ic_->commitString(". ");
         pk_engine_double_space_consume(core_);
@@ -421,6 +424,48 @@ void PinaKeyState::resetIfDocumentDiverged() {
     if (!endsWithSegment) {
         pk_engine_reset(core_);
     }
+}
+
+/// #65 double-space: văn bản NGAY TRƯỚC con trỏ có kết thúc bằng "ký tự từ + một dấu cách"
+/// không (không có selection). Đây là điều kiện an toàn trước khi xoá dấu cách + chèn ". ":
+/// nếu người dùng đã click dời con trỏ (app không gửi reset nên engine còn "armed"), vị trí
+/// mới thường không khớp mẫu này → bỏ qua, tuyệt đối không phá văn bản ở chỗ mới.
+bool PinaKeyState::surroundingEndsWithWordSpace() const {
+    if (!ic_->surroundingText().isValid()) {
+        return false;
+    }
+    const auto &st = ic_->surroundingText();
+    if (st.cursor() != st.anchor()) {
+        return false; // đang có selection → không đụng.
+    }
+    const std::string &text = st.text();
+    const unsigned int cursor = st.cursor();
+    // cursor đếm theo ký tự Unicode → đổi ra byte-offset (như resetIfDocumentDiverged).
+    size_t bytePos = 0;
+    for (unsigned int chars = 0; bytePos < text.size() && chars < cursor; ++chars) {
+        const unsigned char c = static_cast<unsigned char>(text[bytePos]);
+        bytePos += (c < 0x80)            ? 1
+                   : ((c >> 5) == 0x6)   ? 2
+                   : ((c >> 4) == 0xe)   ? 3
+                   : ((c >> 3) == 0x1e)  ? 4
+                                         : 1;
+    }
+    // Ký tự ngay trước con trỏ phải là MỘT dấu cách…
+    if (bytePos < 2 || text[bytePos - 1] != ' ') {
+        return false;
+    }
+    // …và ký tự trước dấu cách phải là "ký tự từ": lùi qua các byte continuation UTF-8 để tới
+    // byte đầu của ký tự. Ký tự đa byte (chữ Việt có dấu) tính là chữ; ASCII thì loại khoảng
+    // trắng + dấu câu (khớp điều kiện arm phía engine: chữ/số ngay trước dấu cách).
+    size_t p = bytePos - 2;
+    while (p > 0 && (static_cast<unsigned char>(text[p]) & 0xC0) == 0x80) {
+        --p;
+    }
+    const unsigned char lead = static_cast<unsigned char>(text[p]);
+    if (lead >= 0x80) {
+        return true;
+    }
+    return std::isalnum(lead) != 0;
 }
 
 /// Áp lệnh thay thế: xoá N ký tự trước con trỏ rồi commit chuỗi mới. Không hiện preedit.
