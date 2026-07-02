@@ -557,6 +557,9 @@ void PinaKeyEngine::setupReloadTimer() {
     for (size_t i = 0; i < reloadFiles_.size(); ++i) {
         reloadMtimes_[i] = fileMtime(reloadFiles_[i]);
     }
+    // #69: canh cả file config (fallback khi GUI không gọi được D-Bus).
+    configFile_ = dir + "ibus-PinaKey.config.json";
+    configMtime_ = fileMtime(configFile_);
     constexpr uint64_t kInterval = 2000000; // 2s
     reloadTimer_ = instance_->eventLoop().addTimeEvent(
         CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + kInterval, 0,
@@ -568,6 +571,14 @@ void PinaKeyEngine::setupReloadTimer() {
 }
 
 void PinaKeyEngine::checkReload() {
+    // #69: file config đổi → nạp lại TOÀN BỘ cấu hình (bao trùm cả macro/dict).
+    if (!configFile_.empty()) {
+        if (uint64_t m = fileMtime(configFile_); m != configMtime_) {
+            configMtime_ = m;
+            reloadConfig();
+            return;
+        }
+    }
     bool changed = false;
     for (size_t i = 0; i < reloadFiles_.size(); ++i) {
         uint64_t m = fileMtime(reloadFiles_[i]);
@@ -581,6 +592,21 @@ void PinaKeyEngine::checkReload() {
     }
     instance_->inputContextManager().foreach([this](InputContext *ic) {
         pk_engine_reload(state(ic)->core());
+        return true;
+    });
+}
+
+void PinaKeyEngine::reloadConfig() {
+    // Cập nhật mtime cache (cả config lẫn macro/dict — pk_engine_reload_config nạp lại tất) để
+    // watcher không nạp lại lần nữa ngay sau lời gọi D-Bus.
+    if (!configFile_.empty()) {
+        configMtime_ = fileMtime(configFile_);
+    }
+    for (size_t i = 0; i < reloadFiles_.size(); ++i) {
+        reloadMtimes_[i] = fileMtime(reloadFiles_[i]);
+    }
+    instance_->inputContextManager().foreach([this](InputContext *ic) {
+        pk_engine_reload_config(state(ic)->core());
         return true;
     });
 }

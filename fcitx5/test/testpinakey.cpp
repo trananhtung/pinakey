@@ -20,6 +20,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 using namespace fcitx;
@@ -160,6 +161,20 @@ int main() {
         testfrontend->call<ITestFrontend::pushCommitExpectation>("\xF0\x9F\x98\x80"); // 😀
         sendKey(testfrontend, uuid, "colon");
         sendKey(testfrontend, uuid, "2");
+
+        // 16) #69 áp config tức thì: ghi config VNI rồi gọi reloadConfig() (đúng đường mà
+        //     D-Bus ReloadAddonConfig của fcitx5 gọi vào) → gõ VNI ăn ngay trên input context
+        //     ĐANG MỞ, không cần khởi động lại. Đặt cuối cùng vì các bước trước dùng Telex.
+        {
+            const std::string cfgDir = std::string(std::getenv("XDG_CONFIG_HOME")) + "/pinakey";
+            std::filesystem::create_directories(cfgDir);
+            std::ofstream cfg(cfgDir + "/ibus-PinaKey.config.json");
+            cfg << "{\"InputMethod\":\"VNI\"}";
+        }
+        pinakey->reloadConfig();
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("á ");
+        typeAscii(testfrontend, uuid, "a1"); // VNI: 1 = dấu sắc
+        sendKey(testfrontend, uuid, "space");
 
         instance.exit();
     });

@@ -36,6 +36,28 @@ pub fn w_shortcut_levels() -> Vec<(u8, &'static str)> {
     vec![(0, "Tắt"), (1, "Không áp dụng ở đầu từ"), (2, "Mọi nơi")]
 }
 
+/// #69: báo fcitx5 nạp lại config addon NGAY qua D-Bus (`ReloadAddonConfig s pinakey`), để
+/// setting vừa lưu ăn tức thì. Trả về `true` nếu gọi thành công; thất bại (không có busctl,
+/// fcitx5 không chạy, dùng IBus…) là bình thường — addon còn watcher mtime áp trong ~2s.
+pub fn notify_fcitx_reload() -> bool {
+    std::process::Command::new("busctl")
+        .args([
+            "--user",
+            "call",
+            "org.fcitx.Fcitx5",
+            "/controller",
+            "org.fcitx.Fcitx.Controller1",
+            "ReloadAddonConfig",
+            "s",
+            "pinakey",
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 /// Bộ điều khiển cho màn hình thiết lập.
 pub struct SettingsController {
     config: Config,
