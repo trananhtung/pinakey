@@ -136,6 +136,10 @@ pub fn expand_placeholders(
 
 /// Như [`expand_placeholders`] nhưng dùng giờ hệ thống hiện tại (giờ địa phương).
 pub fn expand_placeholders_now(text: &str, date_fmt: &str, time_fmt: &str) -> String {
+    if !text.contains('$') {
+        // Đại đa số macro không có placeholder — né syscall + tra múi giờ của Local::now().
+        return text.to_string();
+    }
     expand_placeholders(text, chrono::Local::now().naive_local(), date_fmt, time_fmt)
 }
 
