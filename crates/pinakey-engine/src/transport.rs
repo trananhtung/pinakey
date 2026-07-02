@@ -25,7 +25,12 @@ pub struct TransportRules {
 pub const EMBEDDED_RULES: &str = include_str!("../data/transport-rules.conf");
 
 /// Đường dẫn file rule hệ thống (gói cài đặt có thể cập nhật mà không cần rebuild).
-pub const SYSTEM_RULES_PATH: &str = "/usr/share/pinakey/transport-rules.conf";
+/// CMake truyền `PINAKEY_SYSTEM_RULES_PATH` lúc build cargo để khớp `CMAKE_INSTALL_PREFIX`
+/// tuỳ chỉnh (/usr/local, /opt…); build thuần cargo dùng mặc định /usr.
+pub const SYSTEM_RULES_PATH: &str = match option_env!("PINAKEY_SYSTEM_RULES_PATH") {
+    Some(p) => p,
+    None => "/usr/share/pinakey/transport-rules.conf",
+};
 
 impl TransportRules {
     /// Bảng rỗng (không rule nào — mọi app đều Auto).
@@ -34,11 +39,12 @@ impl TransportRules {
     }
 
     /// Parse một lớp rule và nối vào SAU các rule hiện có (lớp nối sau thắng lớp trước).
-    /// Dòng rỗng / bắt đầu `#` `;` bị bỏ qua; dòng sai cú pháp bị bỏ qua (không phá phiên gõ).
+    /// `#`/`;` mở comment (cả dòng lẫn cuối dòng); dòng rỗng / sai cú pháp bị bỏ qua
+    /// (không phá phiên gõ).
     pub fn append_layer(&mut self, text: &str) {
         for line in text.lines() {
-            let s = line.trim();
-            if s.is_empty() || s.starts_with('#') || s.starts_with(';') {
+            let s = line.split(['#', ';']).next().unwrap_or("").trim();
+            if s.is_empty() {
                 continue;
             }
             let mut it = s.split_whitespace();
@@ -63,7 +69,7 @@ impl TransportRules {
         }
         let w = wm_class.to_ascii_lowercase();
         for (pattern, pref) in self.rules.iter().rev() {
-            if w == *pattern || w.contains(pattern.as_str()) {
+            if w.contains(pattern.as_str()) {
                 return *pref;
             }
         }
@@ -113,5 +119,10 @@ mod tests {
         // biệt hoa/thường); "auto foo" ghi đè lại thành Auto (dòng sau thắng).
         assert_eq!(r.lookup("foo"), TransportPref::Auto);
         assert_eq!(r.rules.len(), 2);
+        // Comment cuối dòng (kể cả dính liền pattern) không được lọt vào mẫu.
+        let mut r = TransportRules::empty();
+        r.append_layer("preedit slack#ghi chú\npreedit discord ; nữa\n");
+        assert_eq!(r.lookup("slack"), TransportPref::Preedit);
+        assert_eq!(r.lookup("discord"), TransportPref::Preedit);
     }
 }

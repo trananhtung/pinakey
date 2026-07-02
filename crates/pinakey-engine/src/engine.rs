@@ -715,10 +715,8 @@ fn load_transport_rules() -> crate::transport::TransportRules {
     if let Ok(text) = std::fs::read_to_string(SYSTEM_RULES_PATH) {
         rules.append_layer(&text);
     }
-    if let Some(path) = pinakey_config::get_transport_rules_path().to_str() {
-        if let Ok(text) = std::fs::read_to_string(path) {
-            rules.append_layer(&text);
-        }
+    if let Ok(text) = std::fs::read_to_string(pinakey_config::get_transport_rules_path()) {
+        rules.append_layer(&text);
     }
     rules
 }

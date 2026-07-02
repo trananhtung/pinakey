@@ -38,8 +38,12 @@ set(PINAKEY_RUST_LIB "${PINAKEY_REPO_ROOT}/target/release/libpinakey_ffi.a")
 set(PINAKEY_RUST_INCLUDE "${PINAKEY_REPO_ROOT}/crates/pinakey-ffi/include")
 
 # cargo tự incremental nên target ALL chạy lại mỗi lần build là rẻ.
+# PINAKEY_SYSTEM_RULES_PATH: engine tra file rule transport hệ thống (#67) tại đúng prefix cài
+# đặt (option_env! phía Rust; đổi env → rustc tự rebuild phần liên quan).
 add_custom_target(pinakey-ffi ALL
-    COMMAND ${CARGO_EXECUTABLE} build -p pinakey-ffi --release
+    COMMAND ${CMAKE_COMMAND} -E env
+        "PINAKEY_SYSTEM_RULES_PATH=${CMAKE_INSTALL_PREFIX}/share/pinakey/transport-rules.conf"
+        ${CARGO_EXECUTABLE} build -p pinakey-ffi --release
     WORKING_DIRECTORY "${PINAKEY_REPO_ROOT}"
     BYPRODUCTS "${PINAKEY_RUST_LIB}"
     COMMENT "Đang build lõi PinaKey (Rust staticlib) bằng cargo"
