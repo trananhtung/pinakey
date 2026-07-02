@@ -408,6 +408,22 @@ pub unsafe extern "C" fn pk_engine_reload(e: *mut PkEngine) {
     }
 }
 
+/// #69: nạp lại TOÀN BỘ cấu hình từ đĩa (kiểu gõ, bảng mã, flags, rule transport, macro, dict)
+/// và áp ngay cho engine này — không cần khởi động lại fcitx5. Trạng thái gõ dở reset an toàn.
+///
+/// # Safety
+/// `e` hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_reload_config(e: *mut PkEngine) {
+    if let Some(engine) = e.as_mut() {
+        engine.core.reload_config();
+        engine.im_name = to_cstring(&engine.core.config.input_method);
+        engine.charset_name = to_cstring(&engine.core.config.output_charset);
+        // Quên segment đang theo dõi: cấu hình mới → diff với chuỗi cũ vô nghĩa.
+        engine.clear_display();
+    }
+}
+
 /// Đặt lại buffer soạn thảo (tương ứng `reset()` của fcitx5 khi đổi focus/huỷ).
 ///
 /// # Safety
@@ -959,6 +975,42 @@ mod tests {
         }
     }
 
+    /// Các test đổi `XDG_CONFIG_HOME` phải chạy tuần tự — env là trạng thái toàn tiến trình,
+    /// hai test song song sẽ ghi/đọc nhầm thư mục của nhau.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn reload_config_applies_new_input_method() {
+        // #69: đổi config trên đĩa (Telex→VNI) rồi pk_engine_reload_config → ăn ngay,
+        // không cần tạo engine mới. Cách ly qua XDG_CONFIG_HOME (thư mục tạm riêng).
+        let _env = ENV_LOCK.lock().unwrap();
+        unsafe {
+            let dir =
+                std::env::temp_dir().join(format!("pinakey_ffi_reloadcfg_{}", std::process::id()));
+            std::fs::create_dir_all(dir.join("pinakey")).unwrap();
+            std::env::set_var("XDG_CONFIG_HOME", &dir);
+
+            let e = pk_engine_new(); // config chưa có trên đĩa → mặc định Telex
+            let (_c, p) = type_str(e, "as");
+            assert_eq!(p, "á", "Telex mặc định: as → á");
+            pk_engine_reset(e);
+
+            std::fs::write(
+                dir.join("pinakey/ibus-PinaKey.config.json"),
+                r#"{"InputMethod":"VNI"}"#,
+            )
+            .unwrap();
+            pk_engine_reload_config(e);
+            let im = CStr::from_ptr(pk_engine_input_method(e)).to_str().unwrap();
+            assert_eq!(im, "VNI", "tên kiểu gõ phải cập nhật");
+            let (_c, p) = type_str(e, "a1");
+            assert_eq!(p, "á", "VNI sau reload: a1 → á");
+
+            pk_engine_free(e);
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
+
     #[test]
     fn double_space_armed_and_consume_via_ffi() {
         // #65: addon C++ hỏi trạng thái double-space trước khi đưa phím space vào engine.
@@ -982,6 +1034,7 @@ mod tests {
 
     #[test]
     fn emoji_recent_and_fuzzy() {
+        let _env = ENV_LOCK.lock().unwrap();
         unsafe {
             // Cách ly persist: trỏ XDG_CONFIG_HOME vào thư mục tạm TRƯỚC lần chạm đầu tiên vào
             // kho recents (OnceLock nạp từ đĩa đúng một lần) — không đụng config thật.

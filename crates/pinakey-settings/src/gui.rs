@@ -213,8 +213,15 @@ impl eframe::App for SettingsApp {
         }
         if do_save {
             self.status = match self.controller.save() {
-                Ok(()) => "Đã lưu cấu hình. Khởi động lại fcitx5 (fcitx5 -r) hoặc IBus để áp dụng."
-                    .to_string(),
+                // #69: báo fcitx5 áp ngay qua D-Bus; không được thì watcher của addon tự áp ~2s.
+                Ok(()) => {
+                    if crate::controller::notify_fcitx_reload() {
+                        "Đã lưu và áp dụng.".to_string()
+                    } else {
+                        "Đã lưu — fcitx5 sẽ tự áp trong vài giây (IBus cần khởi động lại)."
+                            .to_string()
+                    }
+                }
                 Err(e) => format!("Lỗi lưu: {e}"),
             };
         }

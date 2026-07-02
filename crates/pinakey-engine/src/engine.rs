@@ -169,6 +169,19 @@ impl EngineCore {
         self.preeditor = build_preeditor(&self.config);
     }
 
+    /// #69: đọc lại TOÀN BỘ cấu hình từ đĩa và áp ngay — kiểu gõ, bảng mã, flags, rule
+    /// transport, macro, dict. Trạng thái gõ dở bị reset an toàn (đổi kiểu gõ giữa chừng thì
+    /// buffer cũ vô nghĩa). Gọi khi file config đổi (watcher) hoặc GUI báo qua D-Bus.
+    pub fn reload_config(&mut self) {
+        self.config = pinakey_config::load_config(ENGINE_NAME);
+        self.rebuild_preeditor();
+        self.macro_table
+            .set_auto_capitalize(self.config.ib_flags & cfg::IB_AUTO_CAPITALIZE_MACRO != 0);
+        self.reload_data();
+        self.transport_rules = load_transport_rules();
+        self.reset_preeditor();
+    }
+
     /// Nạp lại file macro + từ điển từ đĩa (issue #20, live-reload) — KHÔNG đụng tới cấu hình đang
     /// chạy (kiểu gõ/bảng mã/flags giữ nguyên). Gọi khi phát hiện file thay đổi.
     pub fn reload_data(&mut self) {

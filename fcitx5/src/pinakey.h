@@ -110,6 +110,9 @@ public:
 
     void keyEvent(const InputMethodEntry &entry, KeyEvent &keyEvent) override;
     void reset(const InputMethodEntry &entry, InputContextEvent &event) override;
+    // #69: D-Bus `ReloadAddonConfig s pinakey` (GUI thiết lập gọi sau khi lưu) → nạp lại toàn bộ
+    // config từ đĩa và áp cho MỌI input context đang mở — không cần khởi động lại fcitx5.
+    void reloadConfig() override;
     void activate(const InputMethodEntry &entry, InputContextEvent &event) override;
     void deactivate(const InputMethodEntry &entry, InputContextEvent &event) override;
     // Khi PinaKey đang được chọn, hiển thị nhãn "V" (chỉ báo đang gõ tiếng Việt) thay cho icon.
@@ -138,6 +141,9 @@ private:
     std::unique_ptr<EventSourceTime> reloadTimer_;
     std::vector<std::string> reloadFiles_;
     std::vector<uint64_t> reloadMtimes_;
+    // #69: theo dõi cả file config — fallback khi GUI không gọi được D-Bus (áp trong ≤2s).
+    std::string configFile_;
+    uint64_t configMtime_ = 0;
 
     // Menu khu vực trạng thái: chọn kiểu gõ + bảng mã (issue #12/#17).
     std::unique_ptr<SimpleAction> imRootAction_;

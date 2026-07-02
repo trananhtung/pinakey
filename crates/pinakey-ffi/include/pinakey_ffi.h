@@ -171,6 +171,15 @@ bool pk_engine_preedit_underline(const PkEngine *e);
 void pk_engine_reload(PkEngine *e);
 
 /**
+ * #69: nạp lại TOÀN BỘ cấu hình từ đĩa (kiểu gõ, bảng mã, flags, rule transport, macro, dict)
+ * và áp ngay cho engine này — không cần khởi động lại fcitx5. Trạng thái gõ dở reset an toàn.
+ *
+ * # Safety
+ * `e` hợp lệ.
+ */
+void pk_engine_reload_config(PkEngine *e);
+
+/**
  * Đặt lại buffer soạn thảo (tương ứng `reset()` của fcitx5 khi đổi focus/huỷ).
  *
  * # Safety

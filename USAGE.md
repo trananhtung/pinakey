@@ -217,6 +217,10 @@ cargo build --release -p pinakey-settings --features gui
 ./target/release/pinakey-settings
 ```
 
+Bấm **Lưu** là setting **áp dụng ngay** cho fcitx5 đang chạy (qua D-Bus; nếu không gọi được,
+addon tự nhận file config đổi trong ~2 giây) — không cần khởi động lại. Sửa file config bằng
+tay cũng được áp tự động như vậy.
+
 ---
 
 ## 11. Gỡ cài đặt
