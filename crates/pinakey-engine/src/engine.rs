@@ -105,6 +105,20 @@ impl EngineCore {
         })
     }
 
+    /// Surrounding text của chương trình đang focus có KHÔNG đáng tin không (issue #66).
+    /// LibreOffice/OpenOffice (soffice) báo surrounding text lạc hậu/thiếu dấu cách khi gõ nhanh,
+    /// làm diff xoá-chèn sai vùng — với các app này addon phải rơi về preedit dù chúng quảng cáo
+    /// khả năng SurroundingText. Khớp không phân biệt hoa/thường, theo chuỗi con (như danh sách
+    /// loại trừ #9) để phủ mọi biến thể: soffice.bin, libreoffice-writer, org.libreoffice.…
+    pub fn is_surrounding_text_unreliable(&self) -> bool {
+        const BROKEN_SURROUNDING: [&str; 2] = ["soffice", "libreoffice"];
+        if self.wm_class.is_empty() {
+            return false;
+        }
+        let w = self.wm_class.to_lowercase();
+        BROKEN_SURROUNDING.iter().any(|p| w.contains(p))
+    }
+
     /// Đặt lại trạng thái soạn thảo bên dưới (tương ứng `Reset` của IBus).
     pub fn reset_preeditor(&mut self) {
         self.preeditor.reset();
@@ -660,6 +674,34 @@ mod tests {
         actions.extend(sp);
         // Phím ngắt từ (space) được commit cùng với từ.
         assert!(commits(&actions).iter().any(|c| c.trim() == "tiếng"));
+    }
+
+    #[test]
+    fn surrounding_text_unreliable_for_libreoffice() {
+        // #66: LibreOffice/OpenOffice (soffice) báo surrounding text lạc hậu/thiếu dấu cách khi
+        // gõ nhanh → phải bị đánh dấu "không đáng tin" để addon rơi về preedit.
+        let mut core = EngineCore::new(default_cfg());
+        assert!(
+            !core.is_surrounding_text_unreliable(),
+            "chưa đặt program → coi như đáng tin"
+        );
+        for p in [
+            "soffice",
+            "soffice.bin",
+            "libreoffice-writer",
+            "LibreOffice-calc",
+            "org.libreoffice.LibreOffice",
+        ] {
+            core.set_wm_class(p.to_string());
+            assert!(
+                core.is_surrounding_text_unreliable(),
+                "{p} phải bị coi là không đáng tin"
+            );
+        }
+        for p in ["firefox", "google-chrome", "onlyoffice-desktopeditors"] {
+            core.set_wm_class(p.to_string());
+            assert!(!core.is_surrounding_text_unreliable(), "{p} phải đáng tin");
+        }
     }
 
     #[test]

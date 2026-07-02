@@ -39,6 +39,9 @@ Mặc định bật (cờ `IB_NO_UNDERLINE`). Với ứng dụng hỗ trợ *Sur
 sửa tại chỗ bằng `deleteSurroundingText` (không preedit). App không hỗ trợ → tự lùi về preedit.
 Bơm Backspace qua uinput cho mọi app là phần làm tiếp (issue #28).
 
+Ngoại lệ (#66): LibreOffice/OpenOffice (`soffice`) quảng cáo Surrounding Text nhưng báo cáo không
+đáng tin khi gõ nhanh (lạc hậu, thiếu dấu cách) → addon tự dùng preedit cho các app này.
+
 ## Tạo lại C-ABI header
 
 Header `crates/pinakey-ffi/include/pinakey_ffi.h` được sinh bằng cbindgen và commit kèm repo

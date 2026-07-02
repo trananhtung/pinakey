@@ -472,6 +472,20 @@ pub unsafe extern "C" fn pk_engine_program_excluded(e: *const PkEngine) -> bool 
         .unwrap_or(false)
 }
 
+/// Surrounding text của chương trình đang focus (đặt qua `pk_engine_set_program`) có KHÔNG đáng
+/// tin không (issue #66). LibreOffice (soffice) báo surrounding text lạc hậu/thiếu dấu cách khi gõ
+/// nhanh → C++ phải bỏ qua đường diff-replace và dùng preedit cho các app này dù chúng quảng cáo
+/// khả năng SurroundingText.
+///
+/// # Safety
+/// `e` hợp lệ.
+#[no_mangle]
+pub unsafe extern "C" fn pk_engine_surrounding_text_unreliable(e: *const PkEngine) -> bool {
+    e.as_ref()
+        .map(|x| x.core.is_surrounding_text_unreliable())
+        .unwrap_or(false)
+}
+
 /// Đổi kiểu gõ ("Telex" / "VNI" / "VIQR" …) và dựng lại engine biến đổi.
 ///
 /// # Safety
@@ -843,6 +857,29 @@ mod tests {
             let p3 = CString::new("code - oss").unwrap();
             pk_engine_set_program(e, p3.as_ptr());
             assert!(pk_engine_program_excluded(e));
+            pk_engine_free(e);
+        }
+    }
+
+    #[test]
+    fn surrounding_unreliable_for_libreoffice_via_program() {
+        // #66: đặt program = LibreOffice → surrounding text bị coi là không đáng tin, C++ sẽ bỏ
+        // qua đường replace và dùng preedit cho app này.
+        unsafe {
+            let e = pk_engine_new();
+            assert!(
+                !pk_engine_surrounding_text_unreliable(e),
+                "chưa đặt program → đáng tin"
+            );
+            let p = CString::new("soffice.bin").unwrap();
+            pk_engine_set_program(e, p.as_ptr());
+            assert!(pk_engine_surrounding_text_unreliable(e));
+            let p = CString::new("libreoffice-writer").unwrap();
+            pk_engine_set_program(e, p.as_ptr());
+            assert!(pk_engine_surrounding_text_unreliable(e));
+            let p = CString::new("firefox").unwrap();
+            pk_engine_set_program(e, p.as_ptr());
+            assert!(!pk_engine_surrounding_text_unreliable(e));
             pk_engine_free(e);
         }
     }
