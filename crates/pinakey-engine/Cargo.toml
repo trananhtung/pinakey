@@ -12,3 +12,10 @@ pinakey-emoji = { path = "../pinakey-emoji" }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+criterion = { version = "0.8.2", default-features = false }
+
+[[bench]]
+name = "latency"
+harness = false
