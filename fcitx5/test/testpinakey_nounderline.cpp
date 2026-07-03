@@ -375,13 +375,13 @@ private:
         for (char32_t c : s) {
             switch (c) {
             case U'ê':
-                out += U"ê";
+                out += U"e\u0302";
                 break;
             case U'ệ':
-                out += U"ệ";
+                out += U"e\u0323\u0302";
                 break;
             case U'ế':
-                out += U"ế";
+                out += U"e\u0302\u0301";
                 break;
             default:
                 out.push_back(c);
@@ -684,7 +684,7 @@ int main() {
         nfd->focusIn();
         instance.setCurrentInputMethod(nfd.get(), "pinakey", true);
         sendKeys(nfd.get(), "vieejt ");
-        FCITX_ASSERT(nfd->text() == "viêjt ")
+        FCITX_ASSERT(nfd->text() == "vie\u0302jt ")
             << "nfd-store: doc=\"" << nfd->text()
             << "\", mong đợi \"vie\\u0302jt \" (xuống cấp xác định, không nát)";
 
