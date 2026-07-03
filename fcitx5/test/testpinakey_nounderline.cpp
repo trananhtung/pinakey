@@ -213,6 +213,41 @@ private:
     size_t cursor_ = 0;
 };
 
+/// Bảng chuỗi Telex chạy trên mọi hồ sơ có tài liệu — buffer cuối phải đúng từng byte.
+struct TelexCase {
+    const char *keys;
+    const char *expected;
+};
+constexpr TelexCase kTelexCases[] = {
+    {"tieengs vieetj", "tiếng việt"},
+    {"ddaay laf vieejt", "đây là việt"},
+    {"chaof banj", "chào bạn"},
+    {"ddoongf ys", "đồng ý"},
+};
+
+/// Hồ sơ no-st-preedit: app KHÔNG có SurroundingText (terminal thuần) → addon phải đi đường
+/// preedit, tuyệt đối không deleteSurroundingText; từ chốt vào tài liệu khi ngắt từ.
+class NoStInputContext : public InputContext {
+public:
+    explicit NoStInputContext(InputContextManager &mgr) : InputContext(mgr, "plainterm") {
+        setCapabilityFlags(CapabilityFlags{});
+        created();
+    }
+    ~NoStInputContext() override { destroy(); }
+    const char *frontend() const override { return "doc"; }
+    int deleteCalls() const { return deleteCalls_; }
+    void commitStringImpl(const std::string &text) override { doc_ += text; }
+    void deleteSurroundingTextImpl(int, unsigned int) override { ++deleteCalls_; }
+    void forwardKeyImpl(const ForwardKeyEvent &) override {}
+    void updatePreeditImpl() override {}
+    std::string text() const { return doc_; }
+    void clearDoc() { doc_.clear(); }
+
+private:
+    std::string doc_;
+    int deleteCalls_ = 0;
+};
+
 void sendKeys(InputContext *ic, const std::string &keys) {
     for (char c : keys) {
         Key key = (c == ' ') ? Key("space") : Key(std::string(1, c));
@@ -221,8 +256,8 @@ void sendKeys(InputContext *ic, const std::string &keys) {
     }
 }
 
-void expectType(DocInputContext *ic, const std::string &keys,
-                const std::string &expected) {
+template <typename IC>
+void expectType(IC *ic, const std::string &keys, const std::string &expected) {
     sendKeys(ic, keys);
     FCITX_ASSERT(ic->text() == expected)
         << "gõ \"" << keys << "\" => \"" << ic->text() << "\", mong đợi \"" << expected << "\"";
@@ -361,6 +396,29 @@ int main() {
         FCITX_ASSERT(lo->text() == "việt tiếng ")
             << "LibreOffice giả lập: gõ \"vieetj tieengs \" => \"" << lo->text()
             << "\", mong đợi \"việt tiếng \" (phải rơi về preedit, không diff-replace)";
+
+        // ============== Ma trận hồ sơ × chuỗi gõ (#70) ==============
+        // reliable-st: editor lành (ST, cursor==anchor) — commit thẳng, đúng từng byte.
+        ic->focusIn(); // focus đang ở hồ sơ LibreOffice phía trên
+        for (const auto &c : kTelexCases) {
+            ic->reset();
+            ic->clearDoc();
+            expectType(ic.get(), c.keys, c.expected);
+        }
+
+        // no-st-preedit: không SurroundingText → preedit; thêm dấu cách cuối để chốt từ chót.
+        auto plain = std::make_unique<NoStInputContext>(instance.inputContextManager());
+        plain->focusIn();
+        instance.setCurrentInputMethod(plain.get(), "pinakey", true);
+        for (const auto &c : kTelexCases) {
+            plain->reset();
+            plain->clearDoc();
+            expectType(plain.get(), std::string(c.keys) + " ",
+                       std::string(c.expected) + " ");
+        }
+        FCITX_ASSERT(plain->deleteCalls() == 0)
+            << "no-st-preedit không bao giờ được deleteSurroundingText ("
+            << plain->deleteCalls() << " lần)";
 
         instance.exit();
     });
