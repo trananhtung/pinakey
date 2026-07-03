@@ -20,6 +20,7 @@
 #include <fcitx/inputmethodmanager.h>
 #include <fcitx/instance.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -211,6 +212,111 @@ private:
     std::u32string doc_;
     std::u32string lastSnapshot_;
     size_t cursor_ = 0;
+};
+
+/// Giả lập ô nhập có autocomplete kiểu thanh địa chỉ (#60): app có thể có sẵn vùng bôi chọn
+/// (URL cũ được chọn toàn bộ khi focus); sau một lần commit, autocomplete chèn gợi ý và BÔI
+/// CHỌN nó. Mô phỏng cả "vùng chết": deleteSurroundingText khi đang có selection bị áp vào
+/// VÙNG CHỌN thay vì ký tự trước con trỏ (hành vi quan sát được ở Chromium). commitString
+/// khi đang có selection sẽ THAY THẾ vùng chọn (hành vi app chuẩn).
+class AutofillInputContext : public InputContext {
+public:
+    explicit AutofillInputContext(InputContextManager &mgr)
+        : InputContext(mgr, "autofillapp") {
+        setCapabilityFlags(CapabilityFlags{CapabilityFlag::SurroundingText});
+        created();
+    }
+    ~AutofillInputContext() override { destroy(); }
+    const char *frontend() const override { return "doc"; }
+
+    int deletesWhileSelection() const { return deletesWhileSelection_; }
+    std::string text() const { return toUtf8(doc_); }
+    void clearDoc() {
+        doc_.clear();
+        autofill_.clear();
+        cursor_ = anchor_ = 0;
+        syncSurrounding();
+    }
+    /// Focus thanh địa chỉ: URL cũ đang được bôi chọn toàn bộ.
+    void setAllSelected(const std::string &text) {
+        doc_ = fromUtf8(text);
+        cursor_ = 0;
+        anchor_ = doc_.size();
+        autofill_.clear();
+        syncSurrounding();
+    }
+    /// Bật gợi ý autocomplete MỘT LẦN: lần commit kế tiếp sẽ chèn `suffix` và bôi chọn nó.
+    void armAutofill(const std::string &suffix) { autofill_ = fromUtf8(suffix); }
+    /// App có sẵn chữ phía sau con trỏ (không đụng con trỏ).
+    void appendText(const std::string &t) {
+        auto u = fromUtf8(t);
+        doc_.insert(doc_.size(), u);
+        syncSurrounding();
+    }
+    /// Người dùng bôi chọn [cursor, anchor) (đơn vị: ký tự Unicode).
+    void selectRange(size_t cursor, size_t anchor) {
+        cursor_ = cursor;
+        anchor_ = anchor;
+        syncSurrounding();
+    }
+
+    void commitStringImpl(const std::string &text) override {
+        eraseSelection(); // app chuẩn: commit khi có selection → thay thế vùng chọn
+        auto u = fromUtf8(text);
+        doc_.insert(cursor_, u);
+        cursor_ += u.size();
+        anchor_ = cursor_;
+        if (!autofill_.empty()) { // autocomplete: chèn gợi ý và bôi chọn (một lần)
+            doc_.insert(cursor_, autofill_);
+            anchor_ = cursor_ + autofill_.size();
+            autofill_.clear();
+        }
+        syncSurrounding();
+    }
+    void deleteSurroundingTextImpl(int offset, unsigned int size) override {
+        if (cursor_ != anchor_) {
+            // Vùng chết #60: app áp lệnh xoá vào vùng chọn, KHÔNG xoá trước con trỏ.
+            ++deletesWhileSelection_;
+            eraseSelection();
+            syncSurrounding();
+            return;
+        }
+        long start = static_cast<long>(cursor_) + offset;
+        if (start < 0) {
+            start = 0;
+        }
+        if (static_cast<size_t>(start) > doc_.size()) {
+            start = static_cast<long>(doc_.size());
+        }
+        size_t n = size;
+        if (static_cast<size_t>(start) + n > doc_.size()) {
+            n = doc_.size() - static_cast<size_t>(start);
+        }
+        doc_.erase(static_cast<size_t>(start), n);
+        cursor_ = anchor_ = static_cast<size_t>(start);
+        syncSurrounding();
+    }
+    void forwardKeyImpl(const ForwardKeyEvent &) override {}
+    void updatePreeditImpl() override {}
+
+private:
+    void eraseSelection() {
+        if (cursor_ == anchor_) {
+            return;
+        }
+        const size_t lo = std::min(cursor_, anchor_);
+        const size_t hi = std::max(cursor_, anchor_);
+        doc_.erase(lo, hi - lo);
+        cursor_ = anchor_ = lo;
+    }
+    void syncSurrounding() {
+        surroundingText().setText(toUtf8(doc_), static_cast<unsigned int>(cursor_),
+                                  static_cast<unsigned int>(anchor_));
+        updateSurroundingText();
+    }
+    std::u32string doc_, autofill_;
+    size_t cursor_ = 0, anchor_ = 0;
+    int deletesWhileSelection_ = 0;
 };
 
 /// Bảng chuỗi Telex chạy trên mọi hồ sơ có tài liệu — buffer cuối phải đúng từng byte.
@@ -427,6 +533,46 @@ int main() {
         FCITX_ASSERT(plain->deleteCalls() == 0)
             << "no-st-preedit không bao giờ được deleteSurroundingText ("
             << plain->deleteCalls() << " lần)";
+
+        // ============== B1 (#60): selection guard ==============
+        auto af = std::make_unique<AutofillInputContext>(instance.inputContextManager());
+        af->focusIn();
+        instance.setCurrentInputMethod(af.get(), "pinakey", true);
+
+        // (a) Focus thanh địa chỉ: URL cũ bôi chọn toàn bộ → cả từ soạn trong preedit, chuỗi
+        // mới THAY THẾ vùng chọn khi chốt. (Bảo vệ hồi quy — đường đúng cho case phổ biến.)
+        af->setAllSelected("example.com");
+        sendKeys(af.get(), "dd ");
+        FCITX_ASSERT(af->text() == "đ ")
+            << "omnibox focus-selected: doc=\"" << af->text() << "\", mong đợi \"đ \"";
+        FCITX_ASSERT(af->deletesWhileSelection() == 0)
+            << "deleteSurroundingText trong lúc có selection: " << af->deletesWhileSelection();
+
+        // (b) Timing khó: ô trống, ký tự đầu commit xong thì autocomplete chèn gợi ý + bôi chọn.
+        // Phím sau KHÔNG được diff-replace (vùng chết) — kết quả an toàn xác định là "dd "
+        // (đúng phím đã gõ, không rối thành "dđ "), tuyệt đối không xoá lên selection.
+        af->reset();
+        af->clearDoc();
+        af->armAutofill("uckduckgo.com");
+        sendKeys(af.get(), "dd ");
+        FCITX_ASSERT(af->text() == "dd ")
+            << "omnibox autocomplete giữa từ: doc=\"" << af->text()
+            << "\", mong đợi \"dd \" (an toàn, không \"dđ \")";
+        FCITX_ASSERT(af->deletesWhileSelection() == 0)
+            << "deleteSurroundingText trong lúc có selection: " << af->deletesWhileSelection();
+
+        // (c) Người dùng bôi chọn rồi gõ: gõ "vie", app có sẵn chữ sau con trỏ, bôi chọn phần
+        // đó rồi gõ "j " → "j " thay thế vùng chọn (hành vi app chuẩn), không xoá nhầm.
+        af->reset();
+        af->clearDoc();
+        sendKeys(af.get(), "vie");
+        af->appendText("fix");
+        af->selectRange(3, 6); // bôi chọn "fix", con trỏ vẫn sau "vie"
+        sendKeys(af.get(), "j ");
+        FCITX_ASSERT(af->text() == "viej ")
+            << "bôi chọn rồi gõ: doc=\"" << af->text() << "\", mong đợi \"viej \"";
+        FCITX_ASSERT(af->deletesWhileSelection() == 0)
+            << "deleteSurroundingText trong lúc có selection: " << af->deletesWhileSelection();
 
         instance.exit();
     });

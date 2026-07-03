@@ -70,6 +70,9 @@ private:
     // #65: guard an toàn cho double-space → ". " — văn bản trước con trỏ phải kết thúc bằng
     // "ký tự từ + dấu cách" (không selection); chống con trỏ bị click dời mà app không reset.
     bool surroundingEndsWithWordSpace() const;
+    // #60: có vùng chọn (cursor != anchor) trong surrounding text không — khi có, đường
+    // replace phải nhường preedit vì offset của deleteSurroundingText không còn đáng tin.
+    bool surroundingHasSelection() const;
     // Gõ không gạch chân cho app không có SurroundingText (terminal…) qua daemon uinput + ACK:
     // hoãn commit, bơm (N+1) Backspace, ĐẾM Backspace bơm-ngược quay về fcitx, chỉ commit chuỗi
     // mới sau khi xác nhận đã xoá đủ — triệt tiêu cuộc đua "commit trước khi xoá xong" (như
