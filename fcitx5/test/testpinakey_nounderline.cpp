@@ -416,6 +416,14 @@ int main() {
             expectType(plain.get(), std::string(c.keys) + " ",
                        std::string(c.expected) + " ");
         }
+        // Từ đang soạn dở (chưa có phím ngắt từ) phải còn nguyên trong preedit — tài liệu
+        // chưa được nhận gì (góp ý review: khoá cả trạng thái "trước ranh giới từ").
+        plain->reset();
+        plain->clearDoc();
+        sendKeys(plain.get(), "tieengs");
+        FCITX_ASSERT(plain->text().empty())
+            << "no-st-preedit commit sớm từ đang soạn dở: doc=\"" << plain->text() << "\"";
+        plain->reset();
         FCITX_ASSERT(plain->deleteCalls() == 0)
             << "no-st-preedit không bao giờ được deleteSurroundingText ("
             << plain->deleteCalls() << " lần)";
