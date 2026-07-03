@@ -227,13 +227,24 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
     if (pk_engine_no_underline(core_) &&
         ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
         !pk_engine_surrounding_text_unreliable(core_)) {
-        resetIfDocumentDiverged(); // #7: con trỏ nhảy → quên segment cũ, không xoá nhầm.
-        const bool handled = pk_engine_process_key_replace(core_, sym, state);
-        applyReplaceResult();
-        if (handled) {
-            keyEvent.filterAndAccept();
+        // #60: đang có vùng chọn (autocomplete bôi chọn gợi ý, hoặc người dùng bôi chọn rồi
+        // gõ) → app có thể áp deleteSurroundingText vào vùng chọn thay vì trước con trỏ
+        // (vùng chết đã quan sát ở Chromium) → xoá nhầm. Nhường preedit tới khi hết selection.
+        if (!surroundingHasSelection()) {
+            resetIfDocumentDiverged(); // #7: con trỏ nhảy → quên segment cũ, không xoá nhầm.
+            const bool handled = pk_engine_process_key_replace(core_, sym, state);
+            applyReplaceResult();
+            if (handled) {
+                keyEvent.filterAndAccept();
+            }
+            return;
         }
-        return;
+        // Selection xuất hiện GIỮA từ (engine còn theo dõi segment đã commit): reset trước khi
+        // rơi xuống preedit — không reset thì preedit soạn tiếp trên buffer cũ, hiện chữ đè
+        // cạnh đoạn đã commit trong tài liệu → đúp ký tự kiểu "dđ".
+        if (const char *seg = pk_engine_replace_segment(core_); seg && seg[0] != '\0') {
+            pk_engine_reset(core_);
+        }
     }
 
     // Gõ không gạch chân #2 (#28): app KHÔNG có SurroundingText nhưng có daemon uinput → bơm
@@ -262,7 +273,7 @@ bool PinaKeyState::wantReplaceMode() const {
         return false;
     }
     return (ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
-            !pk_engine_surrounding_text_unreliable(core_)) ||
+            !pk_engine_surrounding_text_unreliable(core_) && !surroundingHasSelection()) ||
            useUinput();
 }
 
@@ -466,6 +477,16 @@ bool PinaKeyState::surroundingEndsWithWordSpace() const {
         return true;
     }
     return std::isalnum(lead) != 0;
+}
+
+/// #60: surrounding text đang có vùng chọn không (cursor != anchor)? Không đọc được
+/// surrounding text thì coi như không có — giữ nguyên hành vi cũ, không hồi quy.
+bool PinaKeyState::surroundingHasSelection() const {
+    if (!ic_->surroundingText().isValid()) {
+        return false;
+    }
+    const auto &st = ic_->surroundingText();
+    return st.cursor() != st.anchor();
 }
 
 /// Áp lệnh thay thế: xoá N ký tự trước con trỏ rồi commit chuỗi mới. Không hiện preedit.
