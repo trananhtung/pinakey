@@ -574,6 +574,27 @@ int main() {
         FCITX_ASSERT(af->deletesWhileSelection() == 0)
             << "deleteSurroundingText trong lúc có selection: " << af->deletesWhileSelection();
 
+        // ============== modifier-noise ==============
+        // Phím có Ctrl/Alt/Super và modifier đơn không sinh lệnh xoá, không phá segment —
+        // trước guard ở engine, Ctrl+A commit ngang buffer và Alt+Tab lọt vào nhánh Tab.
+        ic->focusIn();
+        ic->reset();
+        ic->clearDoc();
+        sendKeys(ic.get(), "vie");
+        FCITX_ASSERT(ic->text() == "vie");
+        const int delsBefore = ic->deleteCalls();
+        for (const char *k :
+             {"Control+A", "Control+C", "Alt+Tab", "Shift_L", "Control_L", "Super_L"}) {
+            KeyEvent ke(ic.get(), Key(k), false);
+            ic->keyEvent(ke);
+        }
+        FCITX_ASSERT(ic->text() == "vie")
+            << "phím modifier làm đổi tài liệu: doc=\"" << ic->text() << "\"";
+        FCITX_ASSERT(ic->deleteCalls() == delsBefore)
+            << "phím modifier sinh deleteSurroundingText";
+        // Segment vẫn sống: gõ tiếp biến "vie" thành "việt " đúng chỗ.
+        expectType(ic.get(), "ejt ", "việt ");
+
         instance.exit();
     });
 

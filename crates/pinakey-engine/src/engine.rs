@@ -616,6 +616,14 @@ impl EngineCore {
         if is_modifier_keysym(key_val) {
             return (false, out);
         }
+        // Tổ hợp mang modifier điều khiển (Ctrl/Alt/Super/Hyper/Meta) là lệnh cho app
+        // (Ctrl+A, Alt+Tab, Ctrl+BackSpace…), không phải ký tự nhập — cho đi qua nguyên vẹn,
+        // không đụng buffer soạn dở. Shift/CapsLock vẫn là gõ chữ thường nên không chặn.
+        // Phím tắt có thể đổi văn bản (Ctrl+V…) → vẫn khép cửa sổ double-space.
+        if !is_valid_state(state) {
+            self.double_space_armed = false;
+            return (false, out);
+        }
         // #65: phím này tới engine nghĩa là addon KHÔNG tiêu thụ nó cho double-space → cửa sổ
         // khép lại (commit sinh ra trong chính sự kiện này có thể mở lại ở commit_text).
         self.double_space_armed = false;
@@ -830,6 +838,32 @@ mod tests {
             );
         }
         let actions = type_keys(&mut core, "j");
+        assert_eq!(last_preedit(&actions).as_deref(), Some("việt"));
+    }
+
+    #[test]
+    fn control_modified_keys_pass_through_untouched() {
+        // Tổ hợp có Ctrl/Alt/Super (Ctrl+A, Alt+Tab, Ctrl+BackSpace…) là lệnh của app, không
+        // phải ký tự gõ — engine không được đụng buffer, không sinh action, không nuốt phím.
+        // Trước guard: Alt+Tab lọt vào nhánh KEY_TAB và commit ngang buffer đang soạn.
+        let mut core = EngineCore::new(default_cfg());
+        type_keys(&mut core, "vie");
+        for (sym, state) in [
+            ('a' as u32, MOD_CONTROL),    // Ctrl+A
+            (KEY_TAB, MOD_MOD1),          // Alt+Tab
+            (KEY_BACKSPACE, MOD_CONTROL), // Ctrl+BackSpace
+            ('c' as u32, MOD_CONTROL),    // Ctrl+C
+            ('l' as u32, MOD_MOD4),       // Super+L
+        ] {
+            let (handled, actions) = core.process_key_event(sym, 0, state);
+            assert!(!handled, "tổ hợp {sym:#x}+{state:#x} phải được cho đi qua");
+            assert!(
+                actions.is_empty(),
+                "tổ hợp {sym:#x}+{state:#x} không được sinh action: {actions:?}"
+            );
+        }
+        // Buffer còn nguyên: gõ tiếp vẫn ra đúng chữ.
+        let actions = type_keys(&mut core, "ejt");
         assert_eq!(last_preedit(&actions).as_deref(), Some("việt"));
     }
 
