@@ -319,6 +319,85 @@ private:
     int deletesWhileSelection_ = 0;
 };
 
+/// Hồ sơ nfd-store: app lưu văn bản dạng NFD (tách dấu). Bất biến phải giữ: addon không bao
+/// giờ xoá "cụt" — không xoá bắt đầu giữa cụm base+dấu, không cắt mất base của dấu. Hành vi
+/// đúng hiện tại: segment NFC lệch byte với đuôi NFD → reset → gõ xuống cấp (mỗi biến đổi dấu
+/// chỉ áp một lần) nhưng tài liệu không bao giờ nát. KHÔNG "sửa" bằng cách so-NFC-rồi-tiếp-tục
+/// replace: số ký tự xoá đếm theo NFC của engine sẽ xoá thiếu codepoint NFD → chính là xoá cụt.
+class NfdInputContext : public InputContext {
+public:
+    explicit NfdInputContext(InputContextManager &mgr) : InputContext(mgr, "nfdapp") {
+        setCapabilityFlags(CapabilityFlags{CapabilityFlag::SurroundingText});
+        created();
+    }
+    ~NfdInputContext() override { destroy(); }
+    const char *frontend() const override { return "doc"; }
+    std::string text() const { return toUtf8(doc_); }
+
+    void commitStringImpl(const std::string &text) override {
+        auto u = decomposeNfd(fromUtf8(text));
+        doc_.insert(cursor_, u);
+        cursor_ += u.size();
+        syncSurrounding();
+    }
+    void deleteSurroundingTextImpl(int offset, unsigned int size) override {
+        long start = static_cast<long>(cursor_) + offset;
+        if (start < 0) {
+            start = 0;
+        }
+        if (static_cast<size_t>(start) > doc_.size()) {
+            start = static_cast<long>(doc_.size());
+        }
+        size_t n = size;
+        if (static_cast<size_t>(start) + n > doc_.size()) {
+            n = doc_.size() - static_cast<size_t>(start);
+        }
+        // BẤT BIẾN: lệnh xoá không được bắt đầu giữa cụm base+dấu (bỏ lại base trơ trọi)…
+        FCITX_ASSERT(!(n > 0 && isCombining(doc_[static_cast<size_t>(start)])))
+            << "xoá bắt đầu giữa cụm dấu tại vị trí " << start;
+        // …và không được kết thúc ngay trước một dấu (cắt mất base của nó).
+        FCITX_ASSERT(!(n > 0 && static_cast<size_t>(start) + n < doc_.size() &&
+                       isCombining(doc_[static_cast<size_t>(start) + n])))
+            << "xoá cắt mất base của dấu tại vị trí " << (start + static_cast<long>(n));
+        doc_.erase(static_cast<size_t>(start), n);
+        cursor_ = static_cast<size_t>(start);
+        syncSurrounding();
+    }
+    void forwardKeyImpl(const ForwardKeyEvent &) override {}
+    void updatePreeditImpl() override {}
+
+private:
+    static bool isCombining(char32_t c) { return c >= 0x0300 && c <= 0x036F; }
+    /// Tách dấu NFD cho các ký tự dùng trong kịch bản test (đủ cho họ chữ ê); ký tự khác giữ
+    /// nguyên. Thứ tự canonical: dấu ccc thấp trước (nặng U+0323 đứng trước mũ U+0302).
+    static std::u32string decomposeNfd(const std::u32string &s) {
+        std::u32string out;
+        for (char32_t c : s) {
+            switch (c) {
+            case U'ê':
+                out += U"e\u0302";
+                break;
+            case U'ệ':
+                out += U"e\u0323\u0302";
+                break;
+            case U'ế':
+                out += U"e\u0302\u0301";
+                break;
+            default:
+                out.push_back(c);
+            }
+        }
+        return out;
+    }
+    void syncSurrounding() {
+        surroundingText().setText(toUtf8(doc_), static_cast<unsigned int>(cursor_),
+                                  static_cast<unsigned int>(cursor_));
+        updateSurroundingText();
+    }
+    std::u32string doc_;
+    size_t cursor_ = 0;
+};
+
 /// Bảng chuỗi Telex chạy trên mọi hồ sơ có tài liệu — buffer cuối phải đúng từng byte.
 struct TelexCase {
     const char *keys;
@@ -594,6 +673,20 @@ int main() {
             << "phím modifier sinh deleteSurroundingText";
         // Segment vẫn sống: gõ tiếp biến "vie" thành "việt " đúng chỗ.
         expectType(ic.get(), "ejt ", "việt ");
+
+        // ============== nfd-store ==============
+        // App lưu NFD: gõ xuống cấp có kiểm soát (dấu áp một lần rồi segment lệch byte →
+        // reset) nhưng KHÔNG bao giờ xoá cụt dấu — bất biến nằm trong
+        // deleteSurroundingTextImpl của hồ sơ. Vết chạy: v,i,e commit ASCII; "e" thứ hai
+        // biến "vie"→"viê" (xoá "e" nguyên vẹn, chèn "ê" được app lưu tách dấu); "j" thấy
+        // đuôi NFD lệch segment NFC → reset, "j" xử lý mới; "t"+" " nối bình thường.
+        auto nfd = std::make_unique<NfdInputContext>(instance.inputContextManager());
+        nfd->focusIn();
+        instance.setCurrentInputMethod(nfd.get(), "pinakey", true);
+        sendKeys(nfd.get(), "vieejt ");
+        FCITX_ASSERT(nfd->text() == "vie\u0302jt ")
+            << "nfd-store: doc=\"" << nfd->text()
+            << "\", mong đợi \"vie\\u0302jt \" (xuống cấp xác định, không nát)";
 
         instance.exit();
     });
