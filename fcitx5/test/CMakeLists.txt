@@ -23,3 +23,8 @@ target_link_libraries(testpinakey_nounderline PRIVATE Fcitx5::Core)
 add_dependencies(testpinakey_nounderline pinakey)
 target_compile_definitions(testpinakey_nounderline PRIVATE ${PINAKEY_TEST_DEFS})
 add_test(NAME testpinakey_nounderline COMMAND testpinakey_nounderline)
+
+# Test 3: hàm tiện ích UTF-8 dùng chung của addon (không cần engine).
+add_executable(testutf8util testutf8util.cpp)
+target_link_libraries(testutf8util PRIVATE Fcitx5::Core)
+add_test(NAME testutf8util COMMAND testutf8util)

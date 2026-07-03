@@ -4,6 +4,8 @@
  */
 #include "pinakey.h"
 
+#include "utf8util.h"
+
 #include <fcitx-utils/capabilityflags.h>
 #include <fcitx-utils/key.h>
 #include <fcitx-utils/keysymgen.h>
@@ -417,16 +419,7 @@ void PinaKeyState::resetIfDocumentDiverged() {
     const std::string segment(segPtr);
     const std::string &text = ic_->surroundingText().text();
     const unsigned int cursor = ic_->surroundingText().cursor();
-    // `cursor` đếm theo ký tự Unicode → tính byte-offset để lấy phần văn bản ngay trước con trỏ.
-    size_t bytePos = 0;
-    for (unsigned int chars = 0; bytePos < text.size() && chars < cursor; ++chars) {
-        const unsigned char c = static_cast<unsigned char>(text[bytePos]);
-        bytePos += (c < 0x80)            ? 1
-                   : ((c >> 5) == 0x6)   ? 2
-                   : ((c >> 4) == 0xe)   ? 3
-                   : ((c >> 3) == 0x1e)  ? 4
-                                         : 1;
-    }
+    const size_t bytePos = pinakey::surroundingBytePosBeforeCursor(text, cursor);
     // UTF-8 tự đồng bộ: phần văn bản trước con trỏ (text[0..bytePos]) kết thúc bằng `segment`
     // (so byte) ⟺ đúng theo ký tự. So trực tiếp trên `text`, không cấp phát chuỗi con (hot path).
     const bool endsWithSegment =
@@ -451,16 +444,7 @@ bool PinaKeyState::surroundingEndsWithWordSpace() const {
     }
     const std::string &text = st.text();
     const unsigned int cursor = st.cursor();
-    // cursor đếm theo ký tự Unicode → đổi ra byte-offset (như resetIfDocumentDiverged).
-    size_t bytePos = 0;
-    for (unsigned int chars = 0; bytePos < text.size() && chars < cursor; ++chars) {
-        const unsigned char c = static_cast<unsigned char>(text[bytePos]);
-        bytePos += (c < 0x80)            ? 1
-                   : ((c >> 5) == 0x6)   ? 2
-                   : ((c >> 4) == 0xe)   ? 3
-                   : ((c >> 3) == 0x1e)  ? 4
-                                         : 1;
-    }
+    const size_t bytePos = pinakey::surroundingBytePosBeforeCursor(text, cursor);
     // Ký tự ngay trước con trỏ phải là MỘT dấu cách…
     if (bytePos < 2 || text[bytePos - 1] != ' ') {
         return false;
