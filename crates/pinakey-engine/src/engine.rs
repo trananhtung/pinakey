@@ -616,17 +616,16 @@ impl EngineCore {
         if is_modifier_keysym(key_val) {
             return (false, out);
         }
+        // #65: phím này tới engine nghĩa là addon KHÔNG tiêu thụ nó cho double-space → cửa sổ
+        // khép lại (commit sinh ra trong chính sự kiện này có thể mở lại ở commit_text).
+        // Kể cả phím tắt có thể đổi văn bản (Ctrl+V…) cũng khép cửa sổ.
+        self.double_space_armed = false;
         // Tổ hợp mang modifier điều khiển (Ctrl/Alt/Super/Hyper/Meta) là lệnh cho app
         // (Ctrl+A, Alt+Tab, Ctrl+BackSpace…), không phải ký tự nhập — cho đi qua nguyên vẹn,
         // không đụng buffer soạn dở. Shift/CapsLock vẫn là gõ chữ thường nên không chặn.
-        // Phím tắt có thể đổi văn bản (Ctrl+V…) → vẫn khép cửa sổ double-space.
         if !is_valid_state(state) {
-            self.double_space_armed = false;
             return (false, out);
         }
-        // #65: phím này tới engine nghĩa là addon KHÔNG tiêu thụ nó cho double-space → cửa sổ
-        // khép lại (commit sinh ra trong chính sự kiện này có thể mở lại ở commit_text).
-        self.double_space_armed = false;
         // #65: viết hoa đầu câu — có thể đổi key_val thành chữ hoa; chạy TRƯỚC luồng chính để
         // cả phím forward (space khi buffer rỗng) cũng đi qua máy trạng thái.
         let key_val = self.apply_sentence_capitalize(key_val, state);
