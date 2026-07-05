@@ -1747,7 +1747,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "pinakey-config"
-version = "1.1.0"
+version = "2.0.0"
 dependencies = [
  "dirs",
  "pinakey-core",
@@ -1757,7 +1757,7 @@ dependencies = [
 
 [[package]]
 name = "pinakey-core"
-version = "1.1.0"
+version = "2.0.0"
 dependencies = [
  "once_cell",
  "regex",
@@ -1765,7 +1765,7 @@ dependencies = [
 
 [[package]]
 name = "pinakey-emoji"
-version = "1.1.0"
+version = "2.0.0"
 dependencies = [
  "chrono",
  "serde",
@@ -1774,7 +1774,7 @@ dependencies = [
 
 [[package]]
 name = "pinakey-engine"
-version = "1.1.0"
+version = "2.0.0"
 dependencies = [
  "criterion",
  "pinakey-config",
@@ -1784,7 +1784,7 @@ dependencies = [
 
 [[package]]
 name = "pinakey-ffi"
-version = "1.1.0"
+version = "2.0.0"
 dependencies = [
  "pinakey-config",
  "pinakey-core",
@@ -1795,7 +1795,7 @@ dependencies = [
 
 [[package]]
 name = "pinakey-settings"
-version = "1.1.0"
+version = "2.0.0"
 dependencies = [
  "eframe",
  "pinakey-config",
