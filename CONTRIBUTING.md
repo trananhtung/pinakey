@@ -108,6 +108,15 @@ PINAKEY_E2E_DATA_HOME="$HOME/.local/share" bash tools/run-e2e.sh
 Thêm ca kiểm thử: sửa danh sách `CASES` trong `pinakey_e2e.py` (mỗi ca: nhãn, có SurroundingText?,
 chuỗi phím, chuỗi mong đợi).
 
+## Chẩn đoán surrounding text (#60)
+
+Để đo semantics `deleteSurroundingText` thật của một app (ví dụ omnibox Chromium khi autocomplete
+bôi chọn gợi ý), đặt env `PINAKEY_DEBUG_SURROUNDING=1` cho tiến trình fcitx5 rồi đọc log
+(`journalctl --user -f -u ...` hoặc chạy `fcitx5 -r` trong terminal). Mỗi lần gõ ở chế độ không
+gạch chân sẽ in `text/cursor/anchor/selection` và từng lời gọi `deleteSurroundingText(-n,n)` kèm
+chuỗi chèn — dữ liệu cần để viết heuristic sau này. **Mặc định tắt**, không đổi hành vi. Log ở mức
+`Info`; nếu không thấy, bảo đảm log level fcitx bao gồm Info.
+
 ## Phong cách phản hồi issue
 
 Cam kết của người duy trì với người báo lỗi (#73):
