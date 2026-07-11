@@ -73,6 +73,9 @@ private:
     // #60: có vùng chọn (cursor != anchor) trong surrounding text không — khi có, đường
     // replace phải nhường preedit vì offset của deleteSurroundingText không còn đáng tin.
     bool surroundingHasSelection() const;
+    // #60: in trạng thái surrounding text (text/cursor/anchor) khi PINAKEY_DEBUG_SURROUNDING=1 —
+    // no-op nếu tắt. `where` là nhãn điểm gọi để đối chiếu với thao tác thật lúc đo thủ công.
+    void debugLogSurrounding(const char *where) const;
     // Gõ không gạch chân cho app không có SurroundingText (terminal…) qua daemon uinput + ACK:
     // hoãn commit, bơm (N+1) Backspace, ĐẾM Backspace bơm-ngược quay về fcitx, chỉ commit chuỗi
     // mới sau khi xác nhận đã xoá đủ — triệt tiêu cuộc đua "commit trước khi xoá xong" (như

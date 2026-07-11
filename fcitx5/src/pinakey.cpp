@@ -9,6 +9,7 @@
 #include <fcitx-utils/capabilityflags.h>
 #include <fcitx-utils/key.h>
 #include <fcitx-utils/keysymgen.h>
+#include <fcitx-utils/log.h>
 #include <fcitx-utils/textformatflags.h>
 #include <fcitx/candidatelist.h>
 #include <fcitx/event.h>
@@ -45,6 +46,17 @@ constexpr uint32_t kPkModRelease = 1u << 30;
 /// Tên engine để lõi Rust nạp cấu hình `~/.config/pinakey/ibus-PinaKey.config.json` — dùng chung
 /// file cấu hình với frontend IBus trong giai đoạn chạy song song.
 constexpr char kConfigName[] = "PinaKey";
+
+/// #60: bật log chẩn đoán surrounding text bằng env `PINAKEY_DEBUG_SURROUNDING=1`. Đọc một lần
+/// rồi cache — MẶC ĐỊNH TẮT, không đụng hành vi hay hiệu năng đường nóng. Dùng cho phiên đo thủ
+/// công semantics `deleteSurroundingText` của app (Chromium omnibox…) trước khi viết heuristic.
+bool debugSurroundingEnabled() {
+    static const bool enabled = [] {
+        const char *e = std::getenv("PINAKEY_DEBUG_SURROUNDING");
+        return e && e[0] == '1';
+    }();
+    return enabled;
+}
 
 /// Client tới daemon uinput (issue #28) — một kết nối dùng chung cho cả tiến trình addon. Gửi số
 /// lượng Backspace cần bơm cho các app không hỗ trợ SurroundingText. Nếu không kết nối được
@@ -229,6 +241,7 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
     if (pk_engine_no_underline(core_) &&
         ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
         !pk_engine_surrounding_text_unreliable(core_)) {
+        debugLogSurrounding("replace-branch"); // #60: đo trạng thái trước khi quyết định.
         // #60: đang có vùng chọn (autocomplete bôi chọn gợi ý, hoặc người dùng bôi chọn rồi
         // gõ) → app có thể áp deleteSurroundingText vào vùng chọn thay vì trước con trỏ
         // (vùng chết đã quan sát ở Chromium) → xoá nhầm. Nhường preedit tới khi hết selection.
@@ -473,13 +486,36 @@ bool PinaKeyState::surroundingHasSelection() const {
     return st.cursor() != st.anchor();
 }
 
+/// #60: chẩn đoán — in surrounding text (text/cursor/anchor) tại điểm gọi `where`. Chỉ chạy khi
+/// PINAKEY_DEBUG_SURROUNDING=1; tắt thì trả về ngay (không đọc surrounding text, không cấp phát).
+void PinaKeyState::debugLogSurrounding(const char *where) const {
+    if (!debugSurroundingEnabled()) {
+        return;
+    }
+    const auto &st = ic_->surroundingText();
+    if (!st.isValid()) {
+        FCITX_INFO() << "[pinakey #60] " << where << " surrounding=INVALID";
+        return;
+    }
+    FCITX_INFO() << "[pinakey #60] " << where << " cursor=" << st.cursor()
+                 << " anchor=" << st.anchor() << " selection=" << (st.cursor() != st.anchor())
+                 << " len=" << st.text().size() << " text=\"" << st.text() << "\"";
+}
+
 /// Áp lệnh thay thế: xoá N ký tự trước con trỏ rồi commit chuỗi mới. Không hiện preedit.
 void PinaKeyState::applyReplaceResult() {
     const uint32_t del = pk_engine_replace_delete(core_);
+    const char *ins = pk_engine_replace_insert(core_);
+    if (debugSurroundingEnabled()) {
+        // #60: kết quả từng lời gọi — số ký tự yêu cầu xoá + chuỗi chèn. Đối chiếu với thay đổi
+        // thật trên màn hình để đo semantics deleteSurroundingText của app khi có/không selection.
+        FCITX_INFO() << "[pinakey #60] applyReplace deleteSurroundingText(-" << del << "," << del
+                     << ") insert=\"" << (ins ? ins : "") << "\"";
+    }
     if (del > 0) {
         ic_->deleteSurroundingText(-static_cast<int>(del), del);
     }
-    if (const char *ins = pk_engine_replace_insert(core_); ins && ins[0] != '\0') {
+    if (ins && ins[0] != '\0') {
         ic_->commitString(ins);
     }
     // Bảo đảm không còn preedit sót lại khi chuyển từ chế độ preedit sang replace.
