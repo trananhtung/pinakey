@@ -717,7 +717,7 @@ pub unsafe extern "C" fn pk_emoji_record_use(emoji: *const c_char) {
     if let Ok(mut r) = emoji_recent().lock() {
         r.record(e);
         if let Err(err) = r.save_to_file(&pinakey_config::get_emoji_recent_path()) {
-            eprintln!("pinakey: không ghi được lịch sử emoji ({err})");
+            pinakey_config::warn_stderr!("pinakey: không ghi được lịch sử emoji ({err})");
         }
     }
 }
