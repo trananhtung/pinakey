@@ -34,6 +34,8 @@ extern "C" {
 #include <pinakey_ffi.h>
 }
 
+#include "filewatch.h"
+
 namespace fcitx {
 
 class PinaKeyEngine;
@@ -146,10 +148,12 @@ private:
     // #20: theo dõi file macro/dict để nạp lại khi sửa, không cần khởi động lại.
     std::unique_ptr<EventSourceTime> reloadTimer_;
     std::vector<std::string> reloadFiles_;
-    std::vector<uint64_t> reloadMtimes_;
+    // #90: fingerprint (mtime ns + inode + size) thay vì mtime giây — không bỏ sót khi file
+    // được ghi nhiều lần trong cùng một giây.
+    std::vector<pinakey::FileFingerprint> reloadFingerprints_;
     // #69: theo dõi cả file config — fallback khi GUI không gọi được D-Bus (áp trong ≤2s).
     std::string configFile_;
-    uint64_t configMtime_ = 0;
+    pinakey::FileFingerprint configFingerprint_;
 
     // Menu khu vực trạng thái: chọn kiểu gõ + bảng mã (issue #12/#17).
     std::unique_ptr<SimpleAction> imRootAction_;

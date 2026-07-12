@@ -28,3 +28,8 @@ add_test(NAME testpinakey_nounderline COMMAND testpinakey_nounderline)
 add_executable(testutf8util testutf8util.cpp)
 target_link_libraries(testutf8util PRIVATE Fcitx5::Core)
 add_test(NAME testutf8util COMMAND testutf8util)
+
+# Test 4: fingerprint file cho watcher live-reload (#90, không cần engine).
+add_executable(testfilewatch testfilewatch.cpp)
+target_link_libraries(testfilewatch PRIVATE Fcitx5::Core)
+add_test(NAME testfilewatch COMMAND testfilewatch)
