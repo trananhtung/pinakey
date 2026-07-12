@@ -2,21 +2,24 @@
 # Build + cài addon fcitx5 của PinaKey TỪ NGUỒN (cho người tự build / nhà phát triển).
 # Người dùng cuối nên cài gói .deb dựng sẵn: `bash tools/install-deb.sh` (xem USAGE.md).
 #
-#   bash tools/install-fcitx5.sh [--clean] [--add-im | --no-add-im]
+#   bash tools/install-fcitx5.sh [--clean] [--uinput] [--add-im | --no-add-im]
 #     --clean       xoá fcitx5/build trước khi cấu hình lại (khi cache CMake hỏng)
+#     --uinput      build kèm daemon uinput (-DPINAKEY_BUILD_UINPUT_SERVER=ON, xem USAGE.md mục 9)
 #     --add-im      tự thêm PinaKey vào cấu hình fcitx5 (không hỏi)
 #     --no-add-im   không tự thêm (tự mở configtool)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CLEAN=0
+UINPUT=0
 ADD_IM=ask
 for arg in "$@"; do
   case "$arg" in
     --clean) CLEAN=1 ;;
+    --uinput) UINPUT=1 ;;
     --add-im) ADD_IM=yes ;;
     --no-add-im) ADD_IM=no ;;
-    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
+    -h|--help) sed -e '1d' -e '/^[^#]/,$d' "$0"; exit 0 ;;
     *) echo "Tham số lạ: $arg (xem --help)"; exit 1 ;;
   esac
 done
@@ -63,7 +66,13 @@ fi
 # ---------------------------------------------------------------------------
 [ "$CLEAN" = 1 ] && { echo "==> Xoá fcitx5/build (--clean)…"; rm -rf fcitx5/build; }
 echo "==> Cấu hình + build…"
-cmake -S fcitx5 -B fcitx5/build -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release
+CMAKE_ARGS=(-DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release)
+# Chỉ ép ON khi có --uinput; không có cờ thì giữ nguyên giá trị trong cache CMake
+# (tránh âm thầm tắt daemon của người đã tự cấu hình ON trước đó).
+if [ "$UINPUT" = 1 ]; then
+  CMAKE_ARGS+=(-DPINAKEY_BUILD_UINPUT_SERVER=ON)
+fi
+cmake -S fcitx5 -B fcitx5/build "${CMAKE_ARGS[@]}"
 cmake --build fcitx5/build
 
 # ---------------------------------------------------------------------------

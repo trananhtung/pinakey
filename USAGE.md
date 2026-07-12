@@ -189,12 +189,14 @@ Bấm vào biểu tượng PinaKey trên khay (hoặc menu trạng thái của f
 
 Cần **3 bước** (thiếu bước nào cũng không có tác dụng):
 
-1. **Build kèm daemon** (mặc định không build):
+1. **Build kèm daemon** (mặc định không build — phải có cờ `--uinput`):
    ```sh
-   bash tools/install-fcitx5.sh --clean   # cấu hình lại; xem thêm bên dưới
+   bash tools/install-fcitx5.sh --clean --uinput
    # hoặc thủ công:
    cmake -S fcitx5 -B fcitx5/build -DPINAKEY_BUILD_UINPUT_SERVER=ON && cmake --build fcitx5/build && sudo cmake --install fcitx5/build
    ```
+   > Lưu ý: chạy `install-fcitx5.sh --clean` **không có** `--uinput` sẽ cấu hình lại về mặc định
+   > (không daemon) — muốn giữ daemon thì lần nào build lại cũng thêm `--uinput`.
 2. **Bật daemon** (chạy dưới quyền bạn, cấp quyền /dev/uinput):
    ```sh
    sudo udevadm control --reload && sudo udevadm trigger
