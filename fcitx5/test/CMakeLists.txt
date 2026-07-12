@@ -49,7 +49,14 @@ add_executable(testpeerauth testpeerauth.cpp)
 target_link_libraries(testpeerauth PRIVATE Fcitx5::Core)
 add_test(NAME testpeerauth COMMAND testpeerauth)
 
-# Test 8: bind socket server — thư mục 0700, socket 0600, dọn socket cũ (#72).
+# Test 8: tích hợp uinput+ACK qua fcitx5 thật + daemon giả lập — vòng ACK, timeout replay (#96).
+add_executable(testuinputack testuinputack.cpp)
+target_link_libraries(testuinputack PRIVATE Fcitx5::Core)
+add_dependencies(testuinputack pinakey)
+target_compile_definitions(testuinputack PRIVATE ${PINAKEY_TEST_DEFS})
+add_test(NAME testuinputack COMMAND testuinputack)
+
+# Test 9: bind socket server — thư mục 0700, socket 0600, dọn socket cũ (#72).
 add_executable(testserversocket testserversocket.cpp)
 target_link_libraries(testserversocket PRIVATE Fcitx5::Core)
 add_test(NAME testserversocket COMMAND testserversocket)

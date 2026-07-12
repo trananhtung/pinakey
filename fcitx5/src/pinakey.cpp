@@ -127,9 +127,15 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
             deleting_ = false;
             expectedBackspaces_ = 0;
             currentBackspaceCount_ = 0;
-            // KHÔNG return → rơi xuống xử lý phím bình thường bên dưới.
-        } else {
-            // Gõ nhanh hợp lệ khi đang xoá: đệm ký tự thường để replay sau, nuốt phím lúc này.
+            // #96: bơm các phím đã đệm TRƯỚC khi xử lý phím hiện tại — bỏ qua thì phím mới
+            // chen lên trước (đảo thứ tự) còn phím cũ kẹt chờ một chuỗi ACK không liên quan
+            // trong tương lai (chèn sai ngữ cảnh) hoặc mất hẳn tới reset().
+            replayBufferedKeys();
+            // KHÔNG return (trừ khi replay lại mở chuỗi xoá mới) → xử lý phím hiện tại bên dưới.
+        }
+        if (deleting_) {
+            // Chưa timeout — hoặc replay ở trên vừa mở một chuỗi xoá mới: đệm ký tự thường
+            // để replay sau, nuốt phím lúc này.
             const std::string u = Key::keySymToUTF8(static_cast<KeySym>(s));
             if (!u.empty() && bufferedKeys_.size() < 32) {
                 bufferedKeys_.emplace_back(s, static_cast<uint32_t>(keyEvent.rawKey().states()));
