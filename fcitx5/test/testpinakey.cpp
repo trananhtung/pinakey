@@ -12,7 +12,9 @@
 #include <fcitx-utils/log.h>
 #include <fcitx-utils/testing.h>
 #include <fcitx/addonmanager.h>
+#include <fcitx/candidatelist.h>
 #include <fcitx/inputcontext.h>
+#include <fcitx/inputpanel.h>
 #include <fcitx/inputcontextmanager.h>
 #include <fcitx/inputmethodgroup.h>
 #include <fcitx/inputmethodmanager.h>
@@ -161,6 +163,23 @@ int main() {
         testfrontend->call<ITestFrontend::pushCommitExpectation>("\xF0\x9F\x98\x80"); // 😀
         sendKey(testfrontend, uuid, "colon");
         sendKey(testfrontend, uuid, "2");
+
+        // 15b) #97 chọn bằng phím số phải theo TRANG HIỆN TẠI: query nhiều kết quả (>9),
+        //      lật sang trang 2 (như bấm nút mũi tên trên panel bằng chuột) rồi bấm '1' —
+        //      phải commit đúng emoji đang mang nhãn "1." trên màn hình, không phải mục 1
+        //      của trang đầu.
+        sendKey(testfrontend, uuid, "colon");
+        typeAscii(testfrontend, uuid, "face");
+        {
+            auto cl = ic->inputPanel().candidateList();
+            FCITX_ASSERT(cl && cl->toPageable() && cl->toPageable()->hasNext())
+                << "query ':face' phải có nhiều hơn 1 trang candidate";
+            cl->toPageable()->next();
+            const std::string label = cl->candidate(0).text().toString(); // "1. <emoji>"
+            FCITX_ASSERT(label.size() > 3 && label[0] == '1');
+            testfrontend->call<ITestFrontend::pushCommitExpectation>(label.substr(3));
+        }
+        sendKey(testfrontend, uuid, "1");
 
         // 16) #69 áp config tức thì: ghi config VNI rồi gọi reloadConfig() (đúng đường mà
         //     D-Bus ReloadAddonConfig của fcitx5 gọi vào) → gõ VNI ăn ngay trên input context

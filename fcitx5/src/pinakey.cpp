@@ -870,8 +870,11 @@ bool PinaKeyState::handleEmojiKey(KeyEvent &keyEvent) {
 
     if (!hexMode && sym >= FcitxKey_1 && sym <= FcitxKey_9) {
         const int idx = static_cast<int>(sym - FcitxKey_1);
-        if (idx < static_cast<int>(emojiCandidates_.size())) {
-            emojiSelect(idx);
+        // #97: nhãn 1..9 là vị trí TRONG TRANG hiện tại — chọn qua candidate list của panel
+        // (candidate(i) là mục thứ i của trang đang xem, như click), vì người dùng có thể đã
+        // lật trang bằng chuột; chỉ số tuyệt đối vào emojiCandidates_ chỉ đúng ở trang đầu.
+        if (auto cl = ic_->inputPanel().candidateList(); cl && idx < cl->size()) {
+            cl->candidate(idx).select(ic_);
             keyEvent.filterAndAccept();
             return true;
         }
