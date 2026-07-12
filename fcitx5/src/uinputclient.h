@@ -31,10 +31,14 @@ class UinputClient {
 public:
     using Clock = std::chrono::steady_clock;
 
+    // #123: helloTimeoutMs tiêm được để test không phụ thuộc lịch thread của máy chạy
+    // (CI quá tải làm hello tới muộn hơn cửa sổ mặc định 200ms → đỏ giả).
     explicit UinputClient(std::string sockPath,
                           Clock::duration retryInterval = std::chrono::seconds(5),
-                          std::function<Clock::time_point()> now = [] { return Clock::now(); })
-        : sockPath_(std::move(sockPath)), retryInterval_(retryInterval), now_(std::move(now)) {}
+                          std::function<Clock::time_point()> now = [] { return Clock::now(); },
+                          int helloTimeoutMs = kDefaultHelloTimeoutMs)
+        : sockPath_(std::move(sockPath)), retryInterval_(retryInterval), now_(std::move(now)),
+          helloTimeoutMs_(helloTimeoutMs) {}
     ~UinputClient() {
         if (fd_ >= 0) {
             ::close(fd_);
@@ -85,9 +89,11 @@ public:
         return false;
     }
 
+    // Chờ hello sau connect (1 lần mỗi cửa sổ retry).
+    static constexpr int kDefaultHelloTimeoutMs = 200;
+
 private:
-    static constexpr int kHelloTimeoutMs = 200; // chờ hello sau connect (1 lần mỗi cửa sổ retry)
-    static constexpr int kSendWaitMs = 50;      // chờ POLLOUT khi buffer đầy (EAGAIN)
+    static constexpr int kSendWaitMs = 50; // chờ POLLOUT khi buffer đầy (EAGAIN)
 
     bool trySend(int n) {
         return send(fd_, &n, sizeof(n), MSG_NOSIGNAL | MSG_DONTWAIT) ==
@@ -117,7 +123,7 @@ private:
         // có trong kHelloTimeoutMs → thất bại (tính vào throttle ở available()).
         struct pollfd p{fd, POLLIN, 0};
         char hello = 0;
-        if (poll(&p, 1, kHelloTimeoutMs) <= 0 || recv(fd, &hello, 1, 0) != 1 ||
+        if (poll(&p, 1, helloTimeoutMs_) <= 0 || recv(fd, &hello, 1, 0) != 1 ||
             hello != kUinputHello) {
             ::close(fd);
             return;
@@ -128,6 +134,7 @@ private:
     std::string sockPath_;
     Clock::duration retryInterval_;
     std::function<Clock::time_point()> now_;
+    int helloTimeoutMs_ = kDefaultHelloTimeoutMs;
     int fd_ = -1;
     bool failedOnce_ = false;
     Clock::time_point lastAttempt_{};
