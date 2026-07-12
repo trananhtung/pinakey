@@ -42,9 +42,13 @@ int main() {
     std::memcpy(addr.sun_path, path.c_str(), path.size());
     FCITX_ASSERT(connect(c, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) == 0);
     ::close(c);
+
+    // Daemon khác ĐANG SỐNG trên cùng đường → không được cướp socket (unlink) của nó.
+    int second = bindUinputServerSocket(path);
+    FCITX_ASSERT(second == -1);
     ::close(fd);
 
-    // Daemon trước thoát bẩn để lại socket cũ → bind lại phải thành công (unlink stale).
+    // Daemon trước thoát bẩn để lại socket cũ (không ai listen) → bind lại phải thành công.
     fd = bindUinputServerSocket(path);
     FCITX_ASSERT(fd >= 0);
     ::close(fd);

@@ -16,9 +16,23 @@
 
 namespace pinakey {
 
+/// Socket tại `path` còn daemon nào SỐNG đang lắng nghe không — probe bằng connect().
+/// ENOENT/ECONNREFUSED = chết/không tồn tại; connect được = còn sống.
+inline bool socketAlive(const struct sockaddr_un &addr) {
+    int probe = socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0);
+    if (probe < 0) {
+        return false;
+    }
+    const bool alive =
+        connect(probe, reinterpret_cast<const struct sockaddr *>(&addr), sizeof(addr)) == 0;
+    close(probe);
+    return alive;
+}
+
 /// Tạo socket SEQPACKET lắng nghe tại `sockPath` với thuộc tính bảo mật của #72:
 /// thư mục cha 0700 (tạo nếu chưa có, siết lại nếu đã có), socket 0600 ngay từ lúc sinh
-/// (qua umask — không có cửa sổ chmod), dọn socket cũ nếu daemon trước thoát bẩn.
+/// (qua umask — không có cửa sổ chmod), dọn socket cũ CHỈ khi daemon trước đã chết —
+/// daemon khác còn sống thì trả -1/EADDRINUSE, không cướp listener của nó.
 /// Trả về fd (non-blocking, cloexec) hoặc -1 nếu thất bại.
 inline int bindUinputServerSocket(const std::string &sockPath) {
     struct sockaddr_un addr {};
@@ -26,11 +40,18 @@ inline int bindUinputServerSocket(const std::string &sockPath) {
         errno = ENAMETOOLONG;
         return -1;
     }
+    addr.sun_family = AF_UNIX;
+    std::memcpy(addr.sun_path, sockPath.c_str(), sockPath.size());
+
     const std::string dir = sockPath.substr(0, sockPath.rfind('/'));
     if (mkdir(dir.c_str(), 0700) != 0 && errno != EEXIST) {
         return -1;
     }
     if (chmod(dir.c_str(), 0700) != 0) { // đã tồn tại (systemd RuntimeDirectory…) → siết lại
+        return -1;
+    }
+    if (socketAlive(addr)) {
+        errno = EADDRINUSE;
         return -1;
     }
     unlink(sockPath.c_str());
@@ -39,8 +60,6 @@ inline int bindUinputServerSocket(const std::string &sockPath) {
     if (fd < 0) {
         return -1;
     }
-    addr.sun_family = AF_UNIX;
-    std::memcpy(addr.sun_path, sockPath.c_str(), sockPath.size());
     const mode_t oldUmask = umask(0177); // socket sinh ra đã 0600
     const int bindRet = bind(fd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr));
     umask(oldUmask);

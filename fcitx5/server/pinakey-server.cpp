@@ -147,6 +147,17 @@ int main(int argc, char *argv[]) {
         std::fprintf(stderr, "pinakey-server: không tìm thấy UID cho user %s\n", targetUser.c_str());
         return 1;
     }
+    // #72: mô hình socket filesystem 0600 yêu cầu daemon chạy CÙNG user với fcitx5 — thư mục
+    // runtime 0700 của user khác không truy cập được. `-u <user khác>` (di sản thời abstract
+    // socket) do đó không thể hoạt động: từ chối sớm với thông báo rõ thay vì bind sai chỗ.
+    if (expectedUid != getuid()) {
+        std::fprintf(stderr,
+                     "pinakey-server: -u %s (uid %u) khác user đang chạy (uid %u) — không hỗ trợ: "
+                     "socket 0600 trong $XDG_RUNTIME_DIR yêu cầu daemon chạy cùng user với fcitx5 "
+                     "(systemctl --user enable --now pinakey-uinput-server)\n",
+                     targetUser.c_str(), expectedUid, getuid());
+        return 1;
+    }
     std::fprintf(stderr, "pinakey-server: phục vụ user %s (uid %u)\n", targetUser.c_str(),
                  expectedUid);
 
