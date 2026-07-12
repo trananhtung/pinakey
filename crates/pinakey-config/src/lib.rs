@@ -7,6 +7,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// Cảnh báo ra stderr nhưng NUỐT lỗi ghi (#99): `eprintln!` panic khi ghi stderr thất bại,
+/// mà profile release đặt `panic = "abort"` và staticlib nhúng vào tiến trình fcitx5 —
+/// một lời cảnh báo không được phép giết cả bộ gõ.
+#[macro_export]
+macro_rules! warn_stderr {
+    ($($arg:tt)*) => {{
+        use ::std::io::Write;
+        let _ = writeln!(::std::io::stderr(), $($arg)*);
+    }};
+}
+
 /// Cấu hình engine được lưu trữ (`Config` trong Go). Tên các trường JSON khớp chính xác với tên
 /// trường của struct Go, nên các file cấu hình cũ vẫn tương thích.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,7 +147,7 @@ fn load_config_from(path: &Path) -> Config {
             // NotFound = bình thường (lần chạy đầu). Lỗi đọc thật (quyền, I/O...) thì cảnh báo —
             // nếu nuốt im lặng, save_config sau sẽ ghi đè mất config mà người dùng không hay.
             if e.kind() != std::io::ErrorKind::NotFound {
-                eprintln!("pinakey: không đọc được config ({e}); dùng mặc định");
+                warn_stderr!("pinakey: không đọc được config ({e}); dùng mặc định");
             }
             return default_cfg();
         }
@@ -146,11 +157,11 @@ fn load_config_from(path: &Path) -> Config {
         Err(e) => {
             let backup = path.with_extension("json.corrupt");
             if let Err(re) = std::fs::rename(path, &backup) {
-                eprintln!(
+                warn_stderr!(
                     "pinakey: config hỏng ({e}) nhưng không backup được ({re}); giữ nguyên file, dùng mặc định"
                 );
             } else {
-                eprintln!(
+                warn_stderr!(
                     "pinakey: config hỏng ({e}); đã backup sang {} và dùng mặc định",
                     backup.display()
                 );

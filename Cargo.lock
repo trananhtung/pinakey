@@ -1750,6 +1750,7 @@ name = "pinakey-config"
 version = "2.0.0"
 dependencies = [
  "dirs",
+ "libc",
  "pinakey-core",
  "serde",
  "serde_json",

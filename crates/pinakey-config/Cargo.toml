@@ -13,3 +13,6 @@ dirs = "5"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+libc = "0.2"
