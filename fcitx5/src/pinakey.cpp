@@ -205,8 +205,10 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
     // Backspace + commit có ĐỒNG BỘ ACK (xem startUinputReplace/handleUinputAck).
     if (useUinput()) {
         const bool handled = pk_engine_process_key_replace(core_, sym, state);
-        startUinputReplace();
-        if (handled) {
+        // #106: send thất bại → KHÔNG nuốt phím — để nó đi tiếp tới app (gõ mộc nhất quán
+        // với việc lõi đã reset), thay vì phím biến mất im lặng.
+        const bool sent = startUinputReplace();
+        if (handled && sent) {
             keyEvent.filterAndAccept();
         }
         return;
@@ -255,7 +257,7 @@ bool PinaKeyState::useUinput() const {
 /// Khác đường cũ (#28) — không commit ngay để tránh cuộc đua "commit tới trước khi Backspace
 /// kịp xoá". Chuỗi mới được cất ở `pendingCommit_` và chỉ commit trong handleUinputAck khi đã
 /// đếm đủ Backspace bơm-ngược (xác nhận app xoá xong).
-void PinaKeyState::startUinputReplace() {
+bool PinaKeyState::startUinputReplace() {
     const uint32_t del = pk_engine_replace_delete(core_);
     const char *ins = pk_engine_replace_insert(core_);
     const std::string insert = (ins && ins[0] != '\0') ? std::string(ins) : std::string();
@@ -273,7 +275,7 @@ void PinaKeyState::startUinputReplace() {
         if (!insert.empty()) {
             ic_->commitString(insert);
         }
-        return;
+        return true;
     }
 
     // Cần xoá `del` ký tự: bơm (del+1) Backspace. `del` cái đầu được để-đi-tiếp để xoá thật;
@@ -284,13 +286,14 @@ void PinaKeyState::startUinputReplace() {
         // Không xoá được chữ cũ → bỏ biến đổi lần này (văn bản giữ nguyên như gõ mộc) và
         // reset lõi để trạng thái engine không lệch với tài liệu.
         pk_engine_reset(core_);
-        return;
+        return false;
     }
     pendingCommit_ = insert;
     currentBackspaceCount_ = 0;
     expectedBackspaces_ = static_cast<int>(del) + 1;
     deleting_ = true;
     deletingSince_ = std::chrono::steady_clock::now();
+    return true;
 }
 
 /// Xử lý một phím Backspace bơm-ngược (từ daemon uinput) trong lúc `deleting_`.
