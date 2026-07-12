@@ -39,9 +39,13 @@ jobs:
 
       - name: Xác định tag
         id: tag
+        # Nội dung do người dùng kiểm soát (tên tag/input) đi qua env, KHÔNG nội suy thẳng vào
+        # shell — tag tên "v$(lệnh)" sẽ được thực thi trước cả bước kiểm tra (script injection).
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "name=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "name=$INPUT_TAG" >> "$GITHUB_OUTPUT"
           else
             echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
@@ -50,8 +54,10 @@ jobs:
       # Cargo.toml (nguồn version duy nhất; version của .deb do CMake đọc thẳng từ đây, còn tên
       # release lấy từ tag — lệch nhau là xuất bản "vX.Y.Z" đính kèm gói version cũ).
       - name: Kiểm tag khớp version Cargo.toml
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
         run: |
-          tag="${{ steps.tag.outputs.name }}"
+          tag="$TAG"
           # Trích version cùng cách với tools/check-versions.sh (chịu được khoảng trắng/comment).
           cargo_ver="$(grep -m1 -oP '^\s*version\s*=\s*"\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)"
           # So NGUYÊN TAG với "v<version>" — workflow_dispatch có thể nhập tag thiếu tiền tố v.
