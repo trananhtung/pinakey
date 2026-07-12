@@ -325,7 +325,11 @@ void PinaKeyState::replayBufferedKeys() {
         const auto [s, st] = bufferedKeys_.front();
         bufferedKeys_.erase(bufferedKeys_.begin());
         pk_engine_process_key_replace(core_, s, st);
-        startUinputReplace();
+        if (!startUinputReplace()) {
+            // #106: phím này đã bị NUỐT từ lúc đệm (filterAndAccept) — không gửi được lệnh
+            // xoá thì commit nguyên văn ký tự (gõ mộc, lõi đã reset) để nó không mất im lặng.
+            ic_->commitString(Key::keySymToUTF8(static_cast<KeySym>(s)));
+        }
     }
 }
 
