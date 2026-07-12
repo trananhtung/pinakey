@@ -52,7 +52,8 @@ jobs:
       - name: Kiểm tag khớp version Cargo.toml
         run: |
           tag="${{ steps.tag.outputs.name }}"
-          cargo_ver="$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')"
+          # Trích version cùng cách với tools/check-versions.sh (chịu được khoảng trắng/comment).
+          cargo_ver="$(grep -m1 -oP '^\s*version\s*=\s*"\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)"
           # So NGUYÊN TAG với "v<version>" — workflow_dispatch có thể nhập tag thiếu tiền tố v.
           if [ "$tag" != "v$cargo_ver" ]; then
             echo "::error::Tag '$tag' không khớp version trong Cargo.toml ('$cargo_ver'). Bump workspace.package.version (và PKGBUILD/flake.nix theo tools/check-versions.sh) rồi tag lại."
