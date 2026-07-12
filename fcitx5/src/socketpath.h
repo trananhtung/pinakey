@@ -12,6 +12,11 @@
 
 namespace fcitx::pinakey {
 
+/// #105: byte hello daemon gửi ngay sau khi CHẤP NHẬN client (auth OK). Với AF_UNIX,
+/// connect() thành công ngay khi listener còn chỗ backlog — chưa nói lên daemon có nhận
+/// mình hay không; client chỉ được coi kết nối là dùng được sau khi nhận byte này.
+inline constexpr char kUinputHello = 'P';
+
 /// #72: socket FILESYSTEM `$XDG_RUNTIME_DIR/pinakey/uinput.sock` (thư mục 0700, socket 0600)
 /// thay cho abstract namespace — abstract không có quyền filesystem nên tiến trình khác user
 /// cũng *thử* kết nối được. Không có env thì fallback `/run/user/<uid>` theo chuẩn systemd.

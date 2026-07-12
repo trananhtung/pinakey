@@ -278,12 +278,19 @@ void PinaKeyState::startUinputReplace() {
 
     // Cần xoá `del` ký tự: bơm (del+1) Backspace. `del` cái đầu được để-đi-tiếp để xoá thật;
     // cái thứ (del+1) là "trigger" — khi nó quay về nghĩa là đã xoá xong → commit + nuốt trigger.
+    // #106: CHỈ vào trạng thái chờ ACK khi thông điệp đã thật sự đi — send thất bại mà vẫn chờ
+    // thì treo 500ms rồi commit đè chữ cũ chưa xoá (đúp chữ im lặng).
+    if (!uinputClient().sendBackspaces(static_cast<int>(del) + 1)) {
+        // Không xoá được chữ cũ → bỏ biến đổi lần này (văn bản giữ nguyên như gõ mộc) và
+        // reset lõi để trạng thái engine không lệch với tài liệu.
+        pk_engine_reset(core_);
+        return;
+    }
     pendingCommit_ = insert;
     currentBackspaceCount_ = 0;
     expectedBackspaces_ = static_cast<int>(del) + 1;
     deleting_ = true;
     deletingSince_ = std::chrono::steady_clock::now();
-    uinputClient().sendBackspaces(expectedBackspaces_);
 }
 
 /// Xử lý một phím Backspace bơm-ngược (từ daemon uinput) trong lúc `deleting_`.

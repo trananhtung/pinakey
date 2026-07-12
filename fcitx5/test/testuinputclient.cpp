@@ -1,16 +1,22 @@
 /*
- * Test client uinput (issue #91): lần connect đầu thất bại KHÔNG được khoá vĩnh viễn —
- * client phải thử kết nối lại (có throttle) khi daemon xuất hiện/restart muộn.
+ * Test client uinput (issue #91/#105/#106):
+ * - #91: lần connect đầu thất bại không khoá vĩnh viễn — retry có throttle.
+ * - #105: connect() AF_UNIX thành công ngay khi còn backlog — client chỉ được coi là
+ *   available sau byte hello daemon gửi khi CHẤP NHẬN (auth OK); send-fail cũng tính
+ *   vào throttle (không connect mỗi phím gõ khi daemon từ chối).
+ * - #106: sendBackspaces trả bool — caller không chờ ACK ma khi send thất bại.
  * GPL-3.0-or-later.
  */
+#include "../src/socketpath.h"
 #include "../src/uinputclient.h"
 
 #include <fcitx-utils/log.h>
 
 #include <chrono>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <string>
+#include <thread>
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -30,6 +36,26 @@ int listenOn(const std::string &path) {
     FCITX_ASSERT(bind(fd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) == 0);
     FCITX_ASSERT(listen(fd, 1) == 0);
     return fd;
+}
+
+// Daemon CHẤP NHẬN: accept rồi gửi hello (#105). Chạy trong thread vì accept chặn.
+std::thread acceptHello(int server, int *connOut) {
+    return std::thread([server, connOut] {
+        int conn = accept(server, nullptr, nullptr);
+        FCITX_ASSERT(conn >= 0);
+        const char hello = fcitx::pinakey::kUinputHello;
+        FCITX_ASSERT(send(conn, &hello, 1, MSG_NOSIGNAL) == 1);
+        *connOut = conn;
+    });
+}
+
+// Daemon TỪ CHỐI (auth fail): accept rồi đóng ngay, không hello — như pinakey-server.
+std::thread acceptReject(int server) {
+    return std::thread([server] {
+        int conn = accept(server, nullptr, nullptr);
+        FCITX_ASSERT(conn >= 0);
+        ::close(conn);
+    });
 }
 
 } // namespace
@@ -54,35 +80,67 @@ int main() {
     int server = listenOn(sockName);
     FCITX_ASSERT(!client.available());
 
-    // Hết cửa sổ throttle → phải kết nối lại được (lõi issue #91: trước đây
-    // triedAndFailed_ khoá vĩnh viễn, chỉ restart fcitx5 mới hồi phục).
+    // Hết throttle + daemon CHẤP NHẬN (hello) → available (lõi #91).
     now += 6s;
-    FCITX_ASSERT(client.available());
-
-    // Kết nối dùng được thật: server nhận đúng số Backspace.
-    int conn = accept(server, nullptr, nullptr);
+    int conn = -1;
+    {
+        auto t = acceptHello(server, &conn);
+        FCITX_ASSERT(client.available());
+        t.join();
+    }
     FCITX_ASSERT(conn >= 0);
-    client.sendBackspaces(3);
+
+    // Kết nối dùng được thật: send trả true và server nhận đúng số Backspace (#106).
+    FCITX_ASSERT(client.sendBackspaces(3));
     int n = 0;
     FCITX_ASSERT(recv(conn, &n, sizeof(n), 0) == static_cast<ssize_t>(sizeof(n)));
     FCITX_ASSERT(n == 3);
 
-    // Daemon "chết" (đóng cả hai đầu) → send thất bại → client tự nhả fd.
+    // Daemon "chết": send phải trả FALSE (caller không chờ ACK ma, #106) và thất bại này
+    // TÍNH VÀO THROTTLE (#105) — available() ngay sau đó không connect lại.
     ::close(conn);
     ::close(server);
-    client.sendBackspaces(1);
-    client.sendBackspaces(1);
+    bool sent = client.sendBackspaces(1);
+    if (sent) { // send đầu có thể lọt vào buffer trước khi kernel biết peer đóng
+        sent = client.sendBackspaces(1);
+    }
+    FCITX_ASSERT(!sent);
+    FCITX_ASSERT(!client.available()); // trong cửa sổ throttle → không thử lại
 
-    // Daemon restart → client phải hồi phục, không cần restart tiến trình.
+    // Daemon TỪ CHỐI sau accept (fcitx5 ngoài allowlist, #105): connect được nhưng không
+    // hello → available phải FALSE, và thất bại tính vào throttle.
     server = listenOn(sockName);
     now += 6s;
-    FCITX_ASSERT(client.available());
-    conn = accept(server, nullptr, nullptr);
-    FCITX_ASSERT(conn >= 0);
-    client.sendBackspaces(2);
+    {
+        auto t = acceptReject(server);
+        FCITX_ASSERT(!client.available());
+        t.join();
+    }
+    FCITX_ASSERT(!client.available()); // ngay sau đó: throttled, không connect lại
+
+    // Daemon chấp nhận trở lại (restart đúng cấu hình) → hồi phục.
+    now += 6s;
+    {
+        auto t = acceptHello(server, &conn);
+        FCITX_ASSERT(client.available());
+        t.join();
+    }
+    FCITX_ASSERT(client.sendBackspaces(2));
     n = 0;
     FCITX_ASSERT(recv(conn, &n, sizeof(n), 0) == static_cast<ssize_t>(sizeof(n)));
     FCITX_ASSERT(n == 2);
+
+    // Daemon nghẽn (không đọc, buffer đầy): sendBackspaces phải trả false trong thời gian
+    // hữu hạn (EAGAIN → chờ ngắn → bỏ), không treo main thread vô hạn (#106).
+    bool everFailed = false;
+    for (int i = 0; i < 1000000; ++i) {
+        if (!client.sendBackspaces(999)) {
+            everFailed = true;
+            break;
+        }
+    }
+    FCITX_ASSERT(everFailed);
+    FCITX_ASSERT(!client.available()); // nghẽn → coi như chết phiên này, throttle
 
     ::close(conn);
     ::close(server);
