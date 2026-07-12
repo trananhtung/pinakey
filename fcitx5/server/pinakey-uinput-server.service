@@ -16,6 +16,11 @@ ProtectHome=read-only
 PrivateTmp=true
 RuntimeDirectory=pinakey
 RuntimeDirectoryMode=0700
+# #113: KHÔNG để systemd xoá đệ quy thư mục khi unit dừng (mặc định no) — xoá cả
+# uinput.lock/uinput.sock đang sống của instance chạy ngoài systemd, làm flock suốt đời
+# của PR #107 vô hiệu (flock chỉ loại trừ trên cùng inode) → hai daemon song song.
+# logind vẫn dọn toàn bộ /run/user/<uid> khi hết phiên nên không rò rỉ.
+RuntimeDirectoryPreserve=yes
 
 [Install]
 WantedBy=default.target

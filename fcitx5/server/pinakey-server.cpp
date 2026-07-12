@@ -161,22 +161,30 @@ int main(int argc, char *argv[]) {
     std::fprintf(stderr, "pinakey-server: phục vụ user %s (uid %u)\n", targetUser.c_str(),
                  expectedUid);
 
+    // #72: socket FILESYSTEM 0600 trong thư mục riêng 0700 — quyền filesystem chặn tiến trình
+    // khác user ngay từ connect(), xác thực SO_PEERCRED/exe trở thành lớp phòng thủ thứ hai.
+    // #113: bind (chiếm flock đơn-instance) TRƯỚC khi tạo bàn phím ảo — instance thừa thoát
+    // sớm, không hot-plug rồi rút thiết bị uinput mỗi chu kỳ Restart=on-failure.
+    const std::string sockPath = fcitx::pinakey::uinputSocketPath();
+    Fd server(pinakey::bindUinputServerSocket(sockPath));
+    if (!server.valid()) {
+        const int bindErrno = errno;
+        std::fprintf(stderr, "pinakey-server: không mở được socket %s: %s\n", sockPath.c_str(),
+                     std::strerror(bindErrno));
+        if (bindErrno == EADDRINUSE) {
+            // Daemon khác đang sống giữ lock — không phải lỗi của instance này: thoát 0 để
+            // Restart=on-failure không quay vòng vô hạn mỗi 2s (#113).
+            return 0;
+        }
+        return 1;
+    }
+    std::fprintf(stderr, "pinakey-server: lắng nghe trên %s\n", sockPath.c_str());
+
     UinputKeyboard kbd;
     if (!kbd.init()) {
         std::fprintf(stderr, "pinakey-server: không mở được /dev/uinput (cần quyền/udev)\n");
         return 1;
     }
-
-    // #72: socket FILESYSTEM 0600 trong thư mục riêng 0700 — quyền filesystem chặn tiến trình
-    // khác user ngay từ connect(), xác thực SO_PEERCRED/exe trở thành lớp phòng thủ thứ hai.
-    const std::string sockPath = fcitx::pinakey::uinputSocketPath();
-    Fd server(pinakey::bindUinputServerSocket(sockPath));
-    if (!server.valid()) {
-        std::fprintf(stderr, "pinakey-server: không mở được socket %s: %s\n", sockPath.c_str(),
-                     std::strerror(errno));
-        return 1;
-    }
-    std::fprintf(stderr, "pinakey-server: lắng nghe trên %s\n", sockPath.c_str());
 
     struct sigaction sa {};
     sa.sa_handler = onSignal;
@@ -235,7 +243,10 @@ int main(int argc, char *argv[]) {
             }
         }
     }
-    unlink(sockPath.c_str()); // dọn socket khi thoát sạch
+    // #113: KHÔNG unlink socket lúc thoát — path có thể đã thuộc về instance khác (kịch bản
+    // lock file bị xoá → daemon mới bind lại); unlink mù sẽ giết socket sống của nó. Socket
+    // cũ để lại vô hại: lần khởi động sau unlink-stale dưới flock, client connect vào socket
+    // chết nhận ECONNREFUSED và tự coi là unavailable.
     std::fprintf(stderr, "pinakey-server: kết thúc\n");
     return 0;
 }
