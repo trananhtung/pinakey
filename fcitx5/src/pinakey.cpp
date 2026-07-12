@@ -110,6 +110,7 @@ void PinaKeyState::reset() {
     currentBackspaceCount_ = 0;
     pendingCommit_.clear();
     bufferedKeys_.clear();
+    pendingForwardKey_.reset();
 
     // Dọn trạng thái emoji: reset là "vứt bỏ" (không commit) — nếu để sót, phím gõ sau khi quay
     // lại context này bị nuốt vào query emoji vô hình.
@@ -149,6 +150,7 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
             deleting_ = false;
             expectedBackspaces_ = 0;
             currentBackspaceCount_ = 0;
+            flushPendingForward(); // #118: không để phím chức năng hoãn bị rơi khi timeout
             // #96: bơm các phím đã đệm TRƯỚC khi xử lý phím hiện tại — bỏ qua thì phím mới
             // chen lên trước (đảo thứ tự) còn phím cũ kẹt chờ một chuỗi ACK không liên quan
             // trong tương lai (chèn sai ngữ cảnh) hoặc mất hẳn tới reset().
@@ -156,12 +158,11 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
             // KHÔNG return (trừ khi replay lại mở chuỗi xoá mới) → xử lý phím hiện tại bên dưới.
         }
         if (deleting_) {
-            // Chưa timeout — hoặc replay ở trên vừa mở một chuỗi xoá mới: đệm ký tự thường
-            // để replay sau, nuốt phím lúc này. #117: chỉ đệm ký tự IN ĐƯỢC — phím điều khiển
-            // (Enter/Tab/Esc/Delete) cũng có keySymToUTF8 khác rỗng nhưng replay fail sẽ
-            // commit control char thô vào tài liệu.
-            const std::string u = Key::keySymToUTF8(static_cast<KeySym>(s));
-            if (isPrintableText(u) && bufferedKeys_.size() < 32) {
+            // Chưa timeout — hoặc replay ở trên vừa mở một chuỗi xoá mới: đệm phím để replay
+            // sau, nuốt phím lúc này. #118: đệm CẢ phím non-text (Enter/Tab/mũi tên…) — khi
+            // replay chúng đi qua engine rồi được forwardKey cho app, không mất; chỉ modifier
+            // đứng một mình là bỏ qua (không mang thông tin).
+            if (!Key(static_cast<KeySym>(s)).isModifier() && bufferedKeys_.size() < 32) {
                 bufferedKeys_.emplace_back(s, static_cast<uint32_t>(keyEvent.rawKey().states()));
             }
             keyEvent.filterAndAccept();
@@ -351,7 +352,27 @@ void PinaKeyState::handleUinputAck(KeyEvent &keyEvent) {
     expectedBackspaces_ = 0;
     currentBackspaceCount_ = 0;
     keyEvent.filterAndAccept(); // nuốt phím trigger (+1)
+    flushPendingForward(); // #118: phím chức năng mở chuỗi xoá này — forward sau khi commit
     replayBufferedKeys();
+}
+
+/// #118: forward một "cú gõ" phím chức năng cho app — cả press lẫn release, vì sự kiện release
+/// gốc đã đi qua từ trước (isRelease return sớm) không khớp cặp; press mồ côi có thể làm app
+/// coi phím còn đang giữ.
+void PinaKeyState::forwardKeyTap(uint32_t sym, uint32_t state) {
+    const Key key(static_cast<KeySym>(sym), KeyStates(state));
+    ic_->forwardKey(key, /*isRelease=*/false);
+    ic_->forwardKey(key, /*isRelease=*/true);
+}
+
+/// #118: forward phím non-text đã hoãn (chờ chuỗi xoá của chính nó hoàn tất) cho app.
+void PinaKeyState::flushPendingForward() {
+    if (!pendingForwardKey_) {
+        return;
+    }
+    const auto [fs, fst] = *pendingForwardKey_;
+    pendingForwardKey_.reset();
+    forwardKeyTap(fs, fst);
 }
 
 /// Replay các phím người dùng gõ trong lúc đang xoá. Xử lý lần lượt; nếu một phím lại sinh ra
@@ -360,14 +381,25 @@ void PinaKeyState::replayBufferedKeys() {
     while (!bufferedKeys_.empty() && !deleting_) {
         const auto [s, st] = bufferedKeys_.front();
         bufferedKeys_.erase(bufferedKeys_.begin());
-        pk_engine_process_key_replace(core_, s, st);
-        if (!startUinputReplace()) {
+        const std::string u = Key::keySymToUTF8(static_cast<KeySym>(s));
+        const bool isText = isPrintableText(u);
+        const bool handled = pk_engine_process_key_replace(core_, s, st);
+        const bool sent = startUinputReplace();
+        if (!sent && isText) {
             // #106: phím này đã bị NUỐT từ lúc đệm (filterAndAccept) — không gửi được lệnh
             // xoá thì commit nguyên văn ký tự (gõ mộc, lõi đã reset) để nó không mất im lặng.
-            // #117: lưới an toàn — tuyệt đối không commit control char thô.
-            const std::string u = Key::keySymToUTF8(static_cast<KeySym>(s));
-            if (isPrintableText(u)) {
-                ic_->commitString(u);
+            // #117: chỉ ký tự in được; control char thô không được vào tài liệu.
+            ic_->commitString(u);
+        }
+        if (!isText && !handled) {
+            // #118: phím chức năng (Enter/Tab/mũi tên…) — sự kiện gốc đã bị nuốt lúc đệm,
+            // forward lại cho app để không mất. Engine đã tiêu thụ (vd Tab bung macro) thì
+            // KHÔNG forward — như đường gõ thường chỉ nuốt khi handled. Nếu chính phím này
+            // vừa mở một chuỗi xoá (finalize từ → del>0) thì hoãn tới khi ACK xong.
+            if (deleting_) {
+                pendingForwardKey_ = std::make_pair(s, st);
+            } else {
+                forwardKeyTap(s, st);
             }
         }
     }

@@ -26,6 +26,7 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -87,6 +88,8 @@ private:
     bool startUinputReplace();
     void handleUinputAck(KeyEvent &keyEvent); // xử lý Backspace bơm-ngược; commit khi đủ
     void replayBufferedKeys();             // gõ nhanh khi đang xoá → replay sau khi ACK xong
+    void flushPendingForward();            // #118: forward phím non-text đã hoãn sau chuỗi xoá
+    void forwardKeyTap(uint32_t sym, uint32_t state); // #118: forward press+release một cú gõ
     bool wantReplaceMode() const; // có dùng diff-and-replace (SurroundingText hoặc uinput) không
     bool useUinput() const;       // không có SurroundingText nhưng có server uinput
     bool shouldPassThrough() const;
@@ -110,6 +113,9 @@ private:
     int currentBackspaceCount_ = 0;     // số Backspace bơm-ngược đã thấy quay về
     std::string pendingCommit_;         // chuỗi mới, commit sau khi xoá xong
     std::vector<std::pair<uint32_t, uint32_t>> bufferedKeys_; // (sym,state) gõ trong lúc đang xoá
+    // #118: phím non-text đã replay nhưng chính nó mở chuỗi xoá mới → forward cho app SAU khi
+    // ACK của chuỗi đó hoàn tất (giữ thứ tự "văn bản trước, phím chức năng sau").
+    std::optional<std::pair<uint32_t, uint32_t>> pendingForwardKey_;
     std::chrono::steady_clock::time_point deletingSince_;     // mốc bắt đầu xoá (lưới an toàn timeout)
 };
 
