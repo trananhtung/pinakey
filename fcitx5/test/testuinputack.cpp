@@ -301,6 +301,27 @@ int main() {
         FCITX_ASSERT(!ic->forwarded().empty() && ic->forwarded().back() == FcitxKey_Tab)
             << "#118: Tab đệm trong lúc deleting_ phải được forward cho app khi replay";
 
+        // ---- #116: replay fail giữa chừng phải flush + DỪNG, không để sót composing ----
+        // Phím fail đầu tiên đã reset core + throttle client; nếu vòng lặp vẫn chạy tiếp,
+        // phím del==0 kế tiếp ('v') commit thẳng NHƯNG để lại composing trong core → phím
+        // thật kế tiếp đi đường preedit trên core bẩn → đúp chữ ("v" + "việt" = "vviệt").
+        // Daemon cũ đã chết (kịch bản #117) → dựng daemon mới trên cùng socket và chờ qua
+        // cửa sổ throttle 5s của client để addon vào lại được chế độ uinput.
+        FakeDaemon daemon2(std::string(std::getenv("XDG_RUNTIME_DIR")) +
+                           "/pinakey/uinput.sock");
+        std::this_thread::sleep_for(std::chrono::milliseconds(5200));
+        ic->reset();
+        ic->clearDoc();
+        ic->typeString("aa"); // "â" (del=1) → deleting_, chờ ACK không bao giờ tới
+        FCITX_ASSERT(daemon2.waitCounts(1));
+        ic->typeString("k"); // đệm — replay sẽ fail (daemon chết) → literal "k" + reset core
+        ic->typeString("v"); // đệm — KHÔNG được chạy engine replace-path sau khi client fail
+        daemon2.kill(); // daemon chết đúng lúc replay → send fail
+        std::this_thread::sleep_for(std::chrono::milliseconds(600));
+        ic->typeString("ieetj "); // 'i' kích timeout + replay; phần còn lại gõ đường preedit
+        FCITX_ASSERT(ic->text().find("vv") == std::string::npos)
+            << "#116: chữ bị đúp sau replay fail: doc=\"" << ic->text() << "\"";
+
         instance.exit();
     });
     instance.exec();

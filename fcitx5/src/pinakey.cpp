@@ -399,6 +399,23 @@ void PinaKeyState::replayBufferedKeys() {
                 forwardKeyTap(s, st);
             }
         }
+        if (!sent) {
+            // #116: client vừa fail (throttle 5s) — mọi phím còn lại chắc chắn cũng fail
+            // hoặc để sót trạng thái composing trong core (phím del==0 commit thẳng nhưng
+            // giữ prev_displayed → phím thật kế tiếp đi đường preedit trên core bẩn, đúp
+            // chữ "vviệt"). Flush nguyên văn phần còn lại rồi DỪNG, để core sạch.
+            for (const auto &[rs, rst] : bufferedKeys_) {
+                const std::string ru = Key::keySymToUTF8(static_cast<KeySym>(rs));
+                if (isPrintableText(ru)) {
+                    ic_->commitString(ru);
+                } else {
+                    forwardKeyTap(rs, rst);
+                }
+            }
+            bufferedKeys_.clear();
+            pk_engine_reset(core_);
+            return;
+        }
     }
 }
 
