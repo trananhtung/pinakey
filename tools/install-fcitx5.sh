@@ -19,7 +19,7 @@ for arg in "$@"; do
     --uinput) UINPUT=1 ;;
     --add-im) ADD_IM=yes ;;
     --no-add-im) ADD_IM=no ;;
-    -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
+    -h|--help) sed -e '1d' -e '/^[^#]/,$d' "$0"; exit 0 ;;
     *) echo "Tham số lạ: $arg (xem --help)"; exit 1 ;;
   esac
 done
@@ -69,7 +69,9 @@ echo "==> Cấu hình + build…"
 CMAKE_ARGS=(-DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release)
 # Chỉ ép ON khi có --uinput; không có cờ thì giữ nguyên giá trị trong cache CMake
 # (tránh âm thầm tắt daemon của người đã tự cấu hình ON trước đó).
-[ "$UINPUT" = 1 ] && CMAKE_ARGS+=(-DPINAKEY_BUILD_UINPUT_SERVER=ON)
+if [ "$UINPUT" = 1 ]; then
+  CMAKE_ARGS+=(-DPINAKEY_BUILD_UINPUT_SERVER=ON)
+fi
 cmake -S fcitx5 -B fcitx5/build "${CMAKE_ARGS[@]}"
 cmake --build fcitx5/build
 
