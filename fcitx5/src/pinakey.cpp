@@ -379,7 +379,9 @@ void PinaKeyState::replayBufferedKeys() {
         const auto [s, st] = bufferedKeys_.front();
         bufferedKeys_.erase(bufferedKeys_.begin());
         const std::string u = Key::keySymToUTF8(static_cast<KeySym>(s));
-        const bool isText = isPrintableText(u);
+        // Tổ hợp mang modifier thật (Ctrl+C…) là LỆNH, không phải văn bản — forward như phím
+        // chức năng, tuyệt đối không commit literal 'c' vào tài liệu.
+        const bool isText = isPrintableText(u) && (st & kRealModMask) == 0;
         const bool handled = pk_engine_process_key_replace(core_, s, st);
         const bool sent = startUinputReplace();
         if (!sent && isText) {
@@ -388,11 +390,12 @@ void PinaKeyState::replayBufferedKeys() {
             // #117: chỉ ký tự in được; control char thô không được vào tài liệu.
             ic_->commitString(u);
         }
-        if (!isText && !handled) {
-            // #118: phím chức năng (Enter/Tab/mũi tên…) — sự kiện gốc đã bị nuốt lúc đệm,
-            // forward lại cho app để không mất. Engine đã tiêu thụ (vd Tab bung macro) thì
-            // KHÔNG forward — như đường gõ thường chỉ nuốt khi handled. Nếu chính phím này
-            // vừa mở một chuỗi xoá (finalize từ → del>0) thì hoãn tới khi ACK xong.
+        if (!isText && !(handled && sent)) {
+            // #118: phím chức năng (Enter/Tab/mũi tên, tổ hợp modifier) — sự kiện gốc đã bị
+            // nuốt lúc đệm, forward lại cho app để không mất. Chỉ khi engine tiêu thụ VÀ gửi
+            // trót lọt (vd Tab bung macro thành công) mới nuốt — khớp đường gõ thường
+            // `if (handled && sent) filterAndAccept()`; send fail thì bung macro đã bị vứt
+            // (core reset) nên phím thô vẫn phải tới app.
             if (deleting_) {
                 pendingForwardKey_ = std::make_pair(s, st);
             } else {
@@ -406,7 +409,7 @@ void PinaKeyState::replayBufferedKeys() {
             // chữ "vviệt"). Flush nguyên văn phần còn lại rồi DỪNG, để core sạch.
             for (const auto &[rs, rst] : bufferedKeys_) {
                 const std::string ru = Key::keySymToUTF8(static_cast<KeySym>(rs));
-                if (isPrintableText(ru)) {
+                if (isPrintableText(ru) && (rst & kRealModMask) == 0) {
                     ic_->commitString(ru);
                 } else {
                     forwardKeyTap(rs, rst);
