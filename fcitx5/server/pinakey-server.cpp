@@ -4,18 +4,24 @@
  *
  * Vì sao cần daemon riêng: addon fcitx5 chạy trong tiến trình fcitx5 (không đặc quyền) nên không mở
  * được `/dev/uinput`. Daemon này (cấp quyền qua udev/systemd) mở uinput, lắng nghe trên một
- * **abstract Unix socket**, xác thực client (UID trùng + tiến trình là `/usr/bin/fcitx5`), rồi với
+ * **Unix socket filesystem** `$XDG_RUNTIME_DIR/pinakey/uinput.sock` (thư mục 0700, socket 0600 —
+ * #72), xác thực client (UID trùng + tiến trình là `/usr/bin/fcitx5`, xem peerauth.h), rồi với
  * mỗi số `count` nhận được sẽ phát `count` lần Backspace. Mô hình theo fcitx5-lotus nhưng rút gọn
  * (chỉ bàn phím; reset khi click chuột do fcitx5 đảm nhiệm qua reset()).
  *
  * GPL-3.0-or-later.
  */
+#include "../src/socketpath.h"
+#include "peerauth.h"
+#include "serversocket.h"
+
 #include <fcntl.h>
 #include <linux/uinput.h>
 #include <poll.h>
 #include <pwd.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -141,6 +147,17 @@ int main(int argc, char *argv[]) {
         std::fprintf(stderr, "pinakey-server: không tìm thấy UID cho user %s\n", targetUser.c_str());
         return 1;
     }
+    // #72: mô hình socket filesystem 0600 yêu cầu daemon chạy CÙNG user với fcitx5 — thư mục
+    // runtime 0700 của user khác không truy cập được. `-u <user khác>` (di sản thời abstract
+    // socket) do đó không thể hoạt động: từ chối sớm với thông báo rõ thay vì bind sai chỗ.
+    if (expectedUid != getuid()) {
+        std::fprintf(stderr,
+                     "pinakey-server: -u %s (uid %u) khác user đang chạy (uid %u) — không hỗ trợ: "
+                     "socket 0600 trong $XDG_RUNTIME_DIR yêu cầu daemon chạy cùng user với fcitx5 "
+                     "(systemctl --user enable --now pinakey-uinput-server)\n",
+                     targetUser.c_str(), expectedUid, getuid());
+        return 1;
+    }
     std::fprintf(stderr, "pinakey-server: phục vụ user %s (uid %u)\n", targetUser.c_str(),
                  expectedUid);
 
@@ -150,28 +167,16 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Abstract socket: "pinakeysocket-<user>-kb".
-    std::string sockName = "pinakeysocket-" + targetUser + "-kb";
-    Fd server(socket(AF_UNIX, SOCK_SEQPACKET | SOCK_NONBLOCK, 0));
+    // #72: socket FILESYSTEM 0600 trong thư mục riêng 0700 — quyền filesystem chặn tiến trình
+    // khác user ngay từ connect(), xác thực SO_PEERCRED/exe trở thành lớp phòng thủ thứ hai.
+    const std::string sockPath = fcitx::pinakey::uinputSocketPath();
+    Fd server(pinakey::bindUinputServerSocket(sockPath));
     if (!server.valid()) {
-        std::perror("socket");
+        std::fprintf(stderr, "pinakey-server: không mở được socket %s: %s\n", sockPath.c_str(),
+                     std::strerror(errno));
         return 1;
     }
-    struct sockaddr_un addr {};
-    addr.sun_family = AF_UNIX;
-    addr.sun_path[0] = '\0'; // NUL đầu => abstract namespace
-    const size_t maxLen = sizeof(addr.sun_path) - 2;
-    if (sockName.size() > maxLen) {
-        sockName.resize(maxLen);
-    }
-    std::memcpy(&addr.sun_path[1], sockName.c_str(), sockName.size());
-    socklen_t addrLen =
-        static_cast<socklen_t>(offsetof(struct sockaddr_un, sun_path) + 1 + sockName.size());
-    if (bind(server.get(), reinterpret_cast<struct sockaddr *>(&addr), addrLen) != 0) {
-        std::perror("bind");
-        return 1;
-    }
-    listen(server.get(), 4);
+    std::fprintf(stderr, "pinakey-server: lắng nghe trên %s\n", sockPath.c_str());
 
     struct sigaction sa {};
     sa.sa_handler = onSignal;
@@ -192,34 +197,10 @@ int main(int argc, char *argv[]) {
         }
         // kết nối mới: xác thực rồi giữ một client duy nhất
         if (fds[0].revents & POLLIN) {
-            int c = accept4(server.get(), nullptr, nullptr, SOCK_NONBLOCK);
+            int c = accept4(server.get(), nullptr, nullptr, SOCK_NONBLOCK | SOCK_CLOEXEC);
             if (c >= 0) {
-                struct ucred cred {};
-                socklen_t len = sizeof(cred);
-                bool ok = false;
-                if (getsockopt(c, SOL_SOCKET, SO_PEERCRED, &cred, &len) == 0 &&
-                    cred.uid == expectedUid) {
-                    char link[64];
-                    char exe[PATH_MAX] = {0};
-                    std::snprintf(link, sizeof(link), "/proc/%d/exe", cred.pid);
-                    ssize_t n = readlink(link, exe, sizeof(exe) - 1);
-                    if (n > 0) {
-                        exe[n] = '\0';
-                        // #72: binary fcitx5 ở các prefix cài đặt chuẩn — so ĐƯỜNG DẪN THẬT
-                        // của tiến trình (readlink /proc/<pid>/exe, không tin argv[0]/cmdline).
-                        static constexpr const char *const kAllowedExes[] = {
-                            "/usr/bin/fcitx5",
-                            "/usr/local/bin/fcitx5",
-                        };
-                        for (const char *allowed : kAllowedExes) {
-                            if (std::strcmp(exe, allowed) == 0) {
-                                ok = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-                if (ok) {
+                // #72: xác thực 2 lớp (SO_PEERCRED + readlink /proc/<pid>/exe) — xem peerauth.h.
+                if (pinakey::peerAuthorized(c, expectedUid)) {
                     client.reset(c);
                     std::fprintf(stderr, "pinakey-server: fcitx5 đã kết nối\n");
                 } else {
@@ -247,6 +228,7 @@ int main(int argc, char *argv[]) {
             }
         }
     }
+    unlink(sockPath.c_str()); // dọn socket khi thoát sạch
     std::fprintf(stderr, "pinakey-server: kết thúc\n");
     return 0;
 }

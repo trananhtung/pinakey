@@ -38,3 +38,18 @@ add_test(NAME testfilewatch COMMAND testfilewatch)
 add_executable(testuinputclient testuinputclient.cpp)
 target_link_libraries(testuinputclient PRIVATE Fcitx5::Core)
 add_test(NAME testuinputclient COMMAND testuinputclient)
+
+# Test 6: resolve đường socket uinput filesystem trong XDG_RUNTIME_DIR (#72).
+add_executable(testsocketpath testsocketpath.cpp)
+target_link_libraries(testsocketpath PRIVATE Fcitx5::Core)
+add_test(NAME testsocketpath COMMAND testsocketpath)
+
+# Test 7: xác thực client daemon uinput — SO_PEERCRED + allowlist exe (#72).
+add_executable(testpeerauth testpeerauth.cpp)
+target_link_libraries(testpeerauth PRIVATE Fcitx5::Core)
+add_test(NAME testpeerauth COMMAND testpeerauth)
+
+# Test 8: bind socket server — thư mục 0700, socket 0600, dọn socket cũ (#72).
+add_executable(testserversocket testserversocket.cpp)
+target_link_libraries(testserversocket PRIVATE Fcitx5::Core)
+add_test(NAME testserversocket COMMAND testserversocket)

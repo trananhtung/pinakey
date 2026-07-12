@@ -67,7 +67,8 @@ jobs:
 
       - name: Configure & build addon (cargo builds the Rust core)
         run: |
-          cmake -S fcitx5 -B fcitx5/build -DCMAKE_INSTALL_PREFIX=/usr
+          # PINAKEY_BUILD_UINPUT_SERVER=ON: daemon opt-in nhưng CI vẫn compile-check (#72).
+          cmake -S fcitx5 -B fcitx5/build -DCMAKE_INSTALL_PREFIX=/usr -DPINAKEY_BUILD_UINPUT_SERVER=ON
           cmake --build fcitx5/build
 
       - name: Integration tests (run via real fcitx5 test harness)
