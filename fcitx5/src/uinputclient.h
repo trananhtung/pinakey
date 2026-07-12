@@ -4,6 +4,8 @@
 #ifndef _PINAKEY_FCITX5_UINPUTCLIENT_H_
 #define _PINAKEY_FCITX5_UINPUTCLIENT_H_
 
+#include <fcitx-utils/log.h>
+
 #include <chrono>
 #include <cstddef>
 #include <cstring>
@@ -58,6 +60,24 @@ public:
         lastAttempt_ = t;
         tryConnect();
         failedOnce_ = fd_ < 0;
+        if (fd_ < 0) {
+            // #114: connect fail dai dẳng thường là daemon CŨ (trước khi đổi protocol/đường
+            // socket) còn chạy sau nâng cấp — suy giảm âm thầm về preedit rất khó đoán bệnh.
+            // Log MỘT LẦN mỗi phiên, sau vài cửa sổ retry để không la làng khi daemon chỉ
+            // khởi động chậm.
+            if (++failedWindows_ == kWarnAfterFailedWindows && !warned_) {
+                warned_ = true;
+                // FCITX_WARN thay stderr thô: fcitx5 -d đóng stderr, còn facility log của
+                // fcitx thì tới journal/log phiên — đúng chỗ người dùng đi tìm bệnh.
+                FCITX_WARN() << "pinakey: không kết nối được daemon uinput tại " << sockPath_
+                             << " sau " << kWarnAfterFailedWindows
+                             << " lần thử — nếu vừa nâng cấp PinaKey, hãy chạy: systemctl "
+                                "--user restart pinakey-uinput-server && fcitx5 -r "
+                                "(xem USAGE.md mục 9)";
+            }
+        } else {
+            failedWindows_ = 0;
+        }
         return fd_ >= 0;
     }
     /// Trả true khi thông điệp đã thật sự vào socket. Trả false = daemon chết/từ chối/nghẽn —
@@ -91,6 +111,8 @@ public:
 
     // Chờ hello sau connect (1 lần mỗi cửa sổ retry).
     static constexpr int kDefaultHelloTimeoutMs = 200;
+    // #114: số cửa sổ retry thất bại liên tiếp trước khi log cảnh báo (một lần mỗi phiên).
+    static constexpr int kWarnAfterFailedWindows = 3;
 
 private:
     static constexpr int kSendWaitMs = 50; // chờ POLLOUT khi buffer đầy (EAGAIN)
@@ -135,6 +157,8 @@ private:
     Clock::duration retryInterval_;
     std::function<Clock::time_point()> now_;
     int helloTimeoutMs_ = kDefaultHelloTimeoutMs;
+    int failedWindows_ = 0; // #114: cửa sổ retry thất bại liên tiếp
+    bool warned_ = false;   // #114: đã log cảnh báo phiên này chưa
     int fd_ = -1;
     bool failedOnce_ = false;
     Clock::time_point lastAttempt_{};
