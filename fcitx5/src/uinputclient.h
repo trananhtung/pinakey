@@ -4,9 +4,10 @@
 #ifndef _PINAKEY_FCITX5_UINPUTCLIENT_H_
 #define _PINAKEY_FCITX5_UINPUTCLIENT_H_
 
+#include <fcitx-utils/log.h>
+
 #include <chrono>
 #include <cstddef>
-#include <cstdio>
 #include <cstring>
 #include <functional>
 #include <string>
@@ -66,11 +67,13 @@ public:
             // khởi động chậm.
             if (++failedWindows_ == kWarnAfterFailedWindows && !warned_) {
                 warned_ = true;
-                std::fprintf(stderr,
-                             "pinakey: không kết nối được daemon uinput tại %s sau %d lần thử "
-                             "— nếu vừa nâng cấp PinaKey, hãy chạy: systemctl --user restart "
-                             "pinakey-uinput-server && fcitx5 -r (xem USAGE.md mục 9)\n",
-                             sockPath_.c_str(), kWarnAfterFailedWindows);
+                // FCITX_WARN thay stderr thô: fcitx5 -d đóng stderr, còn facility log của
+                // fcitx thì tới journal/log phiên — đúng chỗ người dùng đi tìm bệnh.
+                FCITX_WARN() << "pinakey: không kết nối được daemon uinput tại " << sockPath_
+                             << " sau " << kWarnAfterFailedWindows
+                             << " lần thử — nếu vừa nâng cấp PinaKey, hãy chạy: systemctl "
+                                "--user restart pinakey-uinput-server && fcitx5 -r "
+                                "(xem USAGE.md mục 9)";
             }
         } else {
             failedWindows_ = 0;
