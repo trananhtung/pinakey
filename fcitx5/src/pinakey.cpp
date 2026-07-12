@@ -571,16 +571,6 @@ PinaKeyEngine::PinaKeyEngine(Instance *instance)
     setupReloadTimer();
 }
 
-namespace {
-uint64_t fileMtime(const std::string &path) {
-    struct stat st {};
-    if (stat(path.c_str(), &st) == 0) {
-        return static_cast<uint64_t>(st.st_mtime);
-    }
-    return 0;
-}
-} // namespace
-
 void PinaKeyEngine::setupReloadTimer() {
     // Khớp cách lõi Rust tìm thư mục cấu hình (dirs::config_dir()): ưu tiên $XDG_CONFIG_HOME,
     // fallback $HOME/.config — nếu không, watcher canh mtime của file không bao giờ tồn tại.
@@ -594,13 +584,13 @@ void PinaKeyEngine::setupReloadTimer() {
     }
     const std::string dir = base + "/pinakey/";
     reloadFiles_ = {dir + "ibus-PinaKey.macro.text", dir + "dict.txt"};
-    reloadMtimes_.assign(reloadFiles_.size(), 0);
+    reloadFingerprints_.assign(reloadFiles_.size(), pinakey::FileFingerprint{});
     for (size_t i = 0; i < reloadFiles_.size(); ++i) {
-        reloadMtimes_[i] = fileMtime(reloadFiles_[i]);
+        reloadFingerprints_[i] = pinakey::fileFingerprint(reloadFiles_[i]);
     }
     // #69: canh cả file config (fallback khi GUI không gọi được D-Bus).
     configFile_ = dir + "ibus-PinaKey.config.json";
-    configMtime_ = fileMtime(configFile_);
+    configFingerprint_ = pinakey::fileFingerprint(configFile_);
     constexpr uint64_t kInterval = 2000000; // 2s
     reloadTimer_ = instance_->eventLoop().addTimeEvent(
         CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + kInterval, 0,
@@ -614,17 +604,17 @@ void PinaKeyEngine::setupReloadTimer() {
 void PinaKeyEngine::checkReload() {
     // #69: file config đổi → nạp lại TOÀN BỘ cấu hình (bao trùm cả macro/dict).
     if (!configFile_.empty()) {
-        if (uint64_t m = fileMtime(configFile_); m != configMtime_) {
-            configMtime_ = m;
+        if (auto fp = pinakey::fileFingerprint(configFile_); fp != configFingerprint_) {
+            configFingerprint_ = fp;
             reloadConfig();
             return;
         }
     }
     bool changed = false;
     for (size_t i = 0; i < reloadFiles_.size(); ++i) {
-        uint64_t m = fileMtime(reloadFiles_[i]);
-        if (m != reloadMtimes_[i]) {
-            reloadMtimes_[i] = m;
+        auto fp = pinakey::fileFingerprint(reloadFiles_[i]);
+        if (fp != reloadFingerprints_[i]) {
+            reloadFingerprints_[i] = fp;
             changed = true;
         }
     }
@@ -641,10 +631,10 @@ void PinaKeyEngine::reloadConfig() {
     // Cập nhật mtime cache (cả config lẫn macro/dict — pk_engine_reload_config nạp lại tất) để
     // watcher không nạp lại lần nữa ngay sau lời gọi D-Bus.
     if (!configFile_.empty()) {
-        configMtime_ = fileMtime(configFile_);
+        configFingerprint_ = pinakey::fileFingerprint(configFile_);
     }
     for (size_t i = 0; i < reloadFiles_.size(); ++i) {
-        reloadMtimes_[i] = fileMtime(reloadFiles_[i]);
+        reloadFingerprints_[i] = pinakey::fileFingerprint(reloadFiles_[i]);
     }
     instance_->inputContextManager().foreach([this](InputContext *ic) {
         pk_engine_reload_config(state(ic)->core());
