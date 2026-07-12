@@ -83,6 +83,17 @@ enum ConfigSource {
     Injected,
 }
 
+impl ConfigSource {
+    /// #129: tên dùng cho đường file macro `ibus-<name>.macro.text`. Engine không gắn tên
+    /// giữ quy ước cũ (ENGINE_NAME) để không đổi hành vi của addon/GUI hiện có.
+    fn macro_name(&self) -> &str {
+        match self {
+            ConfigSource::Name(n) => n,
+            ConfigSource::Injected => ENGINE_NAME,
+        }
+    }
+}
+
 impl EngineCore {
     pub fn new(config: Config) -> EngineCore {
         Self::with_source(config, ConfigSource::Injected)
@@ -100,7 +111,7 @@ impl EngineCore {
 
     fn with_source(config: Config, config_source: ConfigSource) -> EngineCore {
         let preeditor = build_preeditor(&config);
-        let macro_table = build_macro_table(&config);
+        let macro_table = build_macro_table(&config, config_source.macro_name());
         let dictionary = load_dictionary(&config);
         EngineCore {
             preeditor,
@@ -203,7 +214,7 @@ impl EngineCore {
         self.rebuild_preeditor();
         // Dựng lại bảng macro TỪ ĐẦU theo cờ mới — cờ tắt thì bảng cũ (đầy dữ liệu, còn
         // enabled) phải được thay bằng bảng rỗng, không giữ lại trong bộ nhớ.
-        self.macro_table = build_macro_table(&self.config);
+        self.macro_table = build_macro_table(&self.config, self.config_source.macro_name());
         self.dictionary = load_dictionary(&self.config);
         self.transport_rules = load_transport_rules();
         self.reset_preeditor();
@@ -214,7 +225,7 @@ impl EngineCore {
     /// chạy (kiểu gõ/bảng mã/flags giữ nguyên). Gọi khi phát hiện file thay đổi.
     pub fn reload_data(&mut self) {
         if self.config.ib_flags & cfg::IB_MACRO_ENABLED != 0 {
-            self.macro_table = build_macro_table(&self.config);
+            self.macro_table = build_macro_table(&self.config, self.config_source.macro_name());
         }
         self.dictionary = load_dictionary(&self.config);
     }
@@ -778,10 +789,11 @@ fn load_transport_rules() -> crate::transport::TransportRules {
 /// Dựng bảng macro theo config: cờ `IB_MACRO_ENABLED` bật → nạp file gõ tắt (thiếu file bỏ qua)
 /// và enable; cờ tắt → bảng rỗng disable. Dùng chung cho khởi tạo (#7), live-reload (#20) và
 /// reload config (#69).
-fn build_macro_table(config: &Config) -> MacroTable {
+fn build_macro_table(config: &Config, macro_name: &str) -> MacroTable {
     let mut mt = MacroTable::new(config.ib_flags & cfg::IB_AUTO_CAPITALIZE_MACRO != 0);
     if config.ib_flags & cfg::IB_MACRO_ENABLED != 0 {
-        if let Some(path) = pinakey_config::get_macro_path(ENGINE_NAME).to_str() {
+        // #129: file macro theo TÊN engine, không nạp cứng tên quy ước.
+        if let Some(path) = pinakey_config::get_macro_path(macro_name).to_str() {
             let _ = mt.load_from_file(path);
         }
         mt.set_enabled(true);
