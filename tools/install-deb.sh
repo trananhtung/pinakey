@@ -11,12 +11,16 @@ REPO="trananhtung/pinakey"
 command -v curl >/dev/null 2>&1 || { echo "✗ Cần 'curl'. Cài: sudo apt install curl"; exit 1; }
 command -v apt  >/dev/null 2>&1 || { echo "✗ Script này dành cho Debian/Ubuntu (cần apt)."; exit 1; }
 
-echo "==> Tìm gói .deb mới nhất từ GitHub Releases ($REPO)…"
+# #101: release đính kèm .deb cho NHIỀU kiến trúc (amd64 + arm64) — phải lọc đúng theo máy,
+# lấy asset đầu tiên bất kỳ sẽ cài nhầm gói khác kiến trúc và apt từ chối.
+arch="$(dpkg --print-architecture)"
+echo "==> Tìm gói .deb mới nhất cho kiến trúc '$arch' từ GitHub Releases ($REPO)…"
 url="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
   | grep -oE '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]+\.deb"' \
-  | head -1 | sed -E 's/.*"(https[^"]+)".*/\1/')"
+  | sed -E 's/.*"(https[^"]+)".*/\1/' \
+  | { grep -- "_${arch}\.deb$" || true; } | head -1)"
 if [ -z "${url:-}" ]; then
-  echo "✗ Chưa có gói .deb dựng sẵn trong release mới nhất."
+  echo "✗ Release mới nhất không có gói .deb dựng sẵn cho kiến trúc '$arch'."
   echo "  Hãy build từ nguồn: bash tools/install-fcitx5.sh"
   exit 1
 fi
