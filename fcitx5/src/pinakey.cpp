@@ -74,12 +74,15 @@ bool isBackspaceSym(uint32_t sym) {
 /// Meta=1<<28) — dùng để nhận diện tổ hợp phím tắt. KHÔNG gồm Shift và các bit khoá
 /// CapsLock (1<<1) / NumLock (1<<4): chúng có thể bật thường trực khi gõ văn bản (#108),
 /// đồng bộ với is_valid_state() phía Rust.
-constexpr uint32_t kRealModMask = (1u << 2) | (1u << 3) | (1u << 5) | (1u << 6) |
-                                  (1u << 26) | (1u << 27) | (1u << 28);
+constexpr uint32_t kRealModMask =
+    static_cast<uint32_t>(KeyState::Ctrl) | static_cast<uint32_t>(KeyState::Alt) |
+    static_cast<uint32_t>(KeyState::Hyper) | static_cast<uint32_t>(KeyState::Super) |
+    static_cast<uint32_t>(KeyState::Super2) | static_cast<uint32_t>(KeyState::Hyper2) |
+    static_cast<uint32_t>(KeyState::Meta);
 
 /// Bit auto-repeat (giữ phím). Nhánh double-space phải loại: giữ space chỉ là chuỗi dấu cách,
 /// không phải "nhấn space lần hai".
-constexpr uint32_t kModRepeat = 1u << 31;
+constexpr uint32_t kModRepeat = static_cast<uint32_t>(KeyState::Repeat);
 } // namespace
 
 // ----------------------------------- PinaKeyState -----------------------------------
