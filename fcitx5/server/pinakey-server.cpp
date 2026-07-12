@@ -235,7 +235,10 @@ int main(int argc, char *argv[]) {
             }
         }
     }
-    unlink(sockPath.c_str()); // dọn socket khi thoát sạch
+    // #113: KHÔNG unlink socket lúc thoát — path có thể đã thuộc về instance khác (kịch bản
+    // lock file bị xoá → daemon mới bind lại); unlink mù sẽ giết socket sống của nó. Socket
+    // cũ để lại vô hại: lần khởi động sau unlink-stale dưới flock, client connect vào socket
+    // chết nhận ECONNREFUSED và tự coi là unavailable.
     std::fprintf(stderr, "pinakey-server: kết thúc\n");
     return 0;
 }
