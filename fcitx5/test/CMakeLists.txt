@@ -33,3 +33,8 @@ add_test(NAME testutf8util COMMAND testutf8util)
 add_executable(testfilewatch testfilewatch.cpp)
 target_link_libraries(testfilewatch PRIVATE Fcitx5::Core)
 add_test(NAME testfilewatch COMMAND testfilewatch)
+
+# Test 5: client uinput — reconnect có throttle khi daemon khởi động muộn/restart (#91).
+add_executable(testuinputclient testuinputclient.cpp)
+target_link_libraries(testuinputclient PRIVATE Fcitx5::Core)
+add_test(NAME testuinputclient COMMAND testuinputclient)

@@ -4,6 +4,7 @@
  */
 #include "pinakey.h"
 
+#include "uinputclient.h"
 #include "utf8util.h"
 
 #include <fcitx-utils/capabilityflags.h>
@@ -58,33 +59,10 @@ bool debugSurroundingEnabled() {
     return enabled;
 }
 
-/// Client tới daemon uinput (issue #28) — một kết nối dùng chung cho cả tiến trình addon. Gửi số
-/// lượng Backspace cần bơm cho các app không hỗ trợ SurroundingText. Nếu không kết nối được
-/// (daemon chưa cài/chạy), `available()` trả false và addon lùi về chế độ preedit.
-class UinputClient {
-public:
-    bool available() {
-        if (fd_ >= 0) {
-            return true;
-        }
-        if (triedAndFailed_) {
-            return false;
-        }
-        connectOnce();
-        return fd_ >= 0;
-    }
-    void sendBackspaces(int n) {
-        if (n <= 0 || !available()) {
-            return;
-        }
-        if (send(fd_, &n, sizeof(n), MSG_NOSIGNAL) <= 0) {
-            ::close(fd_);
-            fd_ = -1; // sẽ thử kết nối lại lần sau
-        }
-    }
-
-private:
-    void connectOnce() {
+/// Client tới daemon uinput (issue #28/#91, xem uinputclient.h) — một kết nối dùng chung cho cả
+/// tiến trình addon, tên socket theo user như daemon quy ước.
+pinakey::UinputClient &uinputClient() {
+    static pinakey::UinputClient client([] {
         const char *user = std::getenv("USER");
         std::string name;
         if (user && *user) {
@@ -93,35 +71,8 @@ private:
             struct passwd *pw = getpwuid(getuid());
             name = (pw && pw->pw_name) ? pw->pw_name : "unknown";
         }
-        std::string sockName = "pinakeysocket-" + name + "-kb";
-        int fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-        if (fd < 0) {
-            triedAndFailed_ = true;
-            return;
-        }
-        struct sockaddr_un addr {};
-        addr.sun_family = AF_UNIX;
-        addr.sun_path[0] = '\0';
-        const size_t maxLen = sizeof(addr.sun_path) - 2;
-        if (sockName.size() > maxLen) {
-            sockName.resize(maxLen);
-        }
-        std::memcpy(&addr.sun_path[1], sockName.c_str(), sockName.size());
-        socklen_t len =
-            static_cast<socklen_t>(offsetof(struct sockaddr_un, sun_path) + 1 + sockName.size());
-        if (connect(fd, reinterpret_cast<struct sockaddr *>(&addr), len) != 0) {
-            ::close(fd);
-            triedAndFailed_ = true;
-            return;
-        }
-        fd_ = fd;
-    }
-    int fd_ = -1;
-    bool triedAndFailed_ = false;
-};
-
-UinputClient &uinputClient() {
-    static UinputClient client;
+        return "pinakeysocket-" + name + "-kb";
+    }());
     return client;
 }
 
