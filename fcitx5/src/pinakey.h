@@ -117,6 +117,10 @@ private:
     // ACK của chuỗi đó hoàn tất (giữ thứ tự "văn bản trước, phím chức năng sau").
     std::optional<std::pair<uint32_t, uint32_t>> pendingForwardKey_;
     std::chrono::steady_clock::time_point deletingSince_;     // mốc bắt đầu xoá (lưới an toàn timeout)
+    // #125: số Backspace của chuỗi ĐÃ timeout còn đang bay — về muộn phải nuốt bỏ, không cho
+    // ăn quota ACK của chuỗi mới hay đi vào engine như Backspace người dùng (tự khuếch đại).
+    int orphanBackspaces_ = 0;
+    std::chrono::steady_clock::time_point orphanSince_;
 };
 
 /// Engine fcitx5 (một thực thể addon). Đăng ký factory tạo `PinaKeyState` cho mỗi input context.
