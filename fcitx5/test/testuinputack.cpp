@@ -73,6 +73,18 @@ public:
         ::unlink(path_.c_str());
     }
 
+    /// Mô phỏng daemon CHẾT: đóng cả listener lẫn kết nối đang mở — send() phía client
+    /// fail tức thì (EPIPE) thay vì kẹt.
+    void kill() {
+        stop_.store(true);
+        ::shutdown(server_, SHUT_RDWR);
+        const int c = conn_.load();
+        if (c >= 0) {
+            ::shutdown(c, SHUT_RDWR);
+        }
+        ::unlink(path_.c_str()); // client reconnect cũng phải fail
+    }
+
     /// Chờ (tối đa ~2s) tới khi nhận được `n` thông điệp count.
     bool waitCounts(size_t n) {
         for (int i = 0; i < 200; ++i) {
@@ -241,6 +253,27 @@ int main() {
         FCITX_ASSERT(ic->text() == "dđen")
             << "#96: doc=\"" << ic->text() << "\", mong đợi \"dđen\" (phím đệm 'e' phải ra "
                "trước 'n', không mất)";
+
+        // ---- #117: replay fail không được commit ký tự điều khiển thô ----
+        // keySymToUTF8(Return) = "\r" (không rỗng) nên Enter gõ trong lúc deleting_ bị đệm;
+        // khi replay mà send tới daemon fail, nhánh commit-nguyên-văn cũ chèn "\r" vào tài
+        // liệu thay vì thực hiện hành vi phím.
+        ic->reset();
+        ic->clearDoc();
+        ic->typeString("cuw"); // "cư" (del=1) → deleting_, chờ ACK không bao giờ tới
+        FCITX_ASSERT(daemon.waitCounts(3));
+        ic->typeString("o");  // đệm — "cưo" hợp lệ LỎNG (hiển thị tiếng Việt, del=0 khi replay)
+                              // nhưng "ưo" là chuỗi nguyên âm CHƯA hoàn chỉnh → không hợp lệ CHẶT
+        ic->type(Key("Tab")); // đệm (bug: keySymToUTF8(Tab) = "\t" không rỗng); khi replay,
+                              // chính Tab sinh khôi phục "cuwo" (del>0) → send fail → nhánh
+                              // commit-nguyên-văn cũ chèn "\t" thô vào tài liệu
+        daemon.kill();        // daemon chết → mọi send lúc replay fail
+        std::this_thread::sleep_for(std::chrono::milliseconds(600));
+        ic->typeString("n"); // timeout: commit "ư" + replay 'o' rồi Tab
+        FCITX_ASSERT(ic->text().find('\r') == std::string::npos &&
+                     ic->text().find('\t') == std::string::npos &&
+                     ic->text().find('\x1b') == std::string::npos)
+            << "#117: ký tự điều khiển thô bị commit vào tài liệu: doc=\"" << ic->text() << "\"";
 
         instance.exit();
     });

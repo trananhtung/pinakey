@@ -83,6 +83,14 @@ constexpr uint32_t kRealModMask =
 /// Bit auto-repeat (giữ phím). Nhánh double-space phải loại: giữ space chỉ là chuỗi dấu cách,
 /// không phải "nhấn space lần hai".
 constexpr uint32_t kModRepeat = static_cast<uint32_t>(KeyState::Repeat);
+
+/// #117: keySymToUTF8 trả chuỗi KHÔNG rỗng cho cả phím điều khiển (Return="\r", Tab="\t",
+/// Escape="\x1b", Delete="\x7f") — chỉ chuỗi in được mới là "văn bản" để đệm/commit nguyên văn;
+/// commit control char thô vào tài liệu là rác + mất chức năng phím.
+bool isPrintableText(const std::string &u) {
+    return !u.empty() && !(u.size() == 1 && (static_cast<unsigned char>(u[0]) < 0x20 ||
+                                             u[0] == '\x7f'));
+}
 } // namespace
 
 // ----------------------------------- PinaKeyState -----------------------------------
@@ -149,9 +157,11 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
         }
         if (deleting_) {
             // Chưa timeout — hoặc replay ở trên vừa mở một chuỗi xoá mới: đệm ký tự thường
-            // để replay sau, nuốt phím lúc này.
+            // để replay sau, nuốt phím lúc này. #117: chỉ đệm ký tự IN ĐƯỢC — phím điều khiển
+            // (Enter/Tab/Esc/Delete) cũng có keySymToUTF8 khác rỗng nhưng replay fail sẽ
+            // commit control char thô vào tài liệu.
             const std::string u = Key::keySymToUTF8(static_cast<KeySym>(s));
-            if (!u.empty() && bufferedKeys_.size() < 32) {
+            if (isPrintableText(u) && bufferedKeys_.size() < 32) {
                 bufferedKeys_.emplace_back(s, static_cast<uint32_t>(keyEvent.rawKey().states()));
             }
             keyEvent.filterAndAccept();
@@ -351,7 +361,11 @@ void PinaKeyState::replayBufferedKeys() {
         if (!startUinputReplace()) {
             // #106: phím này đã bị NUỐT từ lúc đệm (filterAndAccept) — không gửi được lệnh
             // xoá thì commit nguyên văn ký tự (gõ mộc, lõi đã reset) để nó không mất im lặng.
-            ic_->commitString(Key::keySymToUTF8(static_cast<KeySym>(s)));
+            // #117: lưới an toàn — tuyệt đối không commit control char thô.
+            const std::string u = Key::keySymToUTF8(static_cast<KeySym>(s));
+            if (isPrintableText(u)) {
+                ic_->commitString(u);
+            }
         }
     }
 }
