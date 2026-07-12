@@ -144,8 +144,13 @@ public:
     const char *frontend() const override { return "doc"; }
     void commitStringImpl(const std::string &text) override { doc_ += text; }
     void deleteSurroundingTextImpl(int, unsigned int) override {}
-    void forwardKeyImpl(const ForwardKeyEvent &) override {}
+    void forwardKeyImpl(const ForwardKeyEvent &key) override {
+        forwarded_.push_back(key.rawKey().sym());
+    }
     void updatePreeditImpl() override {}
+
+    /// Các phím addon forward lại cho app (thứ tự nhận).
+    const std::vector<KeySym> &forwarded() const { return forwarded_; }
 
     /// Bơm một phím qua addon; phím KHÔNG bị nuốt thì áp vào "tài liệu" như app thật.
     void type(const Key &key) {
@@ -179,6 +184,7 @@ public:
 
 private:
     std::string doc_;
+    std::vector<KeySym> forwarded_;
 };
 
 } // namespace
@@ -254,6 +260,22 @@ int main() {
             << "#96: doc=\"" << ic->text() << "\", mong đợi \"dđen\" (phím đệm 'e' phải ra "
                "trước 'n', không mất)";
 
+        // ---- #118: phím non-text gõ trong lúc deleting_ không được nuốt hẳn ----
+        // Right (keySymToUTF8 rỗng) trước đây bị filterAndAccept vô điều kiện mà không đệm.
+        // Nay phải được đệm và forward lại cho app SAU khi chuỗi xoá hoàn tất (giữ thứ tự).
+        ic->reset();
+        ic->clearDoc();
+        ic->typeString("dd"); // doc="d", deleting_, chờ ACK
+        FCITX_ASSERT(daemon.waitCounts(3));
+        ic->type(Key("Right")); // gõ trong lúc đang xoá → đệm, KHÔNG mất
+        FCITX_ASSERT(ic->forwarded().empty())
+            << "Right phải được giữ tới khi chuỗi xoá xong, không forward sớm";
+        ic->type(Key("BackSpace")); // ACK trung gian: xoá thật 'd'
+        ic->type(Key("BackSpace")); // trigger: commit "đ" rồi mới forward Right
+        FCITX_ASSERT(ic->text() == "đ") << "doc=\"" << ic->text() << "\"";
+        FCITX_ASSERT(ic->forwarded().size() == 1 && ic->forwarded()[0] == FcitxKey_Right)
+            << "#118: Right phải được forward cho app sau khi commit (bị nuốt mất?)";
+
         // ---- #117: replay fail không được commit ký tự điều khiển thô ----
         // keySymToUTF8(Return) = "\r" (không rỗng) nên Enter gõ trong lúc deleting_ bị đệm;
         // khi replay mà send tới daemon fail, nhánh commit-nguyên-văn cũ chèn "\r" vào tài
@@ -261,7 +283,7 @@ int main() {
         ic->reset();
         ic->clearDoc();
         ic->typeString("cuw"); // "cư" (del=1) → deleting_, chờ ACK không bao giờ tới
-        FCITX_ASSERT(daemon.waitCounts(3));
+        FCITX_ASSERT(daemon.waitCounts(4));
         ic->typeString("o");  // đệm — "cưo" hợp lệ LỎNG (hiển thị tiếng Việt, del=0 khi replay)
                               // nhưng "ưo" là chuỗi nguyên âm CHƯA hoàn chỉnh → không hợp lệ CHẶT
         ic->type(Key("Tab")); // đệm (bug: keySymToUTF8(Tab) = "\t" không rỗng); khi replay,
@@ -274,6 +296,8 @@ int main() {
                      ic->text().find('\t') == std::string::npos &&
                      ic->text().find('\x1b') == std::string::npos)
             << "#117: ký tự điều khiển thô bị commit vào tài liệu: doc=\"" << ic->text() << "\"";
+        FCITX_ASSERT(!ic->forwarded().empty() && ic->forwarded().back() == FcitxKey_Tab)
+            << "#118: Tab đệm trong lúc deleting_ phải được forward cho app khi replay";
 
         instance.exit();
     });
