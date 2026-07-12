@@ -173,7 +173,10 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
     const uint32_t state = static_cast<uint32_t>(keyEvent.rawKey().states());
 
     // #11/#26: ':' khi không đang soạn dở → mở tra emoji (gõ :tên hoặc :u<hex>).
-    if (!emojiMode_ && sym == FcitxKey_colon && !pk_engine_is_composing(core_)) {
+    // #109: tổ hợp có modifier thật (Ctrl+Shift+; trên layout US cho sym=colon — shortcut của
+    // app) không thuộc về emoji — để đi tiếp, đồng bộ với check trong handleEmojiKey.
+    if (!emojiMode_ && sym == FcitxKey_colon && (state & kRealModMask) == 0 &&
+        !pk_engine_is_composing(core_)) {
         startEmoji();
         keyEvent.filterAndAccept();
         return;

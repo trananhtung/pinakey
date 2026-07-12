@@ -119,6 +119,19 @@ int main() {
         sendKey(testfrontend, uuid, "colon");
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Control+c"), false);
 
+        // 9b) #109: tổ hợp modifier chứa ':' (vd Ctrl+Shift+; trên layout US → sym=colon,
+        //     state=Ctrl|Shift — shortcut Google Sheets/IDE) là PHÍM TẮT của app — không được
+        //     nuốt mở bảng emoji; phải forward nguyên vẹn.
+        {
+            bool handled = testfrontend->call<ITestFrontend::sendKeyEvent>(
+                uuid, Key("Control+Shift+colon"), false);
+            FCITX_ASSERT(!handled) << "Ctrl+Shift+: phải được forward cho app, không mở emoji";
+        }
+        // Gõ tiếp phải là tiếng Việt bình thường (không rơi vào query emoji vô hình).
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("á ");
+        typeAscii(testfrontend, uuid, "as");
+        sendKey(testfrontend, uuid, "space");
+
         // 10) ':' (mở emoji) + SPACE khi không có ứng viên → chốt literal ":" và KHÔNG nuốt dấu
         //     cách (bug fix: Space được forward, không bị mất).
         testfrontend->call<ITestFrontend::pushCommitExpectation>(":");
