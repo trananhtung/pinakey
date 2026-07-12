@@ -51,6 +51,8 @@ pub struct EngineCore {
     double_space_armed: bool,
     /// #67: bảng rule transport theo app (nhúng sẵn → hệ thống → người dùng, lớp sau thắng).
     transport_rules: crate::transport::TransportRules,
+    /// #98: nguồn cấu hình lúc tạo — reload_config nạp lại đúng nguồn này.
+    config_source: ConfigSource,
 }
 
 /// #65: máy trạng thái viết hoa đầu câu. Engine thấy MỌI phím (kể cả phím forward khi buffer
@@ -72,8 +74,31 @@ const VN_CASE_NO_CHANGE: u8 = 3;
 /// Tên engine quy ước, dùng cho đường dẫn file macro `ibus-<name>.macro.text`.
 const ENGINE_NAME: &str = "PinaKey";
 
+/// #98: nguồn cấu hình lúc tạo engine — `reload_config` phải nạp lại đúng nguồn này,
+/// không nạp cứng tên quy ước (âm thầm thay config của engine tạo theo tên khác/từ JSON).
+enum ConfigSource {
+    /// Nạp từ file `~/.config/pinakey/ibus-<name>.config.json`.
+    Name(String),
+    /// Config tiêm trực tiếp (JSON/tự dựng) — không có file nguồn, reload là no-op.
+    Injected,
+}
+
 impl EngineCore {
     pub fn new(config: Config) -> EngineCore {
+        Self::with_source(config, ConfigSource::Injected)
+    }
+
+    /// #98: tạo engine gắn với TÊN config — `reload_config` sẽ đọc lại đúng file của tên này.
+    pub fn new_named(config: Config, name: &str) -> EngineCore {
+        Self::with_source(config, ConfigSource::Name(name.to_string()))
+    }
+
+    /// Config đang chạy (chỉ đọc).
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    fn with_source(config: Config, config_source: ConfigSource) -> EngineCore {
         let preeditor = build_preeditor(&config);
         let macro_table = build_macro_table(&config);
         let dictionary = load_dictionary(&config);
@@ -88,6 +113,7 @@ impl EngineCore {
             sentence: SentenceState::Idle,
             double_space_armed: false,
             transport_rules: load_transport_rules(),
+            config_source,
         }
     }
 
@@ -165,8 +191,15 @@ impl EngineCore {
     /// #69: đọc lại TOÀN BỘ cấu hình từ đĩa và áp ngay — kiểu gõ, bảng mã, flags, rule
     /// transport, macro, dict. Trạng thái gõ dở bị reset an toàn (đổi kiểu gõ giữa chừng thì
     /// buffer cũ vô nghĩa). Gọi khi file config đổi (watcher) hoặc GUI báo qua D-Bus.
-    pub fn reload_config(&mut self) {
-        self.config = pinakey_config::load_config(ENGINE_NAME);
+    /// Trả `true` nếu đã thật sự nạp lại (engine có nguồn file) — caller chỉ nên vứt trạng
+    /// thái hiển thị/segment khi điều đó xảy ra (#98).
+    pub fn reload_config(&mut self) -> bool {
+        // #98: nạp lại đúng NGUỒN lúc tạo; engine từ config tiêm trực tiếp không có file
+        // nguồn → giữ nguyên config (no-op), không âm thầm thay bằng file của tên quy ước.
+        let ConfigSource::Name(name) = &self.config_source else {
+            return false;
+        };
+        self.config = pinakey_config::load_config(name);
         self.rebuild_preeditor();
         // Dựng lại bảng macro TỪ ĐẦU theo cờ mới — cờ tắt thì bảng cũ (đầy dữ liệu, còn
         // enabled) phải được thay bằng bảng rỗng, không giữ lại trong bộ nhớ.
@@ -174,6 +207,7 @@ impl EngineCore {
         self.dictionary = load_dictionary(&self.config);
         self.transport_rules = load_transport_rules();
         self.reset_preeditor();
+        true
     }
 
     /// Nạp lại file macro + từ điển từ đĩa (issue #20, live-reload) — KHÔNG đụng tới cấu hình đang
