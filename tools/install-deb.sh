@@ -18,7 +18,7 @@ echo "==> Tìm gói .deb mới nhất cho kiến trúc '$arch' từ GitHub Relea
 url="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
   | grep -oE '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]+\.deb"' \
   | sed -E 's/.*"(https[^"]+)".*/\1/' \
-  | grep -- "_${arch}\.deb$" | head -1)"
+  | { grep -- "_${arch}\.deb$" || true; } | head -1)"
 if [ -z "${url:-}" ]; then
   echo "✗ Release mới nhất không có gói .deb dựng sẵn cho kiến trúc '$arch'."
   echo "  Hãy build từ nguồn: bash tools/install-fcitx5.sh"
