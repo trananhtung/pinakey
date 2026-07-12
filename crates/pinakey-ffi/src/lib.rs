@@ -48,10 +48,19 @@ pub struct PkEngine {
 
 impl PkEngine {
     fn from_config(config: Config) -> Box<PkEngine> {
-        let im_name = to_cstring(&config.input_method);
-        let charset_name = to_cstring(&config.output_charset);
+        Self::build(EngineCore::new(config))
+    }
+
+    /// #98: engine gắn với TÊN config — reload_config đọc lại đúng file `ibus-<name>.config.json`.
+    fn from_named_config(name: &str, config: Config) -> Box<PkEngine> {
+        Self::build(EngineCore::new_named(config, name))
+    }
+
+    fn build(core: EngineCore) -> Box<PkEngine> {
+        let im_name = to_cstring(&core.config.input_method);
+        let charset_name = to_cstring(&core.config.output_charset);
         Box::new(PkEngine {
-            core: EngineCore::new(config),
+            core,
             commit: CString::default(),
             preedit: CString::default(),
             preedit_cursor: 0,
@@ -201,6 +210,8 @@ unsafe fn opt_str<'a>(ptr: *const c_char) -> Option<&'a str> {
 /// Tạo engine với cấu hình mặc định (Telex, Unicode, cờ chuẩn).
 #[no_mangle]
 pub extern "C" fn pk_engine_new() -> *mut PkEngine {
+    // Lưu ý (#98): engine mặc định không gắn nguồn file — pk_engine_reload_config là no-op;
+    // cần reload theo file thì dùng pk_engine_new_from_name.
     Box::into_raw(PkEngine::from_config(default_cfg()))
 }
 
@@ -211,11 +222,11 @@ pub extern "C" fn pk_engine_new() -> *mut PkEngine {
 /// `name` là chuỗi C NUL-terminated hợp lệ hoặc null.
 #[no_mangle]
 pub unsafe extern "C" fn pk_engine_new_from_name(name: *const c_char) -> *mut PkEngine {
-    let cfg = match opt_str(name) {
-        Some(n) if !n.is_empty() => load_config(n),
-        _ => default_cfg(),
-    };
-    Box::into_raw(PkEngine::from_config(cfg))
+    // #98: giữ danh tính tên để pk_engine_reload_config nạp lại ĐÚNG file của tên này.
+    match opt_str(name) {
+        Some(n) if !n.is_empty() => Box::into_raw(PkEngine::from_named_config(n, load_config(n))),
+        _ => Box::into_raw(PkEngine::from_config(default_cfg())),
+    }
 }
 
 /// Tạo engine từ chuỗi JSON cấu hình; null hoặc JSON sai → cấu hình mặc định.
@@ -990,7 +1001,10 @@ mod tests {
             std::fs::create_dir_all(dir.join("pinakey")).unwrap();
             std::env::set_var("XDG_CONFIG_HOME", &dir);
 
-            let e = pk_engine_new(); // config chưa có trên đĩa → mặc định Telex
+            // #98: tạo THEO TÊN như addon thật — engine mặc định (pk_engine_new) không có
+            // nguồn file nên reload là no-op.
+            let name = CString::new("PinaKey").unwrap();
+            let e = pk_engine_new_from_name(name.as_ptr()); // chưa có file → mặc định Telex
             let (_c, p) = type_str(e, "as");
             assert_eq!(p, "á", "Telex mặc định: as → á");
             pk_engine_reset(e);
