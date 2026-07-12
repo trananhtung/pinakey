@@ -13,12 +13,14 @@
 #include <fcitx-utils/testing.h>
 #include <fcitx/addonmanager.h>
 #include <fcitx/candidatelist.h>
+#include <fcitx/action.h>
 #include <fcitx/inputcontext.h>
 #include <fcitx/inputpanel.h>
 #include <fcitx/inputcontextmanager.h>
 #include <fcitx/inputmethodgroup.h>
 #include <fcitx/inputmethodmanager.h>
 #include <fcitx/instance.h>
+#include <fcitx/userinterfacemanager.h>
 
 #include <cstdlib>
 #include <filesystem>
@@ -237,6 +239,35 @@ int main() {
         testfrontend->call<ITestFrontend::pushCommitExpectation>("á ");
         typeAscii(testfrontend, uuid, "a1"); // VNI: 1 = dấu sắc
         sendKey(testfrontend, uuid, "space");
+
+        // 17) #111: chọn "Kiểu gõ" từ menu khay phải áp cho cả input context MỞ SAU đó —
+        //     không chỉ các cửa sổ đang tồn tại. Config file đang là VNI (bước 16); chọn
+        //     Telex qua action menu rồi mở IC mới: IC mới phải gõ Telex, dù file vẫn VNI.
+        {
+            auto &uim = instance.userInterfaceManager();
+            Action *telex = nullptr;
+            for (int i = 0; i < 64; ++i) {
+                auto *a = uim.lookupAction("pinakey-im-" + std::to_string(i));
+                if (!a) {
+                    break;
+                }
+                if (a->shortText(ic) == "Telex") {
+                    telex = a;
+                    break;
+                }
+            }
+            FCITX_ASSERT(telex) << "không tìm thấy action menu 'Telex'";
+            telex->activate(ic); // như người dùng bấm menu khay
+
+            auto uuid2 = testfrontend->call<ITestFrontend::createInputContext>("testapp2");
+            auto *ic2 = instance.inputContextManager().findByUUID(uuid2);
+            FCITX_ASSERT(ic2);
+            ic2->focusIn();
+            instance.setCurrentInputMethod(ic2, "pinakey", true);
+            testfrontend->call<ITestFrontend::pushCommitExpectation>("á ");
+            typeAscii(testfrontend, uuid2, "as"); // Telex: s = sắc
+            sendKey(testfrontend, uuid2, "space");
+        }
 
         instance.exit();
     });
