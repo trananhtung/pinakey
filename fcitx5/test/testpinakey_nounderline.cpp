@@ -544,6 +544,22 @@ int main() {
             << "double-space với NumLock/CapsLock bật: doc=\"" << ic->text()
             << "\", mong đợi \"tiếng. \"";
 
+        // #108: GIỮ phím space (auto-repeat, KeyState::Repeat) không phải là "nhấn lần hai" —
+        // không được chuyển thành ". "; addon phải để space đi tiếp tới app (không nuốt),
+        // app tự chèn chuỗi dấu cách như thường.
+        ic->reset();
+        ic->clearDoc();
+        sendKeys(ic.get(), "tieengs "); // arm
+        {
+            KeyEvent ke(ic.get(), Key(FcitxKey_space, KeyStates{KeyState::Repeat}), false);
+            ic->keyEvent(ke);
+            FCITX_ASSERT(!ke.accepted())
+                << "space auto-repeat phải được forward cho app, không bị addon nuốt";
+        }
+        FCITX_ASSERT(ic->text() == "tiếng ")
+            << "space auto-repeat bị chuyển nhầm thành \". \": doc=\"" << ic->text()
+            << "\", mong đợi \"tiếng \" (nguyên vẹn)";
+
         // #65 an toàn: click chuột dời con trỏ khi cửa sổ double-space đang mở (app không gửi
         // reset) rồi bấm space → KHÔNG được xoá ký tự ở vị trí mới / chèn ". ". Văn bản trước
         // con trỏ mới không kết thúc bằng "từ + dấu cách" → addon phải bỏ qua.
