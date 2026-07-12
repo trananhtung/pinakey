@@ -322,6 +322,37 @@ int main() {
         FCITX_ASSERT(ic->text().find("vv") == std::string::npos)
             << "#116: chữ bị đúp sau replay fail: doc=\"" << ic->text() << "\"";
 
+        // ---- #125: Backspace muộn của chuỗi ĐÃ timeout không được ăn ACK của chuỗi mới ----
+        // Chuỗi-1 (dd→đ, 2 BS) timeout; replay mở chuỗi-2 (aa→â, 2 BS). 2 BS muộn của
+        // chuỗi-1 về sau đó phải bị NUỐT BỎ (mồ côi), không được: (1) ăn quota ACK chuỗi-2
+        // (xoá ký tự thật + commit sớm), (2) đẩy 2 BS thật của chuỗi-2 vào đường xử lý
+        // thường như Backspace người dùng → mở chuỗi-3 → hỗn loạn tự khuếch đại.
+        // daemon2 đã chết (kịch bản #116) → dựng daemon3 + chờ hết throttle 5s; daemon3
+        // sống suốt kịch bản → replay gửi lệnh xoá chuỗi-2 thành công.
+        FakeDaemon daemon3(std::string(std::getenv("XDG_RUNTIME_DIR")) +
+                           "/pinakey/uinput.sock");
+        std::this_thread::sleep_for(std::chrono::milliseconds(5200));
+        ic->reset();
+        ic->clearDoc();
+        ic->typeString("dd"); // doc="d", chuỗi-1: expected 2 BS, pending "đ"
+        FCITX_ASSERT(daemon3.waitCounts(1));
+        ic->typeString("aa"); // đệm cả hai
+        std::this_thread::sleep_for(std::chrono::milliseconds(600));
+        ic->typeString("n"); // timeout: commit "đ"; replay 'a' (commit), 'a'→"â" mở chuỗi-2;
+                             // 'n' bị đệm lại chờ ACK chuỗi-2
+        FCITX_ASSERT(daemon3.waitCounts(2));
+        FCITX_ASSERT(ic->text() == "dđa") << "sau timeout+replay: doc=\"" << ic->text() << "\"";
+        // 2 BS MUỘN của chuỗi-1 về bây giờ → phải bị nuốt bỏ, doc không đổi.
+        ic->type(Key("BackSpace"));
+        ic->type(Key("BackSpace"));
+        FCITX_ASSERT(ic->text() == "dđa")
+            << "#125: BS mồ côi ăn vào chuỗi mới: doc=\"" << ic->text() << "\"";
+        // 2 BS THẬT của chuỗi-2 về: trung gian xoá 'a', trigger commit "â" rồi replay 'n'.
+        ic->type(Key("BackSpace"));
+        ic->type(Key("BackSpace"));
+        FCITX_ASSERT(ic->text() == "dđân")
+            << "#125: doc=\"" << ic->text() << "\", mong đợi \"dđân\"";
+
         instance.exit();
     });
     instance.exec();

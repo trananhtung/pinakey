@@ -111,6 +111,7 @@ void PinaKeyState::reset() {
     pendingCommit_.clear();
     bufferedKeys_.clear();
     pendingForwardKey_.reset();
+    orphanBackspaces_ = 0;
 
     // Dọn trạng thái emoji: reset là "vứt bỏ" (không commit) — nếu để sót, phím gõ sau khi quay
     // lại context này bị nuốt vào query emoji vô hình.
@@ -128,6 +129,29 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
     // Phím nhả: lõi không xử lý; để đi tiếp.
     if (keyEvent.isRelease()) {
         return;
+    }
+
+    // #125: Backspace "mồ côi" — bơm cho chuỗi xoá ĐÃ timeout, giao muộn (round-trip chậm,
+    // không phải mất hẳn). Nuốt bỏ để chúng không ăn quota ACK của chuỗi mới (xoá ký tự thật
+    // + commit sớm) hay rơi vào engine như Backspace NGƯỜI DÙNG (mở chuỗi mới nữa — lệch pha
+    // tự khuếch đại). Chúng đi cùng pipeline input nên luôn về TRƯỚC Backspace của chuỗi mới;
+    // quá 1000ms coi như mất hẳn — Backspace lúc đó là của người dùng thật.
+    //
+    // Đây là heuristic có chủ đích: Backspace bơm-ngược quay về là key event kernel thuần,
+    // KHÔNG thể mang định danh chuỗi/generation (muốn có phải đổi protocol ACK sang socket).
+    // Nếu chúng thật sự bị rơi (hiếm — daemon còn sống mới mở được chuỗi mới), giá phải trả
+    // bị chặn ở ≤ nợ mồ côi trong 1000ms và KHÔNG tự khuếch đại như để chúng lẫn vào ACK.
+    if (orphanBackspaces_ > 0) {
+        const auto orphanAge = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                   std::chrono::steady_clock::now() - orphanSince_)
+                                   .count();
+        if (orphanAge > 1000) {
+            orphanBackspaces_ = 0;
+        } else if (isBackspaceSym(static_cast<uint32_t>(keyEvent.rawKey().sym()))) {
+            --orphanBackspaces_;
+            keyEvent.filterAndAccept();
+            return;
+        }
     }
 
     // ACK uinput: đang trong chuỗi xoá tự động → các phím Backspace bơm-ngược từ daemon đi qua đây.
@@ -148,6 +172,10 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
             }
             pendingCommit_.clear();
             deleting_ = false;
+            // #125: phần Backspace chưa quay về của chuỗi này có thể chỉ MUỘN chứ không mất
+            // — ghi nợ để nuốt bỏ khi chúng về, không cho lẫn vào chuỗi mới / đường thường.
+            orphanBackspaces_ += expectedBackspaces_ - currentBackspaceCount_;
+            orphanSince_ = std::chrono::steady_clock::now();
             expectedBackspaces_ = 0;
             currentBackspaceCount_ = 0;
             flushPendingForward(); // #118: không để phím chức năng hoãn bị rơi khi timeout
