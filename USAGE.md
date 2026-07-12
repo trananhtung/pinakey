@@ -208,6 +208,10 @@ Cần **3 bước** (thiếu bước nào cũng không có tác dụng):
 
 Muốn tắt: bỏ `PINAKEY_UINPUT=1` (đăng nhập lại) hoặc `systemctl --user disable --now pinakey-uinput-server`.
 
+> **Khi nâng cấp PinaKey**: daemon và addon nói chuyện qua protocol nội bộ (đường socket,
+> byte hello) có thể thay đổi giữa các bản — sau khi cài bản mới hãy restart cả hai:
+> `systemctl --user restart pinakey-uinput-server` và khởi động lại fcitx5.
+
 ---
 
 ## 10. Giao diện thiết lập (tuỳ chọn)

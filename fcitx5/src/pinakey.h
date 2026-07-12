@@ -82,7 +82,9 @@ private:
     // hoãn commit, bơm (N+1) Backspace, ĐẾM Backspace bơm-ngược quay về fcitx, chỉ commit chuỗi
     // mới sau khi xác nhận đã xoá đủ — triệt tiêu cuộc đua "commit trước khi xoá xong" (như
     // fcitx5-lotus). Thay cho đường commit-ngay cũ (#28) vốn racy.
-    void startUinputReplace();             // performReplacement: bơm Backspace, hoãn commit
+    // performReplacement: bơm Backspace, hoãn commit. Trả false khi không gửi được lệnh xoá
+    // (#106) — caller phải để phím đi tiếp (không filterAndAccept), tránh nuốt phím im lặng.
+    bool startUinputReplace();
     void handleUinputAck(KeyEvent &keyEvent); // xử lý Backspace bơm-ngược; commit khi đủ
     void replayBufferedKeys();             // gõ nhanh khi đang xoá → replay sau khi ACK xong
     bool wantReplaceMode() const; // có dùng diff-and-replace (SurroundingText hoặc uinput) không

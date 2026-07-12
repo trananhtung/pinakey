@@ -201,8 +201,15 @@ int main(int argc, char *argv[]) {
             if (c >= 0) {
                 // #72: xác thực 2 lớp (SO_PEERCRED + readlink /proc/<pid>/exe) — xem peerauth.h.
                 if (pinakey::peerAuthorized(c, expectedUid)) {
-                    client.reset(c);
-                    std::fprintf(stderr, "pinakey-server: fcitx5 đã kết nối\n");
+                    // #105: báo "đã chấp nhận" — với AF_UNIX, connect() phía client thành công
+                    // ngay khi còn backlog nên chưa nói lên điều gì; client chờ byte hello này.
+                    const char hello = fcitx::pinakey::kUinputHello;
+                    if (send(c, &hello, 1, MSG_NOSIGNAL) == 1) {
+                        client.reset(c);
+                        std::fprintf(stderr, "pinakey-server: fcitx5 đã kết nối\n");
+                    } else {
+                        close(c);
+                    }
                 } else {
                     close(c);
                 }
