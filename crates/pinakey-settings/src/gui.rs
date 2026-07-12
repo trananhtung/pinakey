@@ -41,16 +41,8 @@ impl eframe::App for SettingsApp {
         // Đọc trước trạng thái (read-only) để closure không mượn `self`.
         let ims = self.controller.input_methods();
         let charsets = self.controller.charsets();
-        let modes = self.controller.input_modes();
         let cur_im = self.controller.input_method().to_string();
         let cur_cs = self.controller.output_charset().to_string();
-        let cur_mode = self.controller.input_mode();
-        let cur_mode_label = modes
-            .iter()
-            .find(|(m, _)| *m == cur_mode)
-            .map(|(_, l)| *l)
-            .unwrap_or("?")
-            .to_string();
         let flag_states: Vec<(u32, &'static str, bool)> = settings_flags()
             .into_iter()
             .map(|(f, l)| (f, l, self.controller.flag_enabled(f)))
@@ -63,7 +55,6 @@ impl eframe::App for SettingsApp {
         // Các thay đổi do người dùng tạo, áp dụng sau khi vẽ.
         let mut set_im: Option<String> = None;
         let mut set_cs: Option<String> = None;
-        let mut set_mode: Option<i32> = None;
         let mut set_flags: Vec<(u32, bool)> = Vec::new();
         let mut set_date_fmt: Option<String> = None;
         let mut set_time_fmt: Option<String> = None;
@@ -107,18 +98,6 @@ impl eframe::App for SettingsApp {
                             for cs in &charsets {
                                 if ui.selectable_label(*cs == cur_cs, cs).clicked() {
                                     set_cs = Some(cs.clone());
-                                }
-                            }
-                        });
-                    ui.end_row();
-
-                    ui.label("Chế độ nhập");
-                    egui::ComboBox::from_id_salt("mode")
-                        .selected_text(cur_mode_label.as_str())
-                        .show_ui(ui, |ui| {
-                            for (m, l) in &modes {
-                                if ui.selectable_label(*m == cur_mode, *l).clicked() {
-                                    set_mode = Some(*m);
                                 }
                             }
                         });
@@ -191,9 +170,6 @@ impl eframe::App for SettingsApp {
         }
         if let Some(cs) = set_cs {
             self.controller.set_output_charset(&cs);
-        }
-        if let Some(m) = set_mode {
-            self.controller.set_input_mode(m);
         }
         for (flag, on) in set_flags {
             self.controller.set_flag(flag, on);

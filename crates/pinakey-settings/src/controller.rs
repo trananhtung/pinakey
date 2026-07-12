@@ -109,11 +109,6 @@ impl SettingsController {
         pinakey_core::get_charset_names()
     }
 
-    /// Các chế độ nhập khả dụng (giá trị + nhãn).
-    pub fn input_modes(&self) -> Vec<(i32, &'static str)> {
-        flags::im_lookup_table()
-    }
-
     pub fn input_method(&self) -> &str {
         &self.config.input_method
     }
@@ -136,17 +131,6 @@ impl SettingsController {
     pub fn set_output_charset(&mut self, charset: &str) {
         if charset != self.config.output_charset {
             self.config.output_charset = charset.to_string();
-            self.dirty = true;
-        }
-    }
-
-    pub fn input_mode(&self) -> i32 {
-        self.config.default_input_mode
-    }
-
-    pub fn set_input_mode(&mut self, mode: i32) {
-        if mode != self.config.default_input_mode {
-            self.config.default_input_mode = mode;
             self.dirty = true;
         }
     }
@@ -274,14 +258,6 @@ mod tests {
             .expect("phải có charset khác");
         c.set_output_charset(&other);
         assert_eq!(c.output_charset(), other);
-        assert!(c.is_dirty());
-    }
-
-    #[test]
-    fn set_input_mode_marks_dirty() {
-        let mut c = ctrl();
-        c.set_input_mode(flags::XTEST_FAKE_KEY_EVENT_IM);
-        assert_eq!(c.input_mode(), flags::XTEST_FAKE_KEY_EVENT_IM);
         assert!(c.is_dirty());
     }
 
