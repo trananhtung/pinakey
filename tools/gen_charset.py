@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate `crates/bamboo-core/src/charset_def.rs` from upstream `charset_def.go`.
+"""Generate `crates/pinakey-core/src/charset_def.rs` from upstream `charset_def.go`.
 
 The legacy Vietnamese charsets are byte encodings (not UTF-8), so each Go string value is
 decoded to its raw bytes and emitted as a Rust byte-string literal.
@@ -9,7 +9,7 @@ Usage:
 
 Defaults:
     SRC  = $BAMBOO_GO_SRC/charset_def.go        (env BAMBOO_GO_SRC, else ./charset_def.go)
-    OUT  = crates/bamboo-core/src/charset_def.rs (resolved relative to the repo root)
+    OUT  = crates/pinakey-core/src/charset_def.rs (resolved relative to the repo root)
 
 Clone the upstream Go source first, e.g.:
     git clone https://github.com/BambooEngine/bamboo-core /tmp/bamboo-core-src
@@ -28,7 +28,7 @@ def default_src():
 
 
 def default_out():
-    return os.path.join(REPO_ROOT, "crates", "bamboo-core", "src", "charset_def.rs")
+    return os.path.join(REPO_ROOT, "crates", "pinakey-core", "src", "charset_def.rs")
 
 
 SRC = sys.argv[1] if len(sys.argv) > 1 else default_src()
@@ -130,17 +130,18 @@ def main():
                 cur[1].append((cp, bs))
 
     lines = []
-    lines.append("//! Charset encoding tables — generated from `charset_def.go`.")
+    # Header khớp NGUYÊN VĂN file đã commit (tiếng Việt) — regen phải cho diff rỗng (#102).
+    lines.append("//! Các bảng mã ký tự — được sinh ra từ `charset_def.go`.")
     lines.append("//!")
-    lines.append("//! Values are raw byte sequences (legacy encodings are not UTF-8). `\\xNN` is a single")
-    lines.append("//! byte; multi-byte values are the UTF-8 (or codepage) bytes of the original Go string.")
+    lines.append("//! Giá trị là chuỗi byte thô (các bảng mã cũ không phải UTF-8). `\\xNN` là một byte đơn;")
+    lines.append("//! các giá trị nhiều byte là byte UTF-8 (hoặc codepage) của chuỗi Go gốc.")
     lines.append("//!")
-    lines.append("//! Regenerate with `python3 tools/gen_charset.py` (see CONTRIBUTING.md). Do not edit by hand.")
+    lines.append("//! Sinh lại bằng `python3 tools/gen_charset.py` (xem CONTRIBUTING.md). Không sửa bằng tay.")
     lines.append("")
-    lines.append("/// One charset: its name paired with `(source_char, encoded_bytes)` entries.")
+    lines.append("/// Một bảng mã: tên của nó cùng các mục `(source_char, encoded_bytes)`.")
     lines.append("pub type CharsetDef = (&'static str, Vec<(char, &'static [u8])>);")
     lines.append("")
-    lines.append("/// Returns the encoding table for every non-Unicode charset.")
+    lines.append("/// Trả về bảng mã hoá cho mọi bảng mã không phải Unicode.")
     lines.append("pub fn charset_definitions() -> Vec<CharsetDef> {")
     lines.append("    vec![")
     for name, entries in charsets:
