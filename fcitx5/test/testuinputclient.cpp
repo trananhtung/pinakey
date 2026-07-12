@@ -9,6 +9,7 @@
 
 #include <chrono>
 #include <cstring>
+#include <cstdlib>
 #include <string>
 
 #include <sys/socket.h>
@@ -17,17 +18,16 @@
 
 namespace {
 
-// Server SEQPACKET abstract-namespace tối giản, mô phỏng pinakey-uinput-server.
-int listenOn(const std::string &name) {
+// Server SEQPACKET trên socket FILESYSTEM (#72), mô phỏng pinakey-uinput-server.
+int listenOn(const std::string &path) {
+    ::unlink(path.c_str());
     int fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
     FCITX_ASSERT(fd >= 0);
     struct sockaddr_un addr {};
     addr.sun_family = AF_UNIX;
-    addr.sun_path[0] = '\0';
-    std::memcpy(&addr.sun_path[1], name.c_str(), name.size());
-    socklen_t len =
-        static_cast<socklen_t>(offsetof(struct sockaddr_un, sun_path) + 1 + name.size());
-    FCITX_ASSERT(bind(fd, reinterpret_cast<struct sockaddr *>(&addr), len) == 0);
+    FCITX_ASSERT(path.size() < sizeof(addr.sun_path));
+    std::memcpy(addr.sun_path, path.c_str(), path.size());
+    FCITX_ASSERT(bind(fd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) == 0);
     FCITX_ASSERT(listen(fd, 1) == 0);
     return fd;
 }
@@ -38,7 +38,9 @@ int main() {
     using namespace std::chrono_literals;
     using fcitx::pinakey::UinputClient;
 
-    const std::string sockName = "pinakey-test-" + std::to_string(getpid());
+    char tmpl[] = "/tmp/pinakey-uinput-test-XXXXXX";
+    FCITX_ASSERT(mkdtemp(tmpl) != nullptr);
+    const std::string sockName = std::string(tmpl) + "/uinput.sock";
 
     // Đồng hồ giả để test throttle tất định, không cần sleep.
     std::chrono::steady_clock::time_point now{};
@@ -84,5 +86,7 @@ int main() {
 
     ::close(conn);
     ::close(server);
+    ::unlink(sockName.c_str());
+    ::rmdir(tmpl);
     return 0;
 }

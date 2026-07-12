@@ -32,19 +32,19 @@ Thành phần "đặc quyền" duy nhất, và chỉ tồn tại khi bạn tự 
 - **Khả năng duy nhất**: tạo một thiết bị bàn phím ảo **chỉ khai báo phím Backspace**
   (`UI_SET_KEYBIT KEY_BACKSPACE`) và phát tối đa 999 Backspace mỗi yêu cầu. Không đọc thiết bị
   nhập nào, không đổi cấu hình thiết bị của bạn.
-- **Xác thực client 2 lớp**: `SO_PEERCRED` (UID phải trùng user phục vụ) **và**
-  `readlink /proc/<pid>/exe` phải là binary fcitx5 ở prefix chuẩn (`/usr/bin`,
-  `/usr/local/bin`) — không tin `argv[0]`/cmdline vì giả được.
+- **Socket filesystem có quyền**: `$XDG_RUNTIME_DIR/pinakey/uinput.sock` — thư mục `0700`,
+  socket `0600` (sinh ra đã đúng quyền qua umask, không có cửa sổ chmod) — tiến trình khác
+  user bị chặn ngay từ `connect()`.
+- **Xác thực client 2 lớp** (phòng thủ tầng hai sau quyền filesystem): `SO_PEERCRED` (UID
+  phải trùng user phục vụ) **và** `readlink /proc/<pid>/exe` phải là binary fcitx5 ở prefix
+  chuẩn (`/usr/bin`, `/usr/local/bin`) — không tin `argv[0]`/cmdline vì giả được. Có unit
+  test (`fcitx5/test/testpeerauth.cpp`).
 - **Quyền hệ thống tối thiểu**: udev rule chỉ gắn tag `uaccess` cho đúng `/dev/uinput`
   (ACL theo seat đang hoạt động — user không ngồi máy không mở được); systemd unit chạy quyền
   user với `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, `PrivateTmp`.
 
 ### Hạn chế đã biết (theo dõi ở issue #72)
 
-- Socket đang dùng **abstract namespace** (`\0pinakeysocket-<user>-kb`) — không có quyền
-  filesystem nên tiến trình khác user có thể *thử* kết nối (bị từ chối bởi 2 lớp xác thực,
-  nhưng về nguyên tắc nên chuyển sang socket filesystem `0600` trong `$XDG_RUNTIME_DIR`).
-  Việc chuyển đổi thay đổi protocol client (addon) nên sẽ làm trong một PR riêng.
 - `readlink /proc/<pid>/exe` có cửa sổ TOCTOU hẹp (pid tái sử dụng) — chấp nhận được trong
   threat model desktop (kẻ tấn công cùng UID vốn đã thao túng được phiên của bạn).
 

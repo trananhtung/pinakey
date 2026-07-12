@@ -4,6 +4,7 @@
  */
 #include "pinakey.h"
 
+#include "socketpath.h"
 #include "uinputclient.h"
 #include "utf8util.h"
 
@@ -19,10 +20,7 @@
 #include <fcitx/text.h>
 #include <fcitx/userinterfacemanager.h>
 
-#include <pwd.h>
-#include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/un.h>
 #include <unistd.h>
 
 #include <cctype>
@@ -59,20 +57,10 @@ bool debugSurroundingEnabled() {
     return enabled;
 }
 
-/// Client tới daemon uinput (issue #28/#91, xem uinputclient.h) — một kết nối dùng chung cho cả
-/// tiến trình addon, tên socket theo user như daemon quy ước.
+/// Client tới daemon uinput (issue #28/#91/#72, xem uinputclient.h) — một kết nối dùng chung
+/// cho cả tiến trình addon, socket filesystem trong $XDG_RUNTIME_DIR như daemon quy ước.
 pinakey::UinputClient &uinputClient() {
-    static pinakey::UinputClient client([] {
-        const char *user = std::getenv("USER");
-        std::string name;
-        if (user && *user) {
-            name = user;
-        } else {
-            struct passwd *pw = getpwuid(getuid());
-            name = (pw && pw->pw_name) ? pw->pw_name : "unknown";
-        }
-        return "pinakeysocket-" + name + "-kb";
-    }());
+    static pinakey::UinputClient client(pinakey::uinputSocketPath());
     return client;
 }
 

@@ -8,11 +8,14 @@ Type=simple
 ExecStart=/usr/bin/pinakey-uinput-server
 Restart=on-failure
 RestartSec=2
-# Tăng cường an toàn: daemon chỉ cần mở /dev/uinput + một abstract socket.
+# Tăng cường an toàn: daemon chỉ cần mở /dev/uinput + một socket 0600 trong
+# $XDG_RUNTIME_DIR/pinakey (systemd tạo sẵn thư mục 0700 qua RuntimeDirectory, #72).
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
 PrivateTmp=true
+RuntimeDirectory=pinakey
+RuntimeDirectoryMode=0700
 
 [Install]
 WantedBy=default.target

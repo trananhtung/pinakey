@@ -28,10 +28,10 @@ class UinputClient {
 public:
     using Clock = std::chrono::steady_clock;
 
-    explicit UinputClient(std::string sockName,
+    explicit UinputClient(std::string sockPath,
                           Clock::duration retryInterval = std::chrono::seconds(5),
                           std::function<Clock::time_point()> now = [] { return Clock::now(); })
-        : sockName_(std::move(sockName)), retryInterval_(retryInterval), now_(std::move(now)) {}
+        : sockPath_(std::move(sockPath)), retryInterval_(retryInterval), now_(std::move(now)) {}
     ~UinputClient() {
         if (fd_ >= 0) {
             ::close(fd_);
@@ -72,25 +72,23 @@ private:
         if (fd < 0) {
             return;
         }
+        // #72: socket FILESYSTEM (0600 trong $XDG_RUNTIME_DIR) thay abstract namespace —
+        // quyền filesystem chặn tiến trình khác user ngay từ connect().
         struct sockaddr_un addr {};
         addr.sun_family = AF_UNIX;
-        addr.sun_path[0] = '\0'; // abstract namespace
-        std::string name = sockName_;
-        const size_t maxLen = sizeof(addr.sun_path) - 2;
-        if (name.size() > maxLen) {
-            name.resize(maxLen);
+        if (sockPath_.size() >= sizeof(addr.sun_path)) {
+            ::close(fd);
+            return;
         }
-        std::memcpy(&addr.sun_path[1], name.c_str(), name.size());
-        socklen_t len =
-            static_cast<socklen_t>(offsetof(struct sockaddr_un, sun_path) + 1 + name.size());
-        if (connect(fd, reinterpret_cast<struct sockaddr *>(&addr), len) != 0) {
+        std::memcpy(addr.sun_path, sockPath_.c_str(), sockPath_.size());
+        if (connect(fd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) != 0) {
             ::close(fd);
             return;
         }
         fd_ = fd;
     }
 
-    std::string sockName_;
+    std::string sockPath_;
     Clock::duration retryInterval_;
     std::function<Clock::time_point()> now_;
     int fd_ = -1;
