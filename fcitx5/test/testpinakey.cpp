@@ -181,6 +181,36 @@ int main() {
         }
         sendKey(testfrontend, uuid, "1");
 
+        // 15c) #127 Enter cũng phải chọn theo TRANG HIỆN TẠI như phím số (15b): lật sang
+        //      trang 2 rồi Enter — phải commit emoji đang mang nhãn "1." trên màn hình,
+        //      không phải mục 1 (vô hình) của trang đầu.
+        sendKey(testfrontend, uuid, "colon");
+        typeAscii(testfrontend, uuid, "face");
+        {
+            auto cl = ic->inputPanel().candidateList();
+            FCITX_ASSERT(cl && cl->toPageable() && cl->toPageable()->hasNext())
+                << "query ':face' phải có nhiều hơn 1 trang candidate";
+            cl->toPageable()->next();
+            const std::string label = cl->candidate(0).text().toString(); // "1. <emoji>"
+            FCITX_ASSERT(label.size() > 3 && label[0] == '1');
+            testfrontend->call<ITestFrontend::pushCommitExpectation>(label.substr(3));
+        }
+        sendKey(testfrontend, uuid, "Return");
+
+        // 15d) #127 Space tương tự Enter: chọn mục 1 của trang ĐANG XEM.
+        sendKey(testfrontend, uuid, "colon");
+        typeAscii(testfrontend, uuid, "face");
+        {
+            auto cl = ic->inputPanel().candidateList();
+            FCITX_ASSERT(cl && cl->toPageable() && cl->toPageable()->hasNext())
+                << "query ':face' phải có nhiều hơn 1 trang candidate";
+            cl->toPageable()->next();
+            const std::string label = cl->candidate(0).text().toString(); // "1. <emoji>"
+            FCITX_ASSERT(label.size() > 3 && label[0] == '1');
+            testfrontend->call<ITestFrontend::pushCommitExpectation>(label.substr(3));
+        }
+        sendKey(testfrontend, uuid, "space");
+
         // 16) #69 áp config tức thì: ghi config VNI rồi gọi reloadConfig() (đúng đường mà
         //     D-Bus ReloadAddonConfig của fcitx5 gọi vào) → gõ VNI ăn ngay trên input context
         //     ĐANG MỞ, không cần khởi động lại. Đặt cuối cùng vì các bước trước dùng Telex.
