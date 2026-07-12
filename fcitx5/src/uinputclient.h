@@ -57,7 +57,9 @@ public:
         if (n <= 0 || !available()) {
             return;
         }
-        if (send(fd_, &n, sizeof(n), MSG_NOSIGNAL) <= 0) {
+        // MSG_DONTWAIT: daemon kẹt (buffer đầy) thì coi như chết và nhả fd — tuyệt đối không
+        // block main thread của fcitx5 (đơ toàn bộ bàn phím).
+        if (send(fd_, &n, sizeof(n), MSG_NOSIGNAL | MSG_DONTWAIT) <= 0) {
             ::close(fd_);
             fd_ = -1;             // sẽ thử kết nối lại lần sau
             failedOnce_ = false;  // daemon vừa còn sống → lần available() kế thử ngay
@@ -66,7 +68,7 @@ public:
 
 private:
     void tryConnect() {
-        int fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+        int fd = socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0);
         if (fd < 0) {
             return;
         }
