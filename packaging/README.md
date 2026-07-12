@@ -7,7 +7,7 @@ Bộ gõ là **addon fcitx5** (build từ nguồn bằng CMake; lõi Rust biên 
 ```sh
 cmake -S fcitx5 -B fcitx5/build -DCMAKE_INSTALL_PREFIX=/usr -DPINAKEY_BUILD_TESTS=OFF
 cmake --build fcitx5/build
-( cd fcitx5/build && cpack -G DEB )    # -> fcitx5-pinakey-<ver>-Linux.deb
+( cd fcitx5/build && cpack -G DEB )    # -> fcitx5-pinakey_<ver>_<arch>.deb (DEB-DEFAULT)
 ( cd fcitx5/build && cpack -G RPM )    # cần rpmbuild
 ```
 

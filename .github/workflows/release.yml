@@ -94,7 +94,7 @@ jobs:
             Tải gói `.deb` bên dưới rồi:
 
             ```sh
-            sudo apt install ./fcitx5-pinakey-*.deb
+            sudo apt install ./fcitx5-pinakey_*.deb
             fcitx5 -r -d
             ```
 
