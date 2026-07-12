@@ -191,11 +191,13 @@ impl EngineCore {
     /// #69: đọc lại TOÀN BỘ cấu hình từ đĩa và áp ngay — kiểu gõ, bảng mã, flags, rule
     /// transport, macro, dict. Trạng thái gõ dở bị reset an toàn (đổi kiểu gõ giữa chừng thì
     /// buffer cũ vô nghĩa). Gọi khi file config đổi (watcher) hoặc GUI báo qua D-Bus.
-    pub fn reload_config(&mut self) {
+    /// Trả `true` nếu đã thật sự nạp lại (engine có nguồn file) — caller chỉ nên vứt trạng
+    /// thái hiển thị/segment khi điều đó xảy ra (#98).
+    pub fn reload_config(&mut self) -> bool {
         // #98: nạp lại đúng NGUỒN lúc tạo; engine từ config tiêm trực tiếp không có file
         // nguồn → giữ nguyên config (no-op), không âm thầm thay bằng file của tên quy ước.
         let ConfigSource::Name(name) = &self.config_source else {
-            return;
+            return false;
         };
         self.config = pinakey_config::load_config(name);
         self.rebuild_preeditor();
@@ -205,6 +207,7 @@ impl EngineCore {
         self.dictionary = load_dictionary(&self.config);
         self.transport_rules = load_transport_rules();
         self.reset_preeditor();
+        true
     }
 
     /// Nạp lại file macro + từ điển từ đĩa (issue #20, live-reload) — KHÔNG đụng tới cấu hình đang

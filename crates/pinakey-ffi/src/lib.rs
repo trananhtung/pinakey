@@ -427,7 +427,11 @@ pub unsafe extern "C" fn pk_engine_reload(e: *mut PkEngine) {
 #[no_mangle]
 pub unsafe extern "C" fn pk_engine_reload_config(e: *mut PkEngine) {
     if let Some(engine) = e.as_mut() {
-        engine.core.reload_config();
+        // #98: engine không có nguồn file (tiêm JSON/mặc định) → no-op, GIỮ trạng thái
+        // hiển thị/segment — clear giữa chừng sẽ làm diff với segment rỗng và đúp chữ.
+        if !engine.core.reload_config() {
+            return;
+        }
         engine.im_name = to_cstring(&engine.core.config.input_method);
         engine.charset_name = to_cstring(&engine.core.config.output_charset);
         // Quên segment đang theo dõi: cấu hình mới → diff với chuỗi cũ vô nghĩa.
