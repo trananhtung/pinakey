@@ -62,6 +62,25 @@ int main() {
     const std::string tooLong = std::string(tmpl) + "/" + std::string(120, 'a') + "/uinput.sock";
     FCITX_ASSERT(bindUinputServerSocket(tooLong) == -1);
 
+    // #115: đường TƯƠNG ĐỐI (XDG_RUNTIME_DIR không chuẩn) phải bị bác EINVAL — không được
+    // mkdir/bind theo CWD của daemon (tạo rác ./run/... mà client không bao giờ tìm thấy).
+    // Chdir vào thư mục tạm rỗng để phép kiểm "không tạo 'run'" không phụ thuộc CWD sẵn có.
+    FCITX_ASSERT(chdir(tmpl) == 0);
+    errno = 0;
+    FCITX_ASSERT(bindUinputServerSocket("run/pinakey/uinput.sock") == -1);
+    FCITX_ASSERT(errno == EINVAL);
+    struct stat relSt;
+    FCITX_ASSERT(stat("run", &relSt) != 0) << "không được tạo thư mục 'run' theo CWD";
+
+    // #115: đường tuyệt đối nhưng thư mục cha là "/" (hoặc toàn dấu '/') cũng phải bác EINVAL —
+    // không được mkdir/chmod thẳng lên thư mục gốc.
+    for (const char *bad : {"/uinput.sock", "//uinput.sock", "///uinput.sock"}) {
+        errno = 0;
+        FCITX_ASSERT(bindUinputServerSocket(bad) == -1) << bad;
+        FCITX_ASSERT(errno == EINVAL) << bad << " errno=" << errno;
+    }
+    FCITX_ASSERT(chdir("/") == 0); // rời khỏi tmpl trước khi rmdir bên dưới
+
     ::unlink(path.c_str());
     ::unlink((dir + "/uinput.lock").c_str());
     ::rmdir(dir.c_str());
