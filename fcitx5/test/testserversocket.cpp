@@ -62,6 +62,14 @@ int main() {
     const std::string tooLong = std::string(tmpl) + "/" + std::string(120, 'a') + "/uinput.sock";
     FCITX_ASSERT(bindUinputServerSocket(tooLong) == -1);
 
+    // #115: đường TƯƠNG ĐỐI (XDG_RUNTIME_DIR không chuẩn) phải bị bác EINVAL — không được
+    // mkdir/bind theo CWD của daemon (tạo rác ./run/... mà client không bao giờ tìm thấy).
+    errno = 0;
+    FCITX_ASSERT(bindUinputServerSocket("run/pinakey/uinput.sock") == -1);
+    FCITX_ASSERT(errno == EINVAL);
+    struct stat relSt;
+    FCITX_ASSERT(stat("run", &relSt) != 0) << "không được tạo thư mục 'run' theo CWD";
+
     ::unlink(path.c_str());
     ::unlink((dir + "/uinput.lock").c_str());
     ::rmdir(dir.c_str());

@@ -35,9 +35,12 @@ inline int bindUinputServerSocket(const std::string &sockPath, int *lockFdOut = 
     addr.sun_family = AF_UNIX;
     std::memcpy(addr.sun_path, sockPath.c_str(), sockPath.size());
 
+    // #115: yêu cầu đường TUYỆT ĐỐI có thư mục cha riêng để đặt quyền 0700 — đường tương đối
+    // (XDG_RUNTIME_DIR không chuẩn) sẽ mkdir/bind theo CWD của daemon: dưới user unit bị
+    // ProtectHome chặn khó hiểu, chạy tay thì tạo rác ./run/... mà client không tìm thấy.
     const size_t slash = sockPath.rfind('/');
-    if (slash == std::string::npos || slash == 0) {
-        errno = EINVAL; // yêu cầu đường tuyệt đối có thư mục cha riêng để đặt quyền 0700
+    if (sockPath.empty() || sockPath[0] != '/' || slash == 0) {
+        errno = EINVAL;
         return -1;
     }
     const std::string dir = sockPath.substr(0, slash);
