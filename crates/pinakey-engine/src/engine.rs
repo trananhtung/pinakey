@@ -724,6 +724,15 @@ impl EngineCore {
     }
 }
 
+/// #100: dòng định nghĩa có phải TÊN DẤU THANH thuần (vd "DauSac") không. Nối "__Ư" vào dòng
+/// như vậy làm tên dấu không còn khớp và rule dấu thanh biến mất. (Dòng dấu mũ/móc của Telex
+/// builtin vẫn nhận phần appending "__Ư" bình thường — không tính ở đây.)
+fn is_tone_line(line: &str) -> bool {
+    core::parse_rules('w', line)
+        .iter()
+        .any(|r| matches!(r.effect_type, core::EffectType::ToneTransformation))
+}
+
 fn build_preeditor(config: &Config) -> PinaKeyEngine {
     let mut pairs: Vec<(String, String)> = config
         .input_method_definitions
@@ -732,9 +741,11 @@ fn build_preeditor(config: &Config) -> PinaKeyEngine {
         .unwrap_or_default();
     // #65: w→ư — thêm rule appending `__Ư` vào phím w (biến Telex thành Telex W). Chỉ áp cho
     // định nghĩa có phím w chưa có phần appending; VNI/VIQR không có "w" nên không đổi.
+    // #100: và chỉ khi w KHÔNG phải phím DẤU THANH do người dùng gán (vd "w": "DauSac" trong
+    // kiểu gõ tự chế) — nối "__Ư" vào tên dấu thanh làm rule dấu biến mất.
     if config.w_shortcut > 0 {
         for (k, v) in pairs.iter_mut() {
-            if k == "w" && !v.contains("__") {
+            if k == "w" && !v.contains("__") && !is_tone_line(v) {
                 v.push_str("__Ư");
             }
         }
@@ -917,6 +928,30 @@ mod tests {
         actions.extend(sp);
         // Phím ngắt từ (space) được commit cùng với từ.
         assert!(commits(&actions).iter().any(|c| c.trim() == "tiếng"));
+    }
+
+    #[test]
+    fn w_shortcut_khong_de_len_phim_dau_tu_che() {
+        // #100: kiểu gõ tự chế gán "w" làm phím dấu ("DauSac") + bật w_shortcut → KHÔNG được
+        // nối "__Ư" vào dòng đó (rule dấu sẽ biến mất, w thành phím chèn ư).
+        let mut cfg = default_cfg();
+        cfg.w_shortcut = 1;
+        let mut defs = cfg
+            .input_method_definitions
+            .get("Telex")
+            .cloned()
+            .expect("có định nghĩa Telex builtin");
+        defs.insert("w".into(), "DauSac".into());
+        cfg.input_method_definitions
+            .insert("TelexWCustom".into(), defs);
+        cfg.input_method = "TelexWCustom".into();
+        let mut core = EngineCore::new(cfg);
+        let actions = type_keys(&mut core, "aw");
+        assert_eq!(
+            last_preedit(&actions).as_deref(),
+            Some("á"),
+            "w do người dùng gán làm phím dấu sắc phải giữ nguyên chức năng"
+        );
     }
 
     #[test]
