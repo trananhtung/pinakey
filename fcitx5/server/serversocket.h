@@ -39,7 +39,10 @@ inline int bindUinputServerSocket(const std::string &sockPath, int *lockFdOut = 
     // (XDG_RUNTIME_DIR không chuẩn) sẽ mkdir/bind theo CWD của daemon: dưới user unit bị
     // ProtectHome chặn khó hiểu, chạy tay thì tạo rác ./run/... mà client không tìm thấy.
     const size_t slash = sockPath.rfind('/');
-    if (sockPath.empty() || sockPath[0] != '/' || slash == 0) {
+    if (sockPath.empty() || sockPath[0] != '/' || slash == 0 ||
+        sockPath.find_first_not_of('/') > slash) {
+        // Vế cuối bác "//uinput.sock", "///x"…: thư mục cha toàn dấu '/' — nếu lọt sẽ
+        // mkdir/chmod thẳng lên "/" (thảm hoạ nếu daemon chạy root, khó hiểu nếu không).
         errno = EINVAL;
         return -1;
     }

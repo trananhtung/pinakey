@@ -71,6 +71,14 @@ int main() {
     FCITX_ASSERT(errno == EINVAL);
     struct stat relSt;
     FCITX_ASSERT(stat("run", &relSt) != 0) << "không được tạo thư mục 'run' theo CWD";
+
+    // #115: đường tuyệt đối nhưng thư mục cha là "/" (hoặc toàn dấu '/') cũng phải bác EINVAL —
+    // không được mkdir/chmod thẳng lên thư mục gốc.
+    for (const char *bad : {"/uinput.sock", "//uinput.sock", "///uinput.sock"}) {
+        errno = 0;
+        FCITX_ASSERT(bindUinputServerSocket(bad) == -1) << bad;
+        FCITX_ASSERT(errno == EINVAL) << bad << " errno=" << errno;
+    }
     FCITX_ASSERT(chdir("/") == 0); // rời khỏi tmpl trước khi rmdir bên dưới
 
     ::unlink(path.c_str());
