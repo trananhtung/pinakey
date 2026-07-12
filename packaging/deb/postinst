@@ -27,6 +27,10 @@ case "$1" in
 
   3) Nhấn Ctrl+Space để chuyển sang PinaKey, gõ thử:  vieetj → việt
 
+  Đang dùng chế độ uinput thử nghiệm (USAGE.md mục 9)? Sau NÂNG CẤP
+  phải restart cả daemon lẫn fcitx5 (protocol nội bộ có thể đã đổi):
+       systemctl --user restart pinakey-uinput-server && fcitx5 -r -d
+
   Nếu fcitx5 chưa phải bộ gõ của hệ thống, chạy 1 LẦN:
        im-config -n fcitx5
   rồi ĐĂNG XUẤT / đăng nhập lại.
