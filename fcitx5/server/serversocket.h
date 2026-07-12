@@ -35,7 +35,12 @@ inline int bindUinputServerSocket(const std::string &sockPath, int *lockFdOut = 
     addr.sun_family = AF_UNIX;
     std::memcpy(addr.sun_path, sockPath.c_str(), sockPath.size());
 
-    const std::string dir = sockPath.substr(0, sockPath.rfind('/'));
+    const size_t slash = sockPath.rfind('/');
+    if (slash == std::string::npos || slash == 0) {
+        errno = EINVAL; // yêu cầu đường tuyệt đối có thư mục cha riêng để đặt quyền 0700
+        return -1;
+    }
+    const std::string dir = sockPath.substr(0, slash);
     if (mkdir(dir.c_str(), 0700) != 0 && errno != EEXIST) {
         return -1;
     }
