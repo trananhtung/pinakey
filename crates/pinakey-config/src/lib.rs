@@ -35,6 +35,9 @@ pub struct Config {
     pub ib_flags: u32,
     #[serde(rename = "Shortcuts")]
     pub shortcuts: [u32; 10],
+    /// #110: chỉ frontend IBus (dùng chung file config) tiêu thụ; addon fcitx5 chọn transport
+    /// bằng `IB_NO_UNDERLINE` + transport-rules. Giữ trường để round-trip config, KHÔNG bày ra
+    /// GUI thiết lập fcitx5.
     #[serde(rename = "DefaultInputMode")]
     pub default_input_mode: i32,
     #[serde(rename = "InputModeMapping")]
