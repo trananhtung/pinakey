@@ -145,7 +145,9 @@ public:
     void commitStringImpl(const std::string &text) override { doc_ += text; }
     void deleteSurroundingTextImpl(int, unsigned int) override {}
     void forwardKeyImpl(const ForwardKeyEvent &key) override {
-        forwarded_.push_back(key.rawKey().sym());
+        if (!key.isRelease()) { // addon forward cặp press+release; chỉ đếm press cho gọn
+            forwarded_.push_back(key.rawKey().sym());
+        }
     }
     void updatePreeditImpl() override {}
 

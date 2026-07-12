@@ -353,6 +353,15 @@ void PinaKeyState::handleUinputAck(KeyEvent &keyEvent) {
     replayBufferedKeys();
 }
 
+/// #118: forward một "cú gõ" phím chức năng cho app — cả press lẫn release, vì sự kiện release
+/// gốc đã đi qua từ trước (isRelease return sớm) không khớp cặp; press mồ côi có thể làm app
+/// coi phím còn đang giữ.
+void PinaKeyState::forwardKeyTap(uint32_t sym, uint32_t state) {
+    const Key key(static_cast<KeySym>(sym), KeyStates(state));
+    ic_->forwardKey(key, /*isRelease=*/false);
+    ic_->forwardKey(key, /*isRelease=*/true);
+}
+
 /// #118: forward phím non-text đã hoãn (chờ chuỗi xoá của chính nó hoàn tất) cho app.
 void PinaKeyState::flushPendingForward() {
     if (!pendingForwardKey_) {
@@ -360,7 +369,7 @@ void PinaKeyState::flushPendingForward() {
     }
     const auto [fs, fst] = *pendingForwardKey_;
     pendingForwardKey_.reset();
-    ic_->forwardKey(Key(static_cast<KeySym>(fs), KeyStates(fst)));
+    forwardKeyTap(fs, fst);
 }
 
 /// Replay các phím người dùng gõ trong lúc đang xoá. Xử lý lần lượt; nếu một phím lại sinh ra
@@ -371,7 +380,7 @@ void PinaKeyState::replayBufferedKeys() {
         bufferedKeys_.erase(bufferedKeys_.begin());
         const std::string u = Key::keySymToUTF8(static_cast<KeySym>(s));
         const bool isText = isPrintableText(u);
-        pk_engine_process_key_replace(core_, s, st);
+        const bool handled = pk_engine_process_key_replace(core_, s, st);
         const bool sent = startUinputReplace();
         if (!sent && isText) {
             // #106: phím này đã bị NUỐT từ lúc đệm (filterAndAccept) — không gửi được lệnh
@@ -379,14 +388,15 @@ void PinaKeyState::replayBufferedKeys() {
             // #117: chỉ ký tự in được; control char thô không được vào tài liệu.
             ic_->commitString(u);
         }
-        if (!isText) {
+        if (!isText && !handled) {
             // #118: phím chức năng (Enter/Tab/mũi tên…) — sự kiện gốc đã bị nuốt lúc đệm,
-            // forward lại cho app để không mất. Nếu chính phím này vừa mở một chuỗi xoá
-            // (finalize từ → del>0) thì hoãn tới khi ACK xong để giữ thứ tự.
+            // forward lại cho app để không mất. Engine đã tiêu thụ (vd Tab bung macro) thì
+            // KHÔNG forward — như đường gõ thường chỉ nuốt khi handled. Nếu chính phím này
+            // vừa mở một chuỗi xoá (finalize từ → del>0) thì hoãn tới khi ACK xong.
             if (deleting_) {
                 pendingForwardKey_ = std::make_pair(s, st);
             } else {
-                ic_->forwardKey(Key(static_cast<KeySym>(s), KeyStates(st)));
+                forwardKeyTap(s, st);
             }
         }
     }

@@ -89,6 +89,7 @@ private:
     void handleUinputAck(KeyEvent &keyEvent); // xử lý Backspace bơm-ngược; commit khi đủ
     void replayBufferedKeys();             // gõ nhanh khi đang xoá → replay sau khi ACK xong
     void flushPendingForward();            // #118: forward phím non-text đã hoãn sau chuỗi xoá
+    void forwardKeyTap(uint32_t sym, uint32_t state); // #118: forward press+release một cú gõ
     bool wantReplaceMode() const; // có dùng diff-and-replace (SurroundingText hoặc uinput) không
     bool useUinput() const;       // không có SurroundingText nhưng có server uinput
     bool shouldPassThrough() const;
