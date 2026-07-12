@@ -145,8 +145,12 @@ public:
 
     /// Đổi kiểu gõ / bảng mã cho MỌI input context đang sống + cập nhật dấu chọn trong menu
     /// (issue #12/#17). Áp dụng cho phiên hiện tại; lưu bền vững do GUI thiết lập đảm nhiệm.
+    /// #111: lựa chọn được nhớ ở mức engine và áp cho cả input context TẠO SAU trong phiên.
     void applyInputMethod(const std::string &name);
     void applyCharset(const std::string &name);
+
+    /// #111: áp lựa chọn menu của phiên (nếu có) lên một core mới tạo — gọi từ PinaKeyState.
+    void applySessionOverrides(PkEngine *core) const;
 
 private:
     void setupStatusMenu();
@@ -176,6 +180,11 @@ private:
     std::vector<std::unique_ptr<SimpleAction>> charsetItems_;
     std::vector<std::string> imNames_;
     std::vector<std::string> charsetNames_;
+
+    // #111: lựa chọn từ menu khay trong phiên này (rỗng = theo config file). Input context
+    // mới tạo áp các giá trị này; reloadConfig (GUI lưu / sửa file) xoá — file lại là nguồn.
+    std::string sessionInputMethod_;
+    std::string sessionCharset_;
 };
 
 class PinaKeyEngineFactory : public AddonFactory {

@@ -99,6 +99,9 @@ PinaKeyState::PinaKeyState(PinaKeyEngine *engine, InputContext *ic)
     : engine_(engine), ic_(ic), core_(pk_engine_new_from_name(kConfigName)) {
     // Tên chương trình đang focus → bật các cách khắc phục theo ứng dụng ở lõi.
     pk_engine_set_program(core_, ic->program().c_str());
+    // #111: người dùng đã đổi Kiểu gõ/Bảng mã qua menu khay trong phiên này → cửa sổ mở sau
+    // phải theo lựa chọn đó, không quay về giá trị trong config file.
+    engine_->applySessionOverrides(core_);
 }
 
 PinaKeyState::~PinaKeyState() { pk_engine_free(core_); }
@@ -709,6 +712,10 @@ void PinaKeyEngine::reloadConfig() {
     for (size_t i = 0; i < reloadFiles_.size(); ++i) {
         reloadFingerprints_[i] = pinakey::fileFingerprint(reloadFiles_[i]);
     }
+    // #111: người dùng vừa LƯU config (GUI/sửa file) — file trở lại là nguồn sự thật, lựa
+    // chọn menu tạm của phiên hết hiệu lực (nếu không, IC mới sẽ đè ngược giá trị vừa lưu).
+    sessionInputMethod_.clear();
+    sessionCharset_.clear();
     instance_->inputContextManager().foreach([this](InputContext *ic) {
         pk_engine_reload_config(state(ic)->core());
         return true;
@@ -802,7 +809,17 @@ void PinaKeyEngine::addStatusActions(InputContext *ic) {
     }
 }
 
+void PinaKeyEngine::applySessionOverrides(PkEngine *core) const {
+    if (!sessionInputMethod_.empty()) {
+        pk_engine_set_input_method(core, sessionInputMethod_.c_str());
+    }
+    if (!sessionCharset_.empty()) {
+        pk_engine_set_charset(core, sessionCharset_.c_str());
+    }
+}
+
 void PinaKeyEngine::applyInputMethod(const std::string &name) {
+    sessionInputMethod_ = name;
     instance_->inputContextManager().foreach([&](InputContext *ic) {
         pk_engine_set_input_method(state(ic)->core(), name.c_str());
         return true;
@@ -816,6 +833,7 @@ void PinaKeyEngine::applyInputMethod(const std::string &name) {
 }
 
 void PinaKeyEngine::applyCharset(const std::string &name) {
+    sessionCharset_ = name;
     instance_->inputContextManager().foreach([&](InputContext *ic) {
         pk_engine_set_charset(state(ic)->core(), name.c_str());
         return true;
