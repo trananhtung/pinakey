@@ -68,9 +68,11 @@ int main() {
     FCITX_ASSERT(mkdtemp(tmpl) != nullptr);
     const std::string sockName = std::string(tmpl) + "/uinput.sock";
 
-    // Đồng hồ giả để test throttle tất định, không cần sleep.
+    // Đồng hồ giả để test throttle tất định, không cần sleep. #123: cửa sổ hello nới lên
+    // 5s (mặc định 200ms) — thread acceptHello trễ lịch trên CI quá tải không làm test đỏ
+    // giả; các kịch bản dưới không đo thời gian hello nên nới rộng vô hại.
     std::chrono::steady_clock::time_point now{};
-    UinputClient client(sockName, 5s, [&now] { return now; });
+    UinputClient client(sockName, 5s, [&now] { return now; }, /*helloTimeoutMs=*/5000);
 
     // Daemon chưa chạy → lần đầu thất bại.
     FCITX_ASSERT(!client.available());
@@ -141,6 +143,24 @@ int main() {
     }
     FCITX_ASSERT(everFailed);
     FCITX_ASSERT(!client.available()); // nghẽn → coi như chết phiên này, throttle
+
+    // #123: helloTimeoutMs tiêm được thật sự có tác dụng — daemon accept nhưng KHÔNG gửi
+    // hello: client với timeout 1ms phải trả false nhanh (không chờ 200ms mặc định).
+    {
+        UinputClient impatient(sockName, 5s, [&now] { return now; }, /*helloTimeoutMs=*/1);
+        int server2 = listenOn(sockName);
+        now += 6s;
+        std::thread silent([server2] {
+            int c = accept(server2, nullptr, nullptr);
+            if (c >= 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100)); // hello "kẹt"
+                ::close(c);
+            }
+        });
+        FCITX_ASSERT(!impatient.available()) << "hello không tới trong 1ms phải là false";
+        silent.join();
+        ::close(server2);
+    }
 
     ::close(conn);
     ::close(server);
