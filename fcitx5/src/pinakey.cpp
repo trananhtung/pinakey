@@ -882,9 +882,18 @@ bool PinaKeyState::handleEmojiKey(KeyEvent &keyEvent) {
     // #63: candidate lịch sử (query rỗng) KHÔNG auto-chọn bằng Enter/Space — ':' + Enter/Space
     // trong văn bản thường phải tiếp tục ra literal ':'; lịch sử chỉ chọn bằng phím số / click.
     const bool hasQuery = emojiQuery_.size() > 1;
+    // #127: như phím số (#97), Enter/Space chọn mục 1 của TRANG đang xem — người dùng có thể
+    // đã lật trang bằng chuột; emojiSelect(0) là chỉ số tuyệt đối nên chỉ đúng ở trang đầu.
+    const auto selectFirstOnPage = [&] {
+        if (auto cl = ic_->inputPanel().candidateList(); cl && cl->size() > 0) {
+            cl->candidate(0).select(ic_);
+        } else {
+            emojiSelect(0);
+        }
+    };
     if (sym == FcitxKey_Return || sym == FcitxKey_KP_Enter) {
         if (hasQuery && !emojiCandidates_.empty()) {
-            emojiSelect(0);
+            selectFirstOnPage();
             keyEvent.filterAndAccept();
             return true;
         }
@@ -894,7 +903,7 @@ bool PinaKeyState::handleEmojiKey(KeyEvent &keyEvent) {
     }
     if (sym == FcitxKey_space) {
         if (hasQuery && !emojiCandidates_.empty()) {
-            emojiSelect(0);
+            selectFirstOnPage();
             keyEvent.filterAndAccept();
             return true;
         }
