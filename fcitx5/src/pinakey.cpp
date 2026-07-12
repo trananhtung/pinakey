@@ -136,6 +136,11 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
     // + commit sớm) hay rơi vào engine như Backspace NGƯỜI DÙNG (mở chuỗi mới nữa — lệch pha
     // tự khuếch đại). Chúng đi cùng pipeline input nên luôn về TRƯỚC Backspace của chuỗi mới;
     // quá 1000ms coi như mất hẳn — Backspace lúc đó là của người dùng thật.
+    //
+    // Đây là heuristic có chủ đích: Backspace bơm-ngược quay về là key event kernel thuần,
+    // KHÔNG thể mang định danh chuỗi/generation (muốn có phải đổi protocol ACK sang socket).
+    // Nếu chúng thật sự bị rơi (hiếm — daemon còn sống mới mở được chuỗi mới), giá phải trả
+    // bị chặn ở ≤ nợ mồ côi trong 1000ms và KHÔNG tự khuếch đại như để chúng lẫn vào ACK.
     if (orphanBackspaces_ > 0) {
         const auto orphanAge = std::chrono::duration_cast<std::chrono::milliseconds>(
                                    std::chrono::steady_clock::now() - orphanSince_)
