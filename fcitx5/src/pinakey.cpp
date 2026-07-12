@@ -69,6 +69,20 @@ pinakey::UinputClient &uinputClient() {
 bool isBackspaceSym(uint32_t sym) {
     return sym == FcitxKey_BackSpace || sym == 8u;
 }
+
+/// Modifier "thật" (Ctrl=1<<2, Alt=1<<3, Hyper=1<<5, Super=1<<6, Super2=1<<26, Hyper2=1<<27,
+/// Meta=1<<28) — dùng để nhận diện tổ hợp phím tắt. KHÔNG gồm Shift và các bit khoá
+/// CapsLock (1<<1) / NumLock (1<<4): chúng có thể bật thường trực khi gõ văn bản (#108),
+/// đồng bộ với is_valid_state() phía Rust.
+constexpr uint32_t kRealModMask =
+    static_cast<uint32_t>(KeyState::Ctrl) | static_cast<uint32_t>(KeyState::Alt) |
+    static_cast<uint32_t>(KeyState::Hyper) | static_cast<uint32_t>(KeyState::Super) |
+    static_cast<uint32_t>(KeyState::Super2) | static_cast<uint32_t>(KeyState::Hyper2) |
+    static_cast<uint32_t>(KeyState::Meta);
+
+/// Bit auto-repeat (giữ phím). Nhánh double-space phải loại: giữ space chỉ là chuỗi dấu cách,
+/// không phải "nhấn space lần hai".
+constexpr uint32_t kModRepeat = static_cast<uint32_t>(KeyState::Repeat);
 } // namespace
 
 // ----------------------------------- PinaKeyState -----------------------------------
@@ -171,7 +185,10 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
     // thấy phím space đi qua như thường. surroundingEndsWithWordSpace() chống trường hợp
     // người dùng click dời con trỏ mà app không gửi reset: vị trí mới không kết thúc bằng
     // "từ + dấu cách" thì tuyệt đối không xoá-chèn.
-    if (sym == FcitxKey_space && state == 0 && pk_engine_double_space_armed(core_) &&
+    // #108: chỉ loại tổ hợp có modifier THẬT (và auto-repeat) — `state == 0` cũ chặn nhầm cả
+    // NumLock/CapsLock (bit khoá luôn có trong states() khi đèn sáng) làm tính năng chết lặng lẽ.
+    if (sym == FcitxKey_space && (state & (kRealModMask | kModRepeat)) == 0 &&
+        pk_engine_double_space_armed(core_) &&
         ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
         !pk_engine_surrounding_text_unreliable(core_) && surroundingEndsWithWordSpace()) {
         ic_->deleteSurroundingText(-1, 1);
@@ -856,10 +873,8 @@ bool PinaKeyState::handleEmojiKey(KeyEvent &keyEvent) {
     const uint32_t state = static_cast<uint32_t>(keyEvent.rawKey().states());
 
     // Tổ hợp có Ctrl/Alt/Super/Meta (vd Ctrl+C, Alt+Tab) → thoát chế độ emoji và để phím đi tiếp,
-    // KHÔNG nuốt thành ký tự truy vấn. (Ctrl=1<<2, Alt=1<<3, Super=1<<6, Super2=1<<26, Meta=1<<28.)
-    constexpr uint32_t kModMask =
-        (1u << 2) | (1u << 3) | (1u << 6) | (1u << 26) | (1u << 28);
-    if (state & kModMask) {
+    // KHÔNG nuốt thành ký tự truy vấn.
+    if (state & kRealModMask) {
         cancelEmoji(true);
         return false;
     }

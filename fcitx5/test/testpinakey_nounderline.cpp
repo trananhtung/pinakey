@@ -528,6 +528,38 @@ int main() {
         FCITX_ASSERT(ic->text() == "tiếng. hai ")
             << "sau double-space gõ tiếp: doc=\"" << ic->text() << "\"";
 
+        // #108: double-space phải chạy cả khi NumLock/CapsLock bật — states() của fcitx5 chứa
+        // bit khoá (CapsLock=1<<1, NumLock=1<<4) nên điều kiện `state == 0` cũ không bao giờ
+        // đúng khi NumLock sáng đèn (mặc định trên hầu hết desktop có bàn phím số).
+        ic->reset();
+        ic->clearDoc();
+        sendKeys(ic.get(), "tieengs");
+        for (int i = 0; i < 2; ++i) {
+            KeyEvent ke(ic.get(),
+                        Key(FcitxKey_space, KeyStates{KeyState::NumLock, KeyState::CapsLock}),
+                        false);
+            ic->keyEvent(ke);
+        }
+        FCITX_ASSERT(ic->text() == "tiếng. ")
+            << "double-space với NumLock/CapsLock bật: doc=\"" << ic->text()
+            << "\", mong đợi \"tiếng. \"";
+
+        // #108: GIỮ phím space (auto-repeat, KeyState::Repeat) không phải là "nhấn lần hai" —
+        // không được chuyển thành ". "; addon phải để space đi tiếp tới app (không nuốt),
+        // app tự chèn chuỗi dấu cách như thường.
+        ic->reset();
+        ic->clearDoc();
+        sendKeys(ic.get(), "tieengs "); // arm
+        {
+            KeyEvent ke(ic.get(), Key(FcitxKey_space, KeyStates{KeyState::Repeat}), false);
+            ic->keyEvent(ke);
+            FCITX_ASSERT(!ke.accepted())
+                << "space auto-repeat phải được forward cho app, không bị addon nuốt";
+        }
+        FCITX_ASSERT(ic->text() == "tiếng ")
+            << "space auto-repeat bị chuyển nhầm thành \". \": doc=\"" << ic->text()
+            << "\", mong đợi \"tiếng \" (nguyên vẹn)";
+
         // #65 an toàn: click chuột dời con trỏ khi cửa sổ double-space đang mở (app không gửi
         // reset) rồi bấm space → KHÔNG được xoá ký tự ở vị trí mới / chèn ". ". Văn bản trước
         // con trỏ mới không kết thúc bằng "từ + dấu cách" → addon phải bỏ qua.
