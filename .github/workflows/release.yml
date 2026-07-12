@@ -37,6 +37,29 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Xác định tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # #104: chặn release lệch version — tag vX.Y.Z phải khớp workspace.package.version trong
+      # Cargo.toml (nguồn version duy nhất; version của .deb do CMake đọc thẳng từ đây, còn tên
+      # release lấy từ tag — lệch nhau là xuất bản "vX.Y.Z" đính kèm gói version cũ).
+      - name: Kiểm tag khớp version Cargo.toml
+        run: |
+          tag="${{ steps.tag.outputs.name }}"
+          ver="${tag#v}"
+          cargo_ver="$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')"
+          if [ "$ver" != "$cargo_ver" ]; then
+            echo "::error::Tag '$tag' không khớp version trong Cargo.toml ('$cargo_ver'). Bump workspace.package.version (và PKGBUILD/flake.nix theo tools/check-versions.sh) rồi tag lại."
+            exit 1
+          fi
+          echo "Tag $tag khớp Cargo.toml $cargo_ver ✓"
+
       # Cài Rust toolchain tường minh (lõi Rust build qua cargo bên trong CMake) — không phụ thuộc
       # ngầm vào việc image runner có sẵn Rust, để build release lúc cắt tag không bất ngờ gãy.
       - name: Cài Rust toolchain
@@ -69,15 +92,6 @@ jobs:
           mkdir -p dist
           cp fcitx5/build/*.deb dist/ || true
           ( cd dist && for f in *.deb; do sha256sum "$f" > "$f.sha256"; done )
-
-      - name: Xác định tag
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "name=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Tạo / cập nhật Release
         uses: softprops/action-gh-release@v3
