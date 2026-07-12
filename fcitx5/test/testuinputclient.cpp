@@ -144,21 +144,26 @@ int main() {
     FCITX_ASSERT(everFailed);
     FCITX_ASSERT(!client.available()); // nghẽn → coi như chết phiên này, throttle
 
-    // #123: helloTimeoutMs tiêm được thật sự có tác dụng — daemon accept nhưng KHÔNG gửi
-    // hello: client với timeout 1ms phải trả false nhanh (không chờ 200ms mặc định).
+    // #123: helloTimeoutMs tiêm được thật sự có tác dụng — hello tới MUỘN hơn cửa sổ mặc
+    // định 200ms (300ms), client cấu hình 5s vẫn phải nhận được. Nếu tham số bị bỏ qua
+    // (poll vẫn 200ms cứng) thì available() timeout → test đỏ.
     {
-        UinputClient impatient(sockName, 5s, [&now] { return now; }, /*helloTimeoutMs=*/1);
+        UinputClient patient(sockName, 5s, [&now] { return now; }, /*helloTimeoutMs=*/5000);
         int server2 = listenOn(sockName);
         now += 6s;
-        std::thread silent([server2] {
+        int conn2 = -1;
+        std::thread lateHello([server2, &conn2] {
             int c = accept(server2, nullptr, nullptr);
-            if (c >= 0) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100)); // hello "kẹt"
-                ::close(c);
-            }
+            FCITX_ASSERT(c >= 0);
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            const char hello = fcitx::pinakey::kUinputHello;
+            FCITX_ASSERT(send(c, &hello, 1, MSG_NOSIGNAL) == 1);
+            conn2 = c;
         });
-        FCITX_ASSERT(!impatient.available()) << "hello không tới trong 1ms phải là false";
-        silent.join();
+        FCITX_ASSERT(patient.available())
+            << "hello tới sau 300ms phải được chấp nhận với cửa sổ 5s";
+        lateHello.join();
+        ::close(conn2);
         ::close(server2);
     }
 
