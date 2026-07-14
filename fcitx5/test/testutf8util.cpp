@@ -18,6 +18,17 @@ int main() {
     // đ (2 byte) + 😀 (4 byte, ngoài BMP) — con trỏ sau 2 ký tự = 6 byte.
     FCITX_ASSERT(surroundingBytePosBeforeCursor("đ😀x", 2) == 6);
 
+    // #154: lead byte đa byte CỤT ở cuối chuỗi (UTF-8 không hợp lệ) không được trả vị trí
+    // vượt text.size() — nếu không, caller text.compare/text[pos-1] ném out_of_range/UB.
+    // "a \xF0": 'a'(+1) ' '(+1) 0xF0 lead 4-byte (+4) = 6 thô, phải clamp về size()==3.
+    FCITX_ASSERT(surroundingBytePosBeforeCursor(std::string("a \xF0"), 3) == 3);
+    // "\xE1\xBB": lead 3-byte cụt (chỉ 2 byte) — clamp về size()==2.
+    FCITX_ASSERT(surroundingBytePosBeforeCursor(std::string("\xE1\xBB"), 1) == 2);
+    // Lead 4-byte đứng một mình — clamp về size()==1.
+    FCITX_ASSERT(surroundingBytePosBeforeCursor(std::string("\xF0"), 1) == 1);
+    // Cursor lớn hơn số ký tự trên chuỗi cụt vẫn clamp về size().
+    FCITX_ASSERT(surroundingBytePosBeforeCursor(std::string("x\xF0"), 99) == 2);
+
     // parseHexCodepoint (#158): validate trên giá trị gốc, không cắt 64→32 bit.
     using fcitx::pinakey::parseHexCodepoint;
     char32_t cp = 0;
