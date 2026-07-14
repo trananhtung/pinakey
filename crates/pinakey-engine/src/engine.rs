@@ -884,8 +884,14 @@ mod tests {
         // (trước đây "vieet" + Shift + "j" cho ra "viêtj" thay vì "việt").
         let mut core = EngineCore::new(default_cfg());
         type_keys(&mut core, "vieet"); // preedit "viêt"
-        for sym in [0xffe1_u32, 0xffe3, 0xfe03] {
-            // Shift_L, Control_L, ISO_Level3_Shift (AltGr)
+        for sym in [
+            0xffe1_u32, // Shift_L
+            0xffe3,     // Control_L
+            0xfe03,     // ISO_Level3_Shift (AltGr)
+            0xff14,     // Scroll_Lock (#159)
+            0xff7e,     // Mode_switch (#159)
+            0xff7f,     // Num_Lock (#159)
+        ] {
             let (handled, actions) = core.process_key_event(sym, 0, 0);
             assert!(!handled, "keysym modifier {sym:#x} phải được cho đi qua");
             assert!(

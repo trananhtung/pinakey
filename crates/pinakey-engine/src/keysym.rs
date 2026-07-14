@@ -31,7 +31,15 @@ pub const MOD_RELEASE: u32 = 1 << 30;
 /// "phím lạ" rồi ép commit từ đang gõ.
 pub fn is_modifier_keysym(keysym: u32) -> bool {
     // 0xffe1–0xffee: Shift_L … Hyper_R; 0xfe01–0xfe13: ISO_Lock … ISO_Level5_Lock (gồm AltGr).
-    matches!(keysym, 0xffe1..=0xffee | 0xfe01..=0xfe13)
+    // Ba phím khoá/chuyển chế độ dưới đây nằm NGOÀI hai dải trên nhưng cũng không mang ký tự,
+    // nhấn giữa từ phải pass-through như Shift/Ctrl (nếu không sẽ ép commit ngang buffer). (#159)
+    const SCROLL_LOCK: u32 = 0xff14;
+    const MODE_SWITCH: u32 = 0xff7e;
+    const NUM_LOCK: u32 = 0xff7f;
+    matches!(
+        keysym,
+        0xffe1..=0xffee | 0xfe01..=0xfe13 | SCROLL_LOCK | MODE_SWITCH | NUM_LOCK
+    )
 }
 
 // ----- Mã phím (keysym) -----
