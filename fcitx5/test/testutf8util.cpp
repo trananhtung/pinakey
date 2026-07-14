@@ -17,5 +17,30 @@ int main() {
     FCITX_ASSERT(surroundingBytePosBeforeCursor("việt", 10) == 6);
     // đ (2 byte) + 😀 (4 byte, ngoài BMP) — con trỏ sau 2 ký tự = 6 byte.
     FCITX_ASSERT(surroundingBytePosBeforeCursor("đ😀x", 2) == 6);
+
+    // parseHexCodepoint (#158): validate trên giá trị gốc, không cắt 64→32 bit.
+    using fcitx::pinakey::parseHexCodepoint;
+    char32_t cp = 0;
+    // Hợp lệ: 'A' = U+0041, và codepoint cao nhất U+10FFFF.
+    FCITX_ASSERT(parseHexCodepoint("41", cp) && cp == 0x41);
+    FCITX_ASSERT(parseHexCodepoint("1F600", cp) && cp == 0x1F600); // 😀
+    FCITX_ASSERT(parseHexCodepoint("10FFFF", cp) && cp == 0x10FFFF);
+    // Chống tái diễn: 0x100000041 (> 0x10FFFF) phải bị LOẠI, không cắt còn 0x41.
+    cp = 0xFFFF; // giá trị canh gác — parse thất bại không được đụng vào.
+    FCITX_ASSERT(!parseHexCodepoint("100000041", cp));
+    FCITX_ASSERT(cp == 0xFFFF);
+    // Ngay trên trần Unicode.
+    FCITX_ASSERT(!parseHexCodepoint("110000", cp));
+    // Surrogate U+D800–DFFF bị loại (UTF-8 không hợp lệ).
+    FCITX_ASSERT(!parseHexCodepoint("D800", cp));
+    FCITX_ASSERT(!parseHexCodepoint("DFFF", cp));
+    FCITX_ASSERT(parseHexCodepoint("D7FF", cp) && cp == 0xD7FF);
+    FCITX_ASSERT(parseHexCodepoint("E000", cp) && cp == 0xE000);
+    // 0 và rỗng bị loại; chuỗi hex tràn 64-bit (ERANGE) bị loại.
+    FCITX_ASSERT(!parseHexCodepoint("0", cp));
+    FCITX_ASSERT(!parseHexCodepoint("", cp));
+    FCITX_ASSERT(!parseHexCodepoint("FFFFFFFFFFFFFFFFFF", cp));
+    // Ký tự không phải hex bị loại.
+    FCITX_ASSERT(!parseHexCodepoint("1G", cp));
     return 0;
 }
