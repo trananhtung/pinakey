@@ -897,15 +897,11 @@ void PinaKeyState::updateEmojiUI() {
     // Hex Unicode: ":u<hex>" → ký tự tương ứng (issue #11 nhập hexadecimal).
     if (query.size() >= 2 && (query[0] == 'u' || query[0] == 'U')) {
         const std::string hex = query.substr(1);
-        if (!hex.empty() &&
-            hex.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos) {
-            char32_t cp = static_cast<char32_t>(strtoul(hex.c_str(), nullptr, 16));
-            // Loại surrogate U+D800–DFFF: mã hoá ra UTF-8 không hợp lệ, commit sẽ bị
-            // frontend D-Bus từ chối (fcitx abort "Invalid utf8 string").
-            const bool surrogate = cp >= 0xD800 && cp <= 0xDFFF;
-            if (cp != 0 && cp <= 0x10FFFF && !surrogate) {
-                emojiCandidates_.push_back(utf32ToUtf8(cp));
-            }
+        // Kiểm phạm vi/surrogate trên giá trị gốc trong parseHexCodepoint — tránh truncate
+        // 64→32 bit trước khi validate (loại surrogate vì UTF-8 của nó bị D-Bus từ chối). (#158)
+        char32_t cp = 0;
+        if (pinakey::parseHexCodepoint(hex, cp)) {
+            emojiCandidates_.push_back(utf32ToUtf8(cp));
         }
     }
 
