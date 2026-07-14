@@ -174,9 +174,10 @@ fn load_config_from(path: &Path) -> Config {
     }
 }
 
-/// Tương đương `SaveConfig` trong Go. Ghi **atomic** để mất điện / bị kill giữa chừng không làm
-/// hỏng file config: ghi ra file tạm cùng thư mục rồi `rename` (đổi tên là thao tác atomic trên
-/// cùng filesystem).
+/// Tương đương `SaveConfig` trong Go. Ghi **atomic + bền vững**: ghi ra file tạm cùng thư mục,
+/// `sync_all()` rồi `rename` (đổi tên là thao tác atomic trên cùng filesystem), sau đó fsync thư
+/// mục cha. Nhờ vậy cả bị kill giữa chừng lẫn mất điện đều không để lại file config rỗng/cụt
+/// (xem `write_file_durable`, #163).
 pub fn save_config(c: &Config, engine_name: &str) -> std::io::Result<()> {
     if try_config_dir().is_none() {
         return Err(std::io::Error::new(
@@ -197,10 +198,34 @@ fn save_config_to(c: &Config, path: &Path) -> std::io::Result<()> {
         }
     }
     let tmp = tmp_path_for(path, std::process::id());
-    std::fs::write(&tmp, data)?;
-    if let Err(e) = std::fs::rename(&tmp, path) {
-        let _ = std::fs::remove_file(&tmp); // không để lại file .tmp rác khi rename lỗi
+    if let Err(e) = write_file_durable(&tmp, path, data.as_bytes()) {
+        let _ = std::fs::remove_file(&tmp); // không để lại file .tmp rác khi ghi/rename lỗi
         return Err(e);
+    }
+    Ok(())
+}
+
+/// Ghi `data` ra `tmp` rồi `rename` sang `path` một cách **bền vững với mất điện**.
+///
+/// `fs::write`+`rename` chỉ atomic với crash/kill tiến trình; khi MẤT ĐIỆN, metadata của rename
+/// có thể chạm đĩa trước dữ liệu file tạm → sau reboot file đích rỗng/cụt, `load_config_from` coi
+/// là JSON hỏng và reset toàn bộ thiết lập. Vì vậy `sync_all()` file tạm TRƯỚC rename, và fsync
+/// thư mục cha SAU rename để entry đổi tên bền vững. Fsync thư mục là best-effort (một số
+/// filesystem không hỗ trợ). (#163)
+fn write_file_durable(tmp: &Path, path: &Path, data: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    {
+        let mut f = std::fs::File::create(tmp)?;
+        f.write_all(data)?;
+        f.sync_all()?;
+    }
+    std::fs::rename(tmp, path)?;
+    if let Some(dir) = path.parent() {
+        if !dir.as_os_str().is_empty() {
+            if let Ok(d) = std::fs::File::open(dir) {
+                let _ = d.sync_all();
+            }
+        }
     }
     Ok(())
 }
@@ -371,6 +396,23 @@ mod tests {
             "phải dọn file .tmp khi rename lỗi, không để lại rác"
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn save_to_overwrites_existing_durably() {
+        // #163: ghi đè file config đã có phải cho nội dung mới nguyên vẹn (đường ghi bền vững:
+        // sync_all file tạm → rename → fsync thư mục cha).
+        let path = unique_tmp("overwrite");
+        let _ = std::fs::remove_file(&path);
+        let mut cfg = default_cfg();
+        cfg.input_method = "Telex".to_string();
+        save_config_to(&cfg, &path).unwrap();
+        cfg.input_method = "VIQR".to_string();
+        save_config_to(&cfg, &path).unwrap();
+        let back = load_config_from(&path);
+        assert_eq!(back.input_method, "VIQR");
+        assert!(!tmp_path_for(&path, std::process::id()).exists());
+        std::fs::remove_file(&path).ok();
     }
 
     #[test]

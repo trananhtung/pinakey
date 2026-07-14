@@ -1,7 +1,8 @@
 //! Lịch sử emoji gần dùng (issue #63): giữ tối đa N emoji dùng gần nhất, persist ra file văn bản
-//! (mỗi dòng một emoji) trong thư mục cấu hình. Ghi **atomic** (file tạm + rename) như config —
-//! mất điện giữa chừng không làm hỏng file. Module này không tự quyết định đường dẫn: tầng FFI
-//! đưa đường dẫn từ `pinakey-config` vào, nhờ đó test được bằng file tạm.
+//! (mỗi dòng một emoji) trong thư mục cấu hình. Ghi **atomic + bền vững** (file tạm → `sync_all()`
+//! → rename → fsync thư mục cha) như config — cả kill giữa chừng lẫn mất điện đều không để lại
+//! file rỗng/cụt (xem `write_file_durable`, #163). Module này không tự quyết định đường dẫn: tầng
+//! FFI đưa đường dẫn từ `pinakey-config` vào, nhờ đó test được bằng file tạm.
 
 use std::path::Path;
 
@@ -63,13 +64,33 @@ impl RecentEmoji {
             data.push('\n');
         }
         let tmp = path.with_extension(format!("txt.tmp.{}", std::process::id()));
-        std::fs::write(&tmp, data)?;
-        if let Err(e) = std::fs::rename(&tmp, path) {
-            let _ = std::fs::remove_file(&tmp); // không để lại file .tmp rác khi rename lỗi
+        if let Err(e) = write_file_durable(&tmp, path, data.as_bytes()) {
+            let _ = std::fs::remove_file(&tmp); // không để lại file .tmp rác khi ghi/rename lỗi
             return Err(e);
         }
         Ok(())
     }
+}
+
+/// Ghi `data` ra `tmp` rồi `rename` sang `path` bền vững với mất điện: `sync_all()` file tạm
+/// TRƯỚC rename, fsync thư mục cha SAU rename (best-effort). `fs::write`+`rename` chỉ atomic với
+/// crash/kill tiến trình, không với mất điện — khi đó file đích có thể rỗng/cụt sau reboot. (#163)
+fn write_file_durable(tmp: &Path, path: &Path, data: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    {
+        let mut f = std::fs::File::create(tmp)?;
+        f.write_all(data)?;
+        f.sync_all()?;
+    }
+    std::fs::rename(tmp, path)?;
+    if let Some(dir) = path.parent() {
+        if !dir.as_os_str().is_empty() {
+            if let Ok(d) = std::fs::File::open(dir) {
+                let _ = d.sync_all();
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -106,6 +127,24 @@ mod tests {
         r.save_to_file(&path).unwrap();
         let loaded = RecentEmoji::load_from_file(&path, 9);
         assert_eq!(loaded.items(), ["👍", "😀"]);
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn save_overwrites_existing_durably() {
+        // #163: ghi đè file lịch sử đã có phải cho nội dung mới nguyên vẹn (sync_all → rename →
+        // fsync thư mục cha), không lẫn phần đuôi của bản cũ.
+        let path = tmp("overwrite");
+        let mut r = RecentEmoji::new(9);
+        r.record("😀");
+        r.record("👍");
+        r.record("🎉");
+        r.save_to_file(&path).unwrap();
+        let mut r2 = RecentEmoji::new(9);
+        r2.record("🚀");
+        r2.save_to_file(&path).unwrap();
+        let loaded = RecentEmoji::load_from_file(&path, 9);
+        assert_eq!(loaded.items(), ["🚀"]);
         std::fs::remove_file(&path).ok();
     }
 
