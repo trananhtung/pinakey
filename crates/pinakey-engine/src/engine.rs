@@ -669,6 +669,10 @@ impl EngineCore {
         // (Ctrl+A, Alt+Tab, Ctrl+BackSpace…), không phải ký tự nhập — cho đi qua nguyên vẹn,
         // không đụng buffer soạn dở. Shift/CapsLock vẫn là gõ chữ thường nên không chặn.
         if !is_valid_state(state) {
+            // #160: tổ hợp này có thể đổi văn bản (Ctrl+V dán, Ctrl+Z hoàn tác…) → văn cảnh câu
+            // cũ vô nghĩa; reset máy trạng thái viết-hoa-đầu-câu như đã disarm double_space_armed
+            // ở trên (cùng lý do đã áp cho double-space nhưng trước đây bỏ quên tính năng này).
+            self.sentence = SentenceState::Idle;
             return (false, out);
         }
         // #65: viết hoa đầu câu — có thể đổi key_val thành chữ hoa; chạy TRƯỚC luồng chính để
@@ -1057,6 +1061,26 @@ mod tests {
         core.process_key_event(' ' as u32, 0, 0); // buffer rỗng → space forward, engine vẫn thấy
         let actions = type_keys(&mut core, "vieetj");
         assert_eq!(last_preedit(&actions).as_deref(), Some("Việt"));
+    }
+
+    #[test]
+    fn capitalize_sentence_reset_by_control_shortcut() {
+        // #160: sau ". " máy trạng thái vào ReadyToCapitalize; một tổ hợp Ctrl/Alt/Super
+        // (Ctrl+V dán…) có thể đổi văn bản nên phải reset trạng thái — gõ "va" tiếp KHÔNG
+        // được viết hoa thành "Va".
+        let mut cfg = default_cfg();
+        cfg.ib_flags |= cfg::IB_CAPITALIZE_SENTENCE;
+        let mut core = EngineCore::new(cfg);
+        type_keys(&mut core, "xong");
+        core.process_key_event('.' as u32, 0, 0); // commit "xong."
+        core.process_key_event(' ' as u32, 0, 0); // → ReadyToCapitalize
+        core.process_key_event('v' as u32, 0, MOD_CONTROL); // Ctrl+V dán → reset
+        let actions = type_keys(&mut core, "va");
+        assert_eq!(
+            last_preedit(&actions).as_deref(),
+            Some("va"),
+            "ReadyToCapitalize phải bị reset bởi tổ hợp Ctrl"
+        );
     }
 
     #[test]
