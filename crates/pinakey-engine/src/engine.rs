@@ -842,6 +842,7 @@ fn determine_macro_case(s: &str) -> u8 {
 fn is_valid_state(state: u32) -> bool {
     state & MOD_CONTROL == 0
         && state & MOD_MOD1 == 0
+        && state & MOD_MOD3 == 0 // Hyper/Mod3 vật lý (bit 5) — xem MOD_MOD3 (#153)
         && state & MOD_MOD4 == 0
         && state & MOD_IGNORED == 0
         && state & MOD_SUPER == 0

@@ -15,6 +15,10 @@ pub const MOD_SHIFT: u32 = 1 << 0;
 pub const MOD_LOCK: u32 = 1 << 1; // Caps Lock
 pub const MOD_CONTROL: u32 = 1 << 2;
 pub const MOD_MOD1: u32 = 1 << 3; // thường là Alt
+/// Mod3 vật lý = `KeyState::Hyper` của fcitx5 (`Mod3 = Hyper = 1 << 5`). KHÁC với [`MOD_HYPER`]
+/// (`1 << 27` = `Hyper2`, bit logic). Cả hai đều là modifier điều khiển của app, không mang ký
+/// tự — phải chặn trong `is_valid_state` để không nuốt shortcut / sửa preedit. (#153)
+pub const MOD_MOD3: u32 = 1 << 5;
 pub const MOD_MOD4: u32 = 1 << 6; // thường là Super/Win
 pub const MOD_HANDLED: u32 = 1 << 24; // chỉ IBus đặt bit này; vô hại với fcitx5
 pub const MOD_FORWARD: u32 = 1 << 25;
