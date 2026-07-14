@@ -4,6 +4,7 @@
 #ifndef _PINAKEY_FCITX5_UTF8UTIL_H_
 #define _PINAKEY_FCITX5_UTF8UTIL_H_
 
+#include <algorithm>
 #include <cerrno>
 #include <cstddef>
 #include <cstdlib>
@@ -50,7 +51,10 @@ inline size_t surroundingBytePosBeforeCursor(const std::string &text, unsigned i
                    : ((c >> 3) == 0x1e)  ? 4
                                          : 1;
     }
-    return bytePos;
+    // Lead byte đa byte cụt ở cuối chuỗi (UTF-8 không hợp lệ do app gửi) cộng 2–4 byte có thể
+    // vượt text.size(). Clamp để giữ đúng lời hứa "không bao giờ vượt cuối chuỗi" — nếu không,
+    // caller (text.compare/text[pos-1]) ném std::out_of_range làm sập cả fcitx5. (#154)
+    return std::min(bytePos, text.size());
 }
 
 } // namespace fcitx::pinakey
