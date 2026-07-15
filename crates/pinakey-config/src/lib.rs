@@ -96,12 +96,6 @@ pub fn try_config_dir() -> Option<PathBuf> {
     config_dir_in(dirs::config_dir(), dirs::home_dir())
 }
 
-/// Tương thích cũ: như [`try_config_dir`] nhưng trả đường dẫn rỗng khi không xác định được
-/// (mọi thao tác đọc trên đường dẫn rỗng đều lỗi → coi như "không có file").
-pub fn get_config_dir() -> PathBuf {
-    try_config_dir().unwrap_or_default()
-}
-
 /// Logic thuần (không đọc môi trường) để test được trực tiếp: ưu tiên thư mục config base của
 /// XDG (`dirs::config_dir()` = `$XDG_CONFIG_HOME` hoặc `~/.config`), fallback `{home}/.config`.
 fn config_dir_in(xdg_config_base: Option<PathBuf>, home: Option<PathBuf>) -> Option<PathBuf> {
@@ -110,33 +104,45 @@ fn config_dir_in(xdg_config_base: Option<PathBuf>, home: Option<PathBuf>) -> Opt
         .map(|base| base.join("pinakey"))
 }
 
-pub fn get_macro_path(engine_name: &str) -> PathBuf {
-    get_config_dir().join(format!("ibus-{}.macro.text", engine_name))
+// #162: mọi getter đường dẫn trả `Option<PathBuf>` — `None` khi thư mục config không xác định
+// được (`try_config_dir()` = None). Trước đây các getter join lên một `PathBuf` RỖNG (từ
+// `get_config_dir()` đã gỡ), cho ra đường dẫn TƯƠNG ĐỐI phân giải theo CWD của tiến trình fcitx5:
+// đọc phải file macro/dict/config lạ đặt sẵn trong CWD, và GHI emoji-recent.txt vào CWD. `None`
+// buộc mọi caller coi như "không có file" — đọc bỏ qua, ghi bỏ qua — như `save_config` vốn đã làm.
+
+/// `~/.config/pinakey/ibus-<name>.macro.text`. `None` khi không xác định được thư mục config.
+pub fn get_macro_path(engine_name: &str) -> Option<PathBuf> {
+    Some(try_config_dir()?.join(format!("ibus-{}.macro.text", engine_name)))
 }
 
 /// `~/.config/pinakey/dict.txt` — từ điển chính tả do người dùng bổ sung (issue #18).
-pub fn get_dict_path() -> PathBuf {
-    get_config_dir().join("dict.txt")
+pub fn get_dict_path() -> Option<PathBuf> {
+    Some(try_config_dir()?.join("dict.txt"))
 }
 
 /// `~/.config/pinakey/emoji-recent.txt` — lịch sử emoji gần dùng (issue #63), mỗi dòng một emoji.
-pub fn get_emoji_recent_path() -> PathBuf {
-    get_config_dir().join("emoji-recent.txt")
+pub fn get_emoji_recent_path() -> Option<PathBuf> {
+    Some(try_config_dir()?.join("emoji-recent.txt"))
 }
 
 /// `~/.config/pinakey/transport-rules.conf` — rule transport theo app của NGƯỜI DÙNG (issue #67),
 /// thắng rule built-in/hệ thống. Cú pháp: mỗi dòng `preedit|replace|auto <mẫu-tên-chương-trình>`.
-pub fn get_transport_rules_path() -> PathBuf {
-    get_config_dir().join("transport-rules.conf")
+pub fn get_transport_rules_path() -> Option<PathBuf> {
+    Some(try_config_dir()?.join("transport-rules.conf"))
 }
 
-pub fn get_config_path(engine_name: &str) -> PathBuf {
-    get_config_dir().join(format!("ibus-{}.config.json", engine_name))
+/// `~/.config/pinakey/ibus-<name>.config.json`. `None` khi không xác định được thư mục config.
+pub fn get_config_path(engine_name: &str) -> Option<PathBuf> {
+    Some(try_config_dir()?.join(format!("ibus-{}.config.json", engine_name)))
 }
 
 /// Nạp cấu hình: bắt đầu từ giá trị mặc định, sau đó phủ lên bằng file JSON của người dùng (nếu có).
+/// Không xác định được thư mục config → trả mặc định (không đọc đường dẫn tương đối theo CWD, #162).
 pub fn load_config(engine_name: &str) -> Config {
-    load_config_from(&get_config_path(engine_name))
+    match get_config_path(engine_name) {
+        Some(path) => load_config_from(&path),
+        None => default_cfg(),
+    }
 }
 
 /// Nạp config từ một đường dẫn cụ thể. Phân biệt rõ:
@@ -179,13 +185,13 @@ fn load_config_from(path: &Path) -> Config {
 /// mục cha. Nhờ vậy cả bị kill giữa chừng lẫn mất điện đều không để lại file config rỗng/cụt
 /// (xem `write_file_durable`, #163).
 pub fn save_config(c: &Config, engine_name: &str) -> std::io::Result<()> {
-    if try_config_dir().is_none() {
-        return Err(std::io::Error::new(
+    let path = get_config_path(engine_name).ok_or_else(|| {
+        std::io::Error::new(
             std::io::ErrorKind::NotFound,
             "không xác định được thư mục cấu hình ($XDG_CONFIG_HOME và $HOME đều thiếu)",
-        ));
-    }
-    save_config_to(c, &get_config_path(engine_name))
+        )
+    })?;
+    save_config_to(c, &path)
 }
 
 fn save_config_to(c: &Config, path: &Path) -> std::io::Result<()> {
@@ -317,6 +323,31 @@ mod tests {
         // Thiếu cả XDG lẫn HOME: KHÔNG được fallback về đường dẫn tương đối kiểu "~/.config"
         // (từng tạo thư mục tên "~" thật trong CWD — nguy cơ `rm -rf ~`).
         assert_eq!(config_dir_in(None, None), None);
+    }
+
+    #[test]
+    fn path_getters_compose_on_config_dir_and_are_absolute() {
+        // #162: mọi getter phải build trên try_config_dir() — đường dẫn TUYỆT ĐỐI dưới thư mục
+        // config, KHÔNG BAO GIỜ tương đối theo CWD. (Khi try_config_dir() = None thì kiểu Option
+        // buộc trả None — không còn nhánh "PathBuf rỗng → đường dẫn tương đối" như trước.)
+        let Some(base) = try_config_dir() else {
+            return; // môi trường không có XDG lẫn HOME — None đã được test riêng ở trên.
+        };
+        assert!(base.is_absolute(), "thư mục config phải tuyệt đối");
+        assert_eq!(
+            get_config_path("Telex"),
+            Some(base.join("ibus-Telex.config.json"))
+        );
+        assert_eq!(get_emoji_recent_path(), Some(base.join("emoji-recent.txt")));
+        assert_eq!(get_dict_path(), Some(base.join("dict.txt")));
+        assert_eq!(
+            get_macro_path("Telex"),
+            Some(base.join("ibus-Telex.macro.text"))
+        );
+        assert_eq!(
+            get_transport_rules_path(),
+            Some(base.join("transport-rules.conf"))
+        );
     }
 
     #[test]

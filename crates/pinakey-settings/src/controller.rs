@@ -336,6 +336,8 @@ mod tests {
         );
 
         // dọn file cấu hình tạm
-        let _ = std::fs::remove_file(pinakey_config::get_config_path(name));
+        if let Some(path) = pinakey_config::get_config_path(name) {
+            let _ = std::fs::remove_file(path);
+        }
     }
 }
