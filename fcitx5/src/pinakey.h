@@ -87,6 +87,9 @@ private:
     // (#106) — caller phải để phím đi tiếp (không filterAndAccept), tránh nuốt phím im lặng.
     bool startUinputReplace();
     void handleUinputAck(KeyEvent &keyEvent); // xử lý Backspace bơm-ngược; commit khi đủ
+    // #156: DỌN (vứt bỏ) toàn bộ khối trạng thái ACK uinput. Dùng chung cho reset() và
+    // deactivate() — chuỗi xoá dở thuộc về context/vị trí cũ, không được sống qua đổi focus.
+    void clearUinputAckState();
     void replayBufferedKeys();             // gõ nhanh khi đang xoá → replay sau khi ACK xong
     void flushPendingForward();            // #118: forward phím non-text đã hoãn sau chuỗi xoá
     void forwardKeyTap(uint32_t sym, uint32_t state); // #118: forward press+release một cú gõ
