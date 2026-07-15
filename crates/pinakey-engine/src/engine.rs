@@ -784,8 +784,11 @@ fn load_transport_rules() -> crate::transport::TransportRules {
     if let Ok(text) = std::fs::read_to_string(SYSTEM_RULES_PATH) {
         rules.append_layer(&text);
     }
-    if let Ok(text) = std::fs::read_to_string(pinakey_config::get_transport_rules_path()) {
-        rules.append_layer(&text);
+    // #162: chỉ đọc khi xác định được thư mục config; None → bỏ qua lớp người dùng.
+    if let Some(path) = pinakey_config::get_transport_rules_path() {
+        if let Ok(text) = std::fs::read_to_string(path) {
+            rules.append_layer(&text);
+        }
     }
     rules
 }
@@ -797,7 +800,11 @@ fn build_macro_table(config: &Config, macro_name: &str) -> MacroTable {
     let mut mt = MacroTable::new(config.ib_flags & cfg::IB_AUTO_CAPITALIZE_MACRO != 0);
     if config.ib_flags & cfg::IB_MACRO_ENABLED != 0 {
         // #129: file macro theo TÊN engine, không nạp cứng tên quy ước.
-        if let Some(path) = pinakey_config::get_macro_path(macro_name).to_str() {
+        // #162: get_macro_path = None (không rõ thư mục config) → không nạp file macro nào.
+        if let Some(path) = pinakey_config::get_macro_path(macro_name)
+            .as_deref()
+            .and_then(|p| p.to_str())
+        {
             let _ = mt.load_from_file(path);
         }
         mt.set_enabled(true);
@@ -812,7 +819,11 @@ fn load_dictionary(config: &Config) -> Option<core::Dictionary> {
         return None;
     }
     let mut dict = core::Dictionary::bundled();
-    if let Some(path) = pinakey_config::get_dict_path().to_str() {
+    // #162: get_dict_path = None (không rõ thư mục config) → chỉ dùng từ điển đóng kèm.
+    if let Some(path) = pinakey_config::get_dict_path()
+        .as_deref()
+        .and_then(|p| p.to_str())
+    {
         if let Ok(user) = core::Dictionary::load_file(path) {
             dict.merge(&user);
         }

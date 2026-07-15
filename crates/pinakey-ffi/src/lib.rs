@@ -684,10 +684,12 @@ const EMOJI_RECENT_CAP: usize = 9;
 
 fn emoji_recent() -> &'static std::sync::Mutex<pinakey_emoji::RecentEmoji> {
     EMOJI_RECENT.get_or_init(|| {
-        std::sync::Mutex::new(pinakey_emoji::RecentEmoji::load_from_file(
-            &pinakey_config::get_emoji_recent_path(),
-            EMOJI_RECENT_CAP,
-        ))
+        // #162: không rõ thư mục config → khởi tạo rỗng, KHÔNG đọc file theo đường dẫn tương đối.
+        let recent = match pinakey_config::get_emoji_recent_path() {
+            Some(path) => pinakey_emoji::RecentEmoji::load_from_file(&path, EMOJI_RECENT_CAP),
+            None => pinakey_emoji::RecentEmoji::new(EMOJI_RECENT_CAP),
+        };
+        std::sync::Mutex::new(recent)
     })
 }
 
@@ -731,8 +733,11 @@ pub unsafe extern "C" fn pk_emoji_record_use(emoji: *const c_char) {
     };
     if let Ok(mut r) = emoji_recent().lock() {
         r.record(e);
-        if let Err(err) = r.save_to_file(&pinakey_config::get_emoji_recent_path()) {
-            pinakey_config::warn_stderr!("pinakey: không ghi được lịch sử emoji ({err})");
+        // #162: không rõ thư mục config → giữ trong bộ nhớ, KHÔNG ghi emoji-recent.txt vào CWD.
+        if let Some(path) = pinakey_config::get_emoji_recent_path() {
+            if let Err(err) = r.save_to_file(&path) {
+                pinakey_config::warn_stderr!("pinakey: không ghi được lịch sử emoji ({err})");
+            }
         }
     }
 }
