@@ -33,6 +33,10 @@ pub struct Config {
     pub flags: u32,
     #[serde(rename = "IBflags")]
     pub ib_flags: u32,
+    /// #161: GIỮ-CHỖ tương thích JSON. Bên Bamboo Go dùng để gán phím tắt "khôi phục phím gõ"
+    /// (restore key strokes), nhưng cơ chế đó chưa từng được đấu dây trong bản Rust — không crate
+    /// nào tiêu thụ mảng này. Giữ trường để round-trip config cũ (file có `"Shortcuts": [...]` vẫn
+    /// nạp/ghi lại nguyên vẹn), KHÔNG có tác dụng chức năng. Tương tự cách giữ chỗ bit flag lỗi thời.
     #[serde(rename = "Shortcuts")]
     pub shortcuts: [u32; 10],
     /// #110: chỉ frontend IBus (dùng chung file config) tiêu thụ; addon fcitx5 chọn transport
