@@ -370,6 +370,24 @@ int main() {
         FCITX_ASSERT(ic->text().find("đ") == std::string::npos)
             << "#156: pendingCommit \"đ\" ma sống sót qua deactivate: doc=\"" << ic->text() << "\"";
 
+        // ---- #155: replay phải commit phím văn bản engine không xử lý (handled=false, sent=true) ----
+        // Gõ "dd" mở chuỗi xoá (deleting_, pending "đ"); hai dấu '.' đến TRONG lúc xoá → đệm vào
+        // bufferedKeys_. Khi ACK hoàn tất, replay xử lý lần lượt: '.'#1 (buffer "đ", word-break →
+        // handled, del=0 chèn ".") RỒI '.'#2 (buffer rỗng → handled=false, apply_replace del=0/
+        // insert="" → sent=true nhưng KHÔNG chèn gì). Trước fix: '.'#2 rơi vào khe hở isText &&
+        // !handled && sent → BIẾN MẤT (ra "đ."). Sau fix: commit nguyên văn → "đ..".
+        ic->reset();
+        ic->clearDoc();
+        ic->typeString("dd"); // doc="d", deleting_=true, pending "đ", chờ ACK
+        FCITX_ASSERT(daemon3.waitCounts(4));
+        ic->type(Key("period")); // đệm trong lúc deleting_
+        ic->type(Key("period")); // đệm trong lúc deleting_ — cái thứ hai là ca lỗi
+        ic->type(Key("BackSpace")); // ACK trung gian: xoá thật 'd'
+        ic->type(Key("BackSpace")); // trigger: commit "đ" rồi replay hai '.'
+        FCITX_ASSERT(ic->text() == "đ..")
+            << "#155: dấu '.' thứ hai (engine không xử lý) bị nuốt khi replay: doc=\""
+            << ic->text() << "\"";
+
         instance.exit();
     });
     instance.exec();

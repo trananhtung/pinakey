@@ -430,6 +430,14 @@ void PinaKeyState::replayBufferedKeys() {
             // xoá thì commit nguyên văn ký tự (gõ mộc, lõi đã reset) để nó không mất im lặng.
             // #117: chỉ ký tự in được; control char thô không được vào tài liệu.
             ic_->commitString(u);
+        } else if (sent && isText && !handled) {
+            // #155: phím VĂN BẢN in được mà engine KHÔNG xử lý (handled=false, không sinh action —
+            // vd dấu câu thứ hai khi buffer rỗng: '.', ';', ',', space, chữ số sau ranh giới từ).
+            // apply_replace đi nhánh sớm del=0/insert="" nên startUinputReplace trả sent=true nhưng
+            // KHÔNG chèn gì; sự kiện gốc đã bị nuốt lúc đệm → nếu không làm gì thì phím biến mất.
+            // Ở đường gõ thường phím handled=false được để đi tới app; replay tương đương bằng cách
+            // commit nguyên văn ký tự (như nhánh !sent ở trên, chỉ khác lý do).
+            ic_->commitString(u);
         }
         if (!isText && !(handled && sent)) {
             // #118: phím chức năng (Enter/Tab/mũi tên, tổ hợp modifier) — sự kiện gốc đã bị
