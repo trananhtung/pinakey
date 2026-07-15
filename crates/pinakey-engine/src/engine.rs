@@ -39,8 +39,6 @@ pub struct EngineCore {
     pub preeditor: PinaKeyEngine,
     pub config: Config,
     pub macro_table: MacroTable,
-    pub should_restore_key_strokes: bool,
-    pub last_key_with_shift: bool,
     wm_class: String,
     /// Từ điển chính tả (chỉ nạp khi bật cờ `IB_SPELL_CHECK_WITH_DICTS`) — issue #18.
     dictionary: Option<core::Dictionary>,
@@ -117,8 +115,6 @@ impl EngineCore {
             preeditor,
             config,
             macro_table,
-            should_restore_key_strokes: false,
-            last_key_with_shift: false,
             wm_class: String::new(),
             dictionary,
             sentence: SentenceState::Idle,
@@ -517,27 +513,11 @@ impl EngineCore {
             && self.get_processed_string(mode::ENGLISH).is_empty()
     }
 
-    fn update_last_key_with_shift(&mut self, key_val: u32, state: u32) {
-        let key_rune = char::from_u32(key_val).unwrap_or('\0');
-        if self.preeditor.can_process_key(key_rune) {
-            self.last_key_with_shift = state & MOD_SHIFT != 0;
-        } else {
-            self.last_key_with_shift = false;
-        }
-    }
-
     /// Trả về `(commit_text, is_word_break)`.
     fn get_commit_text(&mut self, key_val: u32, _key_code: u32, state: u32) -> (String, bool) {
         let mut key_rune = char::from_u32(key_val).unwrap_or('\0');
         let is_printable = self.is_printable_key(state, key_val);
         let old_text = self.get_preedit_string();
-
-        if self.should_restore_key_strokes {
-            self.should_restore_key_strokes = false;
-            self.preeditor
-                .restore_last_word(!has_any_vietnamese_rune(&old_text));
-            return (self.get_preedit_string(), false);
-        }
 
         let key_s = if is_printable {
             key_rune.to_string()
@@ -679,7 +659,6 @@ impl EngineCore {
         // cả phím forward (space khi buffer rỗng) cũng đi qua máy trạng thái.
         let key_val = self.apply_sentence_capitalize(key_val, state);
         let result = self.preedit_process_key_event(key_val, key_code, state, &mut out);
-        self.update_last_key_with_shift(key_val, state);
         (result, out)
     }
 
@@ -694,11 +673,7 @@ impl EngineCore {
         let key_rune = char::from_u32(key_val).unwrap_or('\0');
         let old_text = self.get_preedit_string();
 
-        if !self.should_restore_key_strokes
-            && !self.preeditor.can_process_key(key_rune)
-            && raw_key_len == 0
-            && !self.macro_enabled()
-        {
+        if !self.preeditor.can_process_key(key_rune) && raw_key_len == 0 && !self.macro_enabled() {
             // Không xử lý ký tự đặc biệt khi buffer rỗng (thanh địa chỉ Chrome, v.v.)
             return false;
         }
