@@ -191,12 +191,26 @@ int main(int argc, char *argv[]) {
     sigaction(SIGTERM, &sa, nullptr);
     sigaction(SIGINT, &sa, nullptr);
 
+    // #157: chặn race giữa kiểm g_running và poll(-1). Với poll thường, nếu SIGTERM được giao SAU
+    // khi vòng lặp đọc g_running=true nhưng TRƯỚC khi vào syscall, cờ đã set mà poll vẫn block vô
+    // hạn → daemon treo tới khi có traffic hoặc systemd hết TimeoutStopSec rồi SIGKILL (~90s).
+    // Cách chuẩn: BLOCK hai tín hiệu ngoài vòng chờ; ppoll sẽ unblock chúng NGUYÊN TỬ chỉ trong lúc
+    // block. Tín hiệu rơi vào khe hở trước đây nay còn "pending" (bị chặn) tới khi ppoll mở mask →
+    // handler chạy ngay lúc đó → ppoll trả EINTR → vòng lặp thấy g_running=false và thoát. Không còn
+    // khe hở nào để tín hiệu lọt qua mà không đánh thức được ppoll.
+    sigset_t blockMask, waitMask;
+    sigemptyset(&blockMask);
+    sigaddset(&blockMask, SIGTERM);
+    sigaddset(&blockMask, SIGINT);
+    // waitMask = mask hiện hành TRƯỚC khi block (SIGTERM/SIGINT còn mở) → dùng làm mask trong ppoll.
+    sigprocmask(SIG_BLOCK, &blockMask, &waitMask);
+
     Fd client;
     std::vector<struct pollfd> fds(2);
     while (g_running.load(std::memory_order_acquire)) {
         fds[0] = {server.get(), POLLIN, 0};
         fds[1] = {client.valid() ? client.get() : -1, POLLIN, 0};
-        int ret = poll(fds.data(), fds.size(), -1);
+        int ret = ppoll(fds.data(), fds.size(), nullptr, &waitMask);
         if (ret < 0) {
             if (errno == EINTR) {
                 continue;
