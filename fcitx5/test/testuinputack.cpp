@@ -353,6 +353,23 @@ int main() {
         FCITX_ASSERT(ic->text() == "dđân")
             << "#125: doc=\"" << ic->text() << "\", mong đợi \"dđân\"";
 
+        // ---- #156: deactivate() phải dọn trạng thái ACK; chuỗi xoá dở không sống qua đổi focus ----
+        // Gõ "dd" mở chuỗi xoá (deleting_, pending "đ") nhưng KHÔNG ACK. Đổi focus (fcitx5 gọi
+        // deactivate, client KHÔNG gửi ResetEvent) rồi quay lại. Trước fix: nhánh wantReplaceMode
+        // của deactivate chỉ pk_engine_reset, để deleting_/pendingCommit_ sống sót → phím kế tiếp
+        // (sau 500ms) kích timeout commit "đ" ma vào vị trí mới. Sau fix: state đã dọn sạch.
+        ic->reset();
+        ic->clearDoc();
+        ic->typeString("dd"); // doc="d", deleting_=true, pending "đ", chờ ACK không bao giờ tới
+        FCITX_ASSERT(daemon3.waitCounts(3));
+        ic->focusOut();       // fcitx5 gọi PinaKeyEngine::deactivate (imSwitch=false)
+        ic->focusIn();        // activate — KHÔNG reset (app không gửi ResetEvent)
+        std::this_thread::sleep_for(std::chrono::milliseconds(600)); // vượt cửa sổ timeout 500ms
+        ic->clearDoc();       // "tài liệu" ở vị trí/context mới
+        ic->typeString("m");  // nếu ACK state còn sống: timeout commit "đ" ma trước khi xử lý 'm'
+        FCITX_ASSERT(ic->text().find("đ") == std::string::npos)
+            << "#156: pendingCommit \"đ\" ma sống sót qua deactivate: doc=\"" << ic->text() << "\"";
+
         instance.exit();
     });
     instance.exec();

@@ -106,8 +106,11 @@ PinaKeyState::PinaKeyState(PinaKeyEngine *engine, InputContext *ic)
 
 PinaKeyState::~PinaKeyState() { pk_engine_free(core_); }
 
-void PinaKeyState::reset() {
-    // Dọn trạng thái ACK uinput để không kẹt nếu reset xảy ra giữa chuỗi xoá (đổi focus, click…).
+/// #156: DỌN (vứt bỏ) khối trạng thái ACK uinput để không kẹt nếu bị ngắt giữa chuỗi xoá (reset,
+/// đổi focus, click…). Chuỗi xoá dở gắn với vị trí con trỏ cũ; nếu để sống sót, nhánh timeout ở
+/// keyEvent kế tiếp sẽ commit `pendingCommit_` "ma" vào vị trí mới + cộng nợ orphanBackspaces_ làm
+/// nuốt Backspace thật của người dùng.
+void PinaKeyState::clearUinputAckState() {
     deleting_ = false;
     expectedBackspaces_ = 0;
     currentBackspaceCount_ = 0;
@@ -115,6 +118,10 @@ void PinaKeyState::reset() {
     bufferedKeys_.clear();
     pendingForwardKey_.reset();
     orphanBackspaces_ = 0;
+}
+
+void PinaKeyState::reset() {
+    clearUinputAckState();
 
     // Dọn trạng thái emoji: reset là "vứt bỏ" (không commit) — nếu để sót, phím gõ sau khi quay
     // lại context này bị nuốt vào query emoji vô hình.
@@ -485,6 +492,10 @@ void PinaKeyState::deactivate(bool imSwitch) {
     } else {
         pk_engine_reset(core_);
     }
+    // #156: dọn khối trạng thái ACK uinput như reset(). fcitx5 lúc focus-out chỉ bảo đảm gọi
+    // deactivate (không bảo đảm có ResetEvent từ client), nên nếu bỏ sót thì chuỗi xoá dở sống
+    // qua đổi focus: quay lại context gõ tiếp sẽ commit pendingCommit_ "ma" + nuốt Backspace thật.
+    clearUinputAckState();
     ic_->inputPanel().reset();
     ic_->updatePreedit();
     ic_->updateUserInterface(UserInterfaceComponent::InputPanel);
