@@ -140,9 +140,8 @@ impl IEngine for PinaKeyEngine {
     }
 
     fn get_processed_string(&self, mode_flags: u32) -> String {
-        let tmp: Vec<TransRef>;
-        if mode_flags & mode::FULL_TEXT != 0 {
-            tmp = self.composition.clone();
+        let tmp: Vec<TransRef> = if mode_flags & mode::FULL_TEXT != 0 {
+            self.composition.clone()
         } else if mode_flags & mode::PUNCTUATION != 0 {
             let (_, t) = extract_last_word_with_punctuation_marks(
                 &self.composition,
@@ -151,8 +150,8 @@ impl IEngine for PinaKeyEngine {
             return flatten(&t, mode::VIETNAMESE);
         } else {
             let (_, t) = extract_last_word(&self.composition, &self.input_method.keys);
-            tmp = t;
-        }
+            t
+        };
         flatten(&tmp, mode_flags)
     }
 
