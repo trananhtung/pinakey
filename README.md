@@ -2,63 +2,112 @@
 
 [![All Contributors](https://img.shields.io/github/all-contributors/trananhtung/pinakey?color=ee8449&style=flat-square)](#người-đóng-góp)
 
-**PinaKey** là một bộ gõ tiếng Việt (IME) cho Linux trên nền **fcitx5**, với **lõi xử lý viết hoàn
-toàn bằng Rust thuần** (gõ Telex / VNI / VIQR, không cgo) và một **addon C++ mỏng** tích hợp vào
-fcitx5. Trải nghiệm mặc định là **gõ không gạch chân** — chữ hiện thẳng như gõ thường, không có
-preedit gạch chân.
+Trên phần lớn bộ gõ Linux, gõ `vieetj` sẽ hiện ra một đoạn `vieetj` gạch chân nằm chờ ở đó, đến khi
+bạn gõ dấu cách nó mới bật thành `việt`.
 
-🌐 **Trang giới thiệu:** **[trananhtung.github.io/pinakey-web](https://trananhtung.github.io/pinakey-web/)**
-— landing page song ngữ Việt/Anh, có **sân chơi gõ thử Telex/VNI ngay trong trình duyệt**.
-Mã nguồn trang web: [`trananhtung/pinakey-web`](https://github.com/trananhtung/pinakey-web).
+PinaKey bỏ luôn đoạn gạch chân đó. Chữ hiện thẳng ra màn hình, giống hệt lúc bạn gõ trên Windows hay
+macOS. Đây là một bộ gõ tiếng Việt cho Linux, chạy trên fcitx5.
 
-📖 **Hướng dẫn sử dụng cho người dùng:** [USAGE.md](USAGE.md) — cài đặt, bật bộ gõ, bảng phím
-Telex/VNI/VIQR, gõ không gạch chân, emoji, từ điển, gõ tắt, khắc phục sự cố.
+Đổi lại, mỗi lần bạn thêm một dấu, PinaKey phải xoá chữ vừa hiện rồi viết lại chữ mới, ngay giữa lúc
+bạn đang gõ tiếp. Việc đó phải vừa nhanh vừa không được sai một ký tự nào, nên lõi xử lý viết bằng
+Rust thuần: khoảng 14 µs cho mỗi phím, không GC chen ngang, 165 test đơn vị. Phần nối vào fcitx5 chỉ
+là một addon C++ mỏng.
 
-> PinaKey tham khảo ý tưởng từ **Bamboo** (ibus-bamboo), **[fcitx5-lotus](https://github.com/LotusInputMethod/fcitx5-lotus)**
-> (gõ không gạch chân) và **[fcitx5-cskk](https://github.com/fcitx/fcitx5-cskk)** (addon C++ bọc lõi
-> không-C++ qua C-ABI).
+Trang giới thiệu có sân chơi gõ thử Telex/VNI ngay trong trình duyệt:
+[trananhtung.github.io/pinakey-web](https://trananhtung.github.io/pinakey-web/)
+(mã nguồn: [`trananhtung/pinakey-web`](https://github.com/trananhtung/pinakey-web)).
+Hướng dẫn đầy đủ cho người dùng nằm ở [USAGE.md](USAGE.md).
+
+## Cài đặt
+
+Ubuntu và Debian, cách nhanh nhất:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/trananhtung/pinakey/main/tools/install-deb.sh | bash
+```
+
+Hoặc tải gói `.deb` mới nhất ở [Releases](https://github.com/trananhtung/pinakey/releases/latest)
+rồi `sudo apt install ./fcitx5-pinakey_*.deb`.
+
+Cài xong còn ba bước nữa mới gõ được:
+
+1. `im-config -n fcitx5`, rồi **đăng xuất và đăng nhập lại**. Chỉ cần làm một lần, và chỉ khi
+   fcitx5 chưa phải bộ gõ của hệ thống. Bỏ qua bước này hay gặp lỗi "PinaKey (Not available)".
+2. `fcitx5 -r -d` để fcitx5 nạp addon mới.
+3. Mở `fcitx5-configtool`, bỏ tick "Only Show Current Language" ở góc dưới, tìm PinaKey rồi bấm mũi tên sang phải.
+
+Xong. Nhấn Ctrl+Space để chuyển sang PinaKey và gõ thử `vieetj`, chữ ra phải là `việt`.
+
+Cách gỡ cài đặt, cách xử lý khi app snap/flatpak không gõ được, và các lỗi hay gặp khác:
+[USAGE.md](USAGE.md#1-cài-đặt).
+
+## Gõ được những gì
+
+Telex, VNI, VIQR, kèm vài biến thể dựng sẵn, trong đó có Telex đơn giản (gõ dấu chặt).
+
+### Chỗ nào không gạch chân, chỗ nào vẫn còn
+
+| Ứng dụng | Lúc gõ |
+|----------|--------|
+| Firefox, Chrome, VS Code, Telegram, phần lớn app GTK và Qt | Không gạch chân |
+| Terminal: gnome-terminal, konsole, kitty, foot, ghostty… | Còn gạch chân (preedit) |
+| LibreOffice | Còn gạch chân (preedit) |
+
+PinaKey chỉ bỏ được gạch chân khi app cho phép đọc và xoá chữ đã hiện ra (Surrounding Text).
+Terminal thì không cho thật: VTE nhận lệnh xoá rồi bỏ qua luôn, nên nếu cứ cố sẽ ra chữ rối như
+`tieêngếng`. LibreOffice có cho, nhưng báo cáo sai vị trí khi gõ nhanh. Gặp hai nhóm này PinaKey tự
+lùi về preedit, chữ vẫn ra đúng, chỉ là có gạch chân trong lúc soạn. Bạn không phải cấu hình gì cả;
+danh sách nằm sẵn trong bộ gõ và sửa được ở `~/.config/pinakey/transport-rules.conf`.
+
+Có thêm chế độ uinput để bỏ gạch chân ở cả terminal, nhưng còn thử nghiệm và tắt sẵn
+(xem mục 9 của USAGE).
+
+### Emoji
+
+Gõ `:tên` là ra, tìm gần đúng trên khoảng 11 nghìn khóa nên `:heye` vẫn tìm được `heart_eyes`.
+Vừa mở `:` đã thấy 9 emoji dùng gần nhất, chọn bằng phím số. Cần ký tự Unicode lạ thì gõ `:u<hex>`.
+
+### Còn lại
+
+- Menu ở khay trạng thái để đổi kiểu gõ và bảng mã.
+- Từ điển chính tả "giải oan" cho từ mượn, cộng từ điển riêng của bạn ở `~/.config/pinakey/dict.txt`.
+- Gõ tắt (macro), có cả `$DATE` và `$TIME` tự điền.
+- Tự bỏ qua app tiếng Anh (terminal, IDE) và ô mật khẩu.
+- Vài tiện ích nhỏ, mặc định tắt: w thành ư theo 3 mức, tự viết hoa đầu câu, hai dấu cách thành một dấu chấm rồi một dấu cách.
+- Sửa file macro hay từ điển là có hiệu lực ngay, không phải khởi động lại.
+- Giao diện thiết lập đồ họa viết bằng egui, bấm lưu là áp dụng luôn.
+
+Con số 14 µs ở trên tự chạy lại được, cách đo nằm ở [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
 ## Về cái tên
 
 <img src="docs/assets/francisco-de-pina.jpg" alt="Francisco de Pina (trong tranh khắc cùng Alexandre de Rhodes)" align="right" width="200">
 
-**PinaKey** tri ân **Francisco de Pina** (1585–1625), giáo sĩ Dòng Tên người Bồ Đào Nha, người
-đầu tiên La-tinh hóa tiếng Việt một cách có hệ thống tại Thanh Chiêm – Hội An và đặt nền móng cho
-**chữ Quốc Ngữ** — thứ chữ mà mọi bàn phím tiếng Việt ngày nay đều gõ. Ông là thầy dạy tiếng Việt
-cho Alexandre de Rhodes và thường bị lãng quên sau cái bóng của học trò; bộ gõ này là một lời tri
-ân nhỏ. Hậu tố **"Key"** đánh dấu nó là một bộ gõ (keyboard / input method).
+PinaKey tri ân Francisco de Pina (1585–1625), giáo sĩ Dòng Tên người Bồ Đào Nha. Ông là người đầu
+tiên La-tinh hóa tiếng Việt một cách có hệ thống, ở Thanh Chiêm và Hội An, đặt nền móng cho chữ
+Quốc Ngữ, thứ chữ mà mọi bàn phím tiếng Việt ngày nay đều gõ. Ông cũng là thầy dạy tiếng Việt của
+Alexandre de Rhodes, và thường bị lãng quên sau cái bóng của học trò. Bộ gõ này là một lời tri ân nhỏ.
+Hậu tố "Key" đánh dấu nó là một bộ gõ.
 
-## Tính năng
+## Dành cho người phát triển
 
-- **Telex / VNI / VIQR** + nhiều biến thể dựng sẵn, kể cả **Telex đơn giản** (gõ dấu chặt).
-- **Gõ không gạch chân**: với app hỗ trợ *Surrounding Text* (đa số GTK/Qt) commit thẳng + sửa tại
-  chỗ; với app khác (terminal…) tự lùi về **preedit** (ổn định). Có chế độ **uinput thử nghiệm**
-  (opt-in, không ổn định trên GNOME Wayland) — xem USAGE mục 9.
-- **Bảng tra emoji** (`:tên`, tìm **fuzzy** — `:heye` ra `heart_eyes`), **lịch sử 9 emoji gần
-  dùng** hiện ngay khi mở `:` (chọn bằng phím số), và **nhập Unicode hex** (`:u<hex>`).
-- **Menu** trên khay trạng thái: đổi kiểu gõ + bảng mã.
-- **Từ điển chính tả** "giải oan" cho từ mượn (+ từ điển người dùng `~/.config/pinakey/dict.txt`).
-- **Gõ tắt (macro)** (kèm `$DATE`/`$TIME` động), **loại trừ app tiếng Anh** (terminal/IDE…),
-  **tự bỏ qua ô mật khẩu**.
-- **Tiện ích gõ tuỳ chọn** (mặc định tắt): w→ư 3 mức, tự viết hoa đầu câu, double-space → `. `.
-- **Live-reload** file macro/dict khi sửa (không cần khởi động lại).
-- **Giao diện thiết lập** đồ họa thuần Rust (egui) — lưu là **áp dụng ngay**, không cần restart.
-- **Nhanh đo được**: ~14 µs/phím trên lõi Rust (không GC) — xem [benchmark tự chạy lại
-  được](docs/BENCHMARK.md).
+PinaKey tham khảo ý tưởng từ Bamboo (ibus-bamboo),
+[fcitx5-lotus](https://github.com/LotusInputMethod/fcitx5-lotus) cho phần gõ không gạch chân, và
+[fcitx5-cskk](https://github.com/fcitx/fcitx5-cskk) cho cách bọc một lõi không phải C++ qua C-ABI.
 
-## Bố cục workspace
+### Các crate trong workspace
 
 | Crate | Trách nhiệm |
 |-------|-------------|
 | `pinakey-core` | Biến đổi Telex/VNI/VIQR, kiểm tra chính tả, từ điển, mã hóa charset. Logic thuần, không I/O. |
 | `pinakey-config` | Cấu hình JSON, feature flag, đường dẫn cấu hình. |
-| `pinakey-emoji` | Tra emoji (fuzzy + trie), lịch sử gần dùng + bảng macro. |
-| `pinakey-engine` | **Lõi engine trung lập transport**: `process_key → (handled, Vec<Action>)`, không I/O. |
-| `pinakey-ffi` | **C-ABI** (cbindgen) bọc `pinakey-engine` để addon fcitx5 C++ dùng lại lõi Rust. |
+| `pinakey-emoji` | Tra emoji (fuzzy + trie), lịch sử gần dùng, bảng macro. |
+| `pinakey-engine` | Lõi engine trung lập transport: `process_key → (handled, Vec<Action>)`, không I/O. |
+| `pinakey-ffi` | C-ABI (cbindgen) bọc `pinakey-engine` để addon C++ dùng lại lõi Rust. |
 | `pinakey-settings` | Giao diện thiết lập đồ họa (egui, feature `gui`). |
-| `fcitx5/` (C++) | **Addon fcitx5** (`InputMethodEngineV2`) + **daemon uinput** bơm Backspace. |
+| `fcitx5/` (C++) | Addon fcitx5 (`InputMethodEngineV2`) và daemon uinput bơm Backspace. |
 
-## Biên dịch & test (lõi Rust)
+### Build và test lõi Rust
 
 ```sh
 cargo build --workspace
@@ -67,23 +116,12 @@ cargo fmt --all --check                                  # cổng định dạng
 cargo clippy --workspace --all-targets -- -D warnings    # cổng lint (CI)
 ```
 
-Xem [ARCHITECTURE.md](ARCHITECTURE.md) để biết đồ thị phụ thuộc và lý do thiết kế,
-và [CONTRIBUTING.md](CONTRIBUTING.md) để biết quy trình phát triển.
+[ARCHITECTURE.md](ARCHITECTURE.md) có đồ thị phụ thuộc và lý do đằng sau từng quyết định thiết kế.
+[CONTRIBUTING.md](CONTRIBUTING.md) có quy trình phát triển.
 
-## Cài đặt (fcitx5)
+### Build addon fcitx5 từ nguồn
 
-### Cách dễ nhất — gói `.deb` dựng sẵn (Ubuntu/Debian, khuyến nghị)
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/trananhtung/pinakey/main/tools/install-deb.sh | bash
-```
-
-hoặc tải `.deb` mới nhất tại [Releases](https://github.com/trananhtung/pinakey/releases/latest) rồi
-`sudo apt install ./fcitx5-pinakey_*.deb`. Sau đó xem **[3 bước bắt đầu gõ](USAGE.md#1-cài-đặt)**.
-
-### Build từ nguồn
-
-#### Phụ thuộc build (Debian/Ubuntu)
+Phụ thuộc trên Debian và Ubuntu:
 
 ```sh
 sudo apt install fcitx5 fcitx5-configtool libfcitx5core-dev libfcitx5utils-dev libfcitx5config-dev \
@@ -91,13 +129,13 @@ sudo apt install fcitx5 fcitx5-configtool libfcitx5core-dev libfcitx5utils-dev l
 # + Rust (rustup) >= 1.85
 ```
 
-#### Build & cài
+Một lệnh là xong (build, ctest, `sudo cmake --install`, khởi động lại fcitx5):
 
 ```sh
-bash tools/install-fcitx5.sh     # build + ctest + sudo cmake --install + restart fcitx5
+bash tools/install-fcitx5.sh
 ```
 
-hoặc thủ công:
+Hoặc làm từng bước:
 
 ```sh
 cmake -S fcitx5 -B fcitx5/build -DCMAKE_INSTALL_PREFIX=/usr   # cargo tự build lõi Rust (staticlib)
@@ -107,64 +145,66 @@ sudo cmake --install fcitx5/build
 fcitx5 -r -d
 ```
 
-Sau đó: nếu fcitx5 chưa bật ở mức phiên, chạy `im-config -n fcitx5` rồi **đăng nhập lại** (tránh lỗi
-“Not available”); mở **fcitx5-configtool** → thêm input method **PinaKey** (Tiếng Việt) → Ctrl+Space
-để chuyển → gõ Telex, ví dụ `vieetj` → `việt`. Chi tiết: [USAGE.md](USAGE.md#1-cài-đặt).
+Sau đó làm ba bước ở phần [Cài đặt](#cài-đặt) bên trên để fcitx5 nhận PinaKey.
 
-> **Tự đóng gói** (deb/rpm/AUR/Nix) cho người phân phối: xem [packaging/](packaging/).
+Muốn tự đóng gói cho deb, rpm, AUR hay Nix thì xem [packaging/](packaging/).
 
-### Giao diện thiết lập (tùy chọn)
+### Giao diện thiết lập
 
 ```sh
 cargo build --release -p pinakey-settings --features gui
 ./target/release/pinakey-settings
 ```
 
-### (Thử nghiệm) Gõ không gạch chân ở terminal — daemon uinput
+### Chế độ uinput, để bỏ gạch chân ở terminal
 
-> ⚠️ Tắt mặc định và **không ổn định trên GNOME Wayland** (frontend D-Bus không bảo đảm thứ tự
-> xoá/commit → rối ký tự). Terminal mặc định dùng preedit. Chi tiết + cảnh báo: USAGE mục 9.
+Cảnh báo trước: chế độ này tắt mặc định và không ổn định trên GNOME Wayland, vì frontend D-Bus
+không bảo đảm thứ tự xoá và commit nên chữ dễ bị rối. Terminal mặc định vẫn dùng preedit.
+Chi tiết ở mục 9 của USAGE.
 
-Cần cả 3: (1) build kèm `-DPINAKEY_BUILD_UINPUT_SERVER=ON` (mặc định OFF), (2) bật daemon, (3) đặt
-env `PINAKEY_UINPUT=1` rồi đăng nhập lại.
+Cần đủ cả ba: build kèm `-DPINAKEY_BUILD_UINPUT_SERVER=ON` (mặc định OFF), bật daemon, rồi đặt biến
+môi trường `PINAKEY_UINPUT=1` và đăng nhập lại.
 
 ```sh
 cmake -S fcitx5 -B fcitx5/build -DPINAKEY_BUILD_UINPUT_SERVER=ON && cmake --build fcitx5/build && sudo cmake --install fcitx5/build
 sudo udevadm control --reload && sudo udevadm trigger
 systemctl --user enable --now pinakey-uinput-server
-echo 'PINAKEY_UINPUT=1' >> ~/.config/environment.d/fcitx5.conf   # rồi đăng xuất/đăng nhập lại
+echo 'PINAKEY_UINPUT=1' >> ~/.config/environment.d/fcitx5.conf   # rồi đăng xuất và đăng nhập lại
 ```
 
-## Ghi chú kiến trúc
+### Các mảnh ghép lại với nhau thế nào
 
-- Logic xử lý phím nằm ở **`pinakey-engine`** (lõi trung lập transport): trả về danh sách `Action`
-  (commit / cập-nhật-preedit / ẩn), unit-test được mà không cần daemon. Keysym/modifier dùng giá trị
-  X11 — trùng với fcitx5 nên không cần ánh xạ.
-- Addon fcitx5 (`fcitx5/`) gọi `pinakey-ffi` (C-ABI), rồi dịch `Action` thành lệnh fcitx5
-  (`commitString` / preedit / `deleteSurroundingText`). Gõ không gạch chân = so tiền tố chung giữa
-  chuỗi đang hiển thị và chuỗi mới → `(số ký tự xoá, chuỗi chèn)`.
-- `pinakey-core` dùng `Rc` (đơn luồng); mỗi input context giữ một thực thể engine riêng.
+Toàn bộ logic xử lý phím nằm ở `pinakey-engine`. Nó không biết gì về transport, chỉ trả về một danh
+sách `Action` (commit, cập nhật preedit, ẩn), nên unit-test được mà không cần dựng daemon. Keysym và
+modifier dùng thẳng giá trị X11, trùng với fcitx5 nên không phải ánh xạ lại.
+
+Addon trong `fcitx5/` gọi `pinakey-ffi` qua C-ABI rồi dịch từng `Action` thành lệnh fcitx5:
+`commitString`, cập nhật preedit, hoặc `deleteSurroundingText`. Gõ không gạch chân chính là so tiền
+tố chung giữa chuỗi đang hiển thị và chuỗi mới, ra được cặp (số ký tự cần xoá, chuỗi cần chèn).
+
+`pinakey-core` dùng `Rc` nên đơn luồng. Mỗi input context giữ một engine riêng.
 
 ## Lịch sử
 
-PinaKey khởi đầu là bộ gõ IBus thuần Rust; từ EPIC #22 đã **chuyển hẳn sang fcitx5** để có gõ không
-gạch chân mượt + Wayland vững (bơm Backspace mà IBus không cấp). Frontend IBus cũ đã được gỡ bỏ.
+PinaKey khởi đầu là bộ gõ IBus thuần Rust. Từ EPIC #22 dự án chuyển hẳn sang fcitx5 để có gõ không
+gạch chân mượt hơn và chạy vững trên Wayland, nhờ khả năng bơm Backspace mà IBus không cấp.
+Frontend IBus cũ đã gỡ bỏ.
 
 ## Đóng góp
 
-PinaKey rất hoan nghênh đóng góp — từ sửa lỗi, thêm bảng phím/bảng mã, cải thiện tài liệu, tới báo
-lỗi và góp ý. Xem [CONTRIBUTING.md](CONTRIBUTING.md) cho quy trình làm việc cục bộ và các cổng chất
-lượng (fmt/clippy/test/e2e) mà CI bắt buộc. Mọi PR đều được CI kiểm tự động trước khi merge.
+Mọi đóng góp đều được hoan nghênh: sửa lỗi, thêm bảng phím hoặc bảng mã, cải thiện tài liệu, báo lỗi,
+góp ý. [CONTRIBUTING.md](CONTRIBUTING.md) mô tả quy trình làm việc cục bộ và các cổng chất lượng
+(fmt, clippy, test, e2e) mà CI bắt buộc. Mọi PR đều qua CI trước khi merge.
 
-Một vài hướng dễ bắt đầu: thêm/đối chiếu test gõ Telex/VNI/VIQR, mở rộng từ điển chính tả, viết tài
-liệu, hoặc đóng gói cho thêm distro. Cứ mở issue/PR — chúng tôi sẵn lòng hỗ trợ!
+Vài hướng dễ bắt đầu: thêm test gõ Telex/VNI/VIQR, mở rộng từ điển chính tả, viết tài liệu, hoặc
+đóng gói cho distro khác. Cứ mở issue hoặc PR.
 
-Báo **lỗ hổng bảo mật** theo kênh riêng trong [SECURITY.md](SECURITY.md) (mô hình an toàn của từng
-thành phần cũng ở đó) — đừng mở issue công khai.
+Lỗ hổng bảo mật thì báo theo kênh riêng trong [SECURITY.md](SECURITY.md), đừng mở issue công khai.
+Mô hình an toàn của từng thành phần cũng nằm ở đó.
 
 ## Người đóng góp
 
-Cảm ơn những người tuyệt vời ✨ đã đóng góp cho PinaKey ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+Cảm ơn những người đã đóng góp cho PinaKey ([bảng emoji](https://allcontributors.org/docs/en/emoji-key)):
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore-start -->
@@ -182,12 +222,12 @@ Cảm ơn những người tuyệt vời ✨ đã đóng góp cho PinaKey ([emoj
 
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
-Dự án theo chuẩn [all-contributors](https://github.com/all-contributors/all-contributors) — **mọi
-loại đóng góp** đều được ghi nhận, không chỉ code. Để thêm người đóng góp, comment trong issue/PR:
+Dự án theo chuẩn [all-contributors](https://github.com/all-contributors/all-contributors): mọi loại
+đóng góp đều được ghi nhận, không riêng code. Để thêm người đóng góp, comment trong issue hoặc PR:
 
-```
+```text
 @all-contributors please add @username for code, doc
 ```
 
-(cần cài [all-contributors bot](https://allcontributors.org/docs/en/bot/installation) cho repo;
-hoặc dùng CLI: `npx all-contributors-cli add @username code,doc`).
+(cần cài [all-contributors bot](https://allcontributors.org/docs/en/bot/installation) cho repo, hoặc
+dùng CLI: `npx all-contributors-cli add @username code,doc`).
