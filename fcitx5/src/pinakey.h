@@ -28,6 +28,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -67,6 +68,7 @@ public:
 private:
     void applyResult();
     void applyReplaceResult();
+    void syncSurroundingAfterOwnWrite(uint32_t del, std::string_view ins);
     // #7: reset segment đang theo dõi nếu con trỏ đã nhảy / văn bản đổi (so với surrounding text),
     // tránh deleteSurroundingText xoá nhầm ký tự ở vị trí mới.
     void resetIfDocumentDiverged();

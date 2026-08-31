@@ -570,6 +570,68 @@ private:
     int deleteCalls_ = 0;
 };
 
+/// InputContext mô hình ĐÚNG hành vi fcitx5-gtk (#181): ứng dụng lành mạnh, áp lệnh xoá và commit
+/// NGAY và ĐÚNG THỨ TỰ (cả hai callback đều là `g_signal_emit` đồng bộ), nhưng chỉ gửi surrounding
+/// text mới cho fcitx5 ở một nhịp vòng lặp SAU — fcitx5-gtk xin lại qua
+/// `gdk_threads_add_idle_full(G_PRIORITY_DEFAULT_IDLE, …)` sau mỗi commit. Idle là mức ưu tiên
+/// thấp nhất, nên khi hai phím đã nằm sẵn trong hàng đợi (gõ nhanh, phím lặp, app vừa bận một
+/// nhịp) thì phím thứ hai được xử lý TRƯỚC khi cache của fcitx5 kịp cập nhật.
+///
+/// `flushSurrounding()` = idle đã chạy. Không gọi = phím kế tiếp thấy cache cũ.
+class DeferredSyncInputContext : public InputContext {
+public:
+    explicit DeferredSyncInputContext(InputContextManager &mgr)
+        : InputContext(mgr, "gtkapp") {
+        setCapabilityFlags(CapabilityFlags{CapabilityFlag::SurroundingText});
+        created();
+        flushSurrounding();
+    }
+    ~DeferredSyncInputContext() override { destroy(); }
+
+    const char *frontend() const override { return "doc"; }
+
+    /// >0 nghĩa là addon thật sự đi đường diff-replace (không gạch chân), không phải preedit.
+    int deleteCalls() const { return deleteCalls_; }
+
+    void commitStringImpl(const std::string &text) override {
+        auto u = fromUtf8(text);
+        doc_.insert(cursor_, u);
+        cursor_ += u.size();
+    }
+    void deleteSurroundingTextImpl(int offset, unsigned int size) override {
+        ++deleteCalls_;
+        long start = static_cast<long>(cursor_) + offset;
+        if (start < 0) {
+            start = 0;
+        }
+        if (static_cast<size_t>(start) > doc_.size()) {
+            start = static_cast<long>(doc_.size());
+        }
+        size_t n = size;
+        if (static_cast<size_t>(start) + n > doc_.size()) {
+            n = doc_.size() - static_cast<size_t>(start);
+        }
+        doc_.erase(static_cast<size_t>(start), n);
+        cursor_ = static_cast<size_t>(start);
+    }
+    void forwardKeyImpl(const ForwardKeyEvent & /*key*/) override {}
+    void updatePreeditImpl() override {}
+
+    std::string text() const { return toUtf8(doc_); }
+
+    /// Idle callback của fcitx5-gtk chạy: client gửi surrounding text hiện tại cho fcitx5.
+    void flushSurrounding() {
+        surroundingText().setText(toUtf8(doc_), static_cast<unsigned int>(cursor_),
+                                  static_cast<unsigned int>(cursor_));
+        updateSurroundingText();
+    }
+
+private:
+    std::u32string doc_;
+    size_t cursor_ = 0;
+    int deleteCalls_ = 0;
+};
+
 void sendKeys(InputContext *ic, const std::string &keys) {
     for (char c : keys) {
         Key key = (c == ' ') ? Key("space") : Key(std::string(1, c));
@@ -956,6 +1018,46 @@ int main() {
         FCITX_ASSERT(vte->deleteCalls() == 0)
             << "surrounding text cũ của app trước làm terminal quay lại diff-replace ("
             << vte->deleteCalls() << " lần xoá)";
+
+
+        // #181: app lành mạnh (GTK), gõ thong thả thì idle của fcitx5-gtk kịp chạy giữa mỗi phím
+        // nên cache tươi. Nhưng idle chạy ở G_PRIORITY_DEFAULT_IDLE, mức thấp nhất, nên chỉ cần
+        // HAI phím đã nằm sẵn trong hàng đợi (gõ nhanh, phím lặp, app vừa bận một nhịp) là phím
+        // thứ hai chạy TRƯỚC khi cache kịp cập nhật. Cache của fcitx5 KHÔNG tự cập nhật sau
+        // deleteSurroundingText/commitString của chính addon (inputcontext.cpp chỉ chuyển tiếp
+        // xuống frontend), nên phím thứ hai so segment với ảnh CŨ của tài liệu →
+        // resetIfDocumentDiverged() reset oan GIỮA TỪ và chữ mất dấu.
+        auto gtkapp = std::make_unique<DeferredSyncInputContext>(instance.inputContextManager());
+        gtkapp->focusIn();
+        instance.setCurrentInputMethod(gtkapp.get(), "pinakey", true);
+
+        auto key1 = [&](char c) {
+            Key key = (c == ' ') ? Key("space") : Key(std::string(1, c));
+            KeyEvent ke(gtkapp.get(), key, false);
+            gtkapp->keyEvent(ke);
+        };
+
+        // "vie" gõ thong thả: idle kịp chạy sau mỗi phím.
+        for (char c : std::string("vie")) {
+            key1(c);
+            gtkapp->flushSurrounding();
+        }
+        FCITX_ASSERT(gtkapp->text() == "vie") << "nền: \"" << gtkapp->text() << "\"";
+
+        // Hai phím dồn trong cùng một nhịp: 'e' biến "vie"→"viê" (đây mới là phím gọi
+        // deleteSurroundingText), rồi 't' chạy NGAY trước khi idle kịp gửi ảnh mới. Đây là chỗ
+        // cache cũ cắn.
+        key1('e');
+        FCITX_ASSERT(gtkapp->deleteCalls() > 0)
+            << "phép biến đổi phải đi đường diff-replace chứ không phải preedit";
+        FCITX_ASSERT(gtkapp->text() == "viê") << "sau 'e': \"" << gtkapp->text() << "\"";
+        key1('t');
+        gtkapp->flushSurrounding();
+        key1('j');
+        key1(' ');
+        gtkapp->flushSurrounding();
+        FCITX_ASSERT(gtkapp->text() == "việt ")
+            << "cache surrounding cũ một nhịp làm nát chữ: \"" << gtkapp->text() << "\"";
 
         instance.exit();
     });
