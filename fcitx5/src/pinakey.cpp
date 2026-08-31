@@ -259,7 +259,7 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
         // #60: đang có vùng chọn (autocomplete bôi chọn gợi ý, hoặc người dùng bôi chọn rồi
         // gõ) → app có thể áp deleteSurroundingText vào vùng chọn thay vì trước con trỏ
         // (vùng chết đã quan sát ở Chromium) → xoá nhầm. Nhường preedit tới khi hết selection.
-        if (!surroundingHasSelection()) {
+        if (surroundingUsable() && !surroundingHasSelection()) {
             resetIfDocumentDiverged(); // #7: con trỏ nhảy → quên segment cũ, không xoá nhầm.
             const bool handled = pk_engine_process_key_replace(core_, sym, state);
             applyReplaceResult();
@@ -268,9 +268,10 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
             }
             return;
         }
-        // Selection xuất hiện GIỮA từ (engine còn theo dõi segment đã commit): reset trước khi
-        // rơi xuống preedit — không reset thì preedit soạn tiếp trên buffer cũ, hiện chữ đè
-        // cạnh đoạn đã commit trong tài liệu → đúp ký tự kiểu "dđ".
+        // Nhường preedit GIỮA từ (selection xuất hiện, hoặc client thôi cấp surrounding text)
+        // mà engine còn theo dõi segment đã commit: reset trước khi rơi xuống preedit — không
+        // reset thì preedit soạn tiếp trên buffer cũ, hiện chữ đè cạnh đoạn đã commit trong
+        // tài liệu → đúp ký tự kiểu "dđ".
         if (const char *seg = pk_engine_replace_segment(core_); seg && seg[0] != '\0') {
             pk_engine_reset(core_);
         }
@@ -303,9 +304,25 @@ bool PinaKeyState::wantReplaceMode() const {
     if (!pk_engine_no_underline(core_)) {
         return false;
     }
-    return (ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
-            !pk_engine_surrounding_text_unreliable(core_) && !surroundingHasSelection()) ||
+    return (surroundingUsable() && !pk_engine_surrounding_text_unreliable(core_) &&
+            !surroundingHasSelection()) ||
            useUinput();
+}
+
+/// Surrounding text của client có DÙNG ĐƯỢC không — capability mới chỉ là lời hứa, `isValid()`
+/// mới là bằng chứng client đã thật sự gửi văn bản quanh con trỏ trong phiên focus này.
+///
+/// Vì sao phải kiểm: trên GNOME Wayland (mặc định của Ubuntu) mọi app nói chuyện với fcitx5 qua
+/// frontend IBus, mà `IBusFrontend::createInputContext` luôn tạo context với **program rỗng** —
+/// rule transport theo tên app (#67) không thể nhận ra terminal. mutter thì quảng cáo cứng
+/// `IBUS_CAP_SURROUNDING_TEXT` cho MỌI app. Trong khi đó VTE (gnome-terminal) hiện thực
+/// `im_retrieve_surrounding`/`im_delete_surrounding` là `return false`: không bao giờ gửi
+/// surrounding text và NUỐT lệnh xoá. Tin vào capability ở đây = xoá không được nhưng vẫn commit
+/// chuỗi mới → "tieengs" ra "tieêngếng". Chưa có surrounding text thật thì rơi về preedit
+/// (ổn định 100%, chữ luôn đúng).
+bool PinaKeyState::surroundingUsable() const {
+    return ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
+           ic_->surroundingText().isValid();
 }
 
 /// Có dùng chế độ uinput+ACK (xoá-bằng-Backspace) cho app KHÔNG có SurroundingText không.
@@ -504,6 +521,14 @@ void PinaKeyState::deactivate(bool imSwitch) {
     // deactivate (không bảo đảm có ResetEvent từ client), nên nếu bỏ sót thì chuỗi xoá dở sống
     // qua đổi focus: quay lại context gõ tiếp sẽ commit pendingCommit_ "ma" + nuốt Backspace thật.
     clearUinputAckState();
+    // Mất focus → surrounding text trong cache là của app CŨ. fcitx5 không tự vô hiệu hoá nó,
+    // mà trên GNOME Wayland mutter dùng CHUNG một input context cho mọi app: để nguyên thì văn
+    // bản của trình duyệt vừa rời khiến terminal (không bao giờ gửi surrounding text) trông như
+    // vẫn dùng được đường diff-replace → xoá hụt, nát chữ. Đổi input method (Ctrl+Space) thì
+    // giữ nguyên: vẫn đúng client, đúng ô văn bản đó.
+    if (!imSwitch) {
+        ic_->surroundingText().invalidate();
+    }
     ic_->inputPanel().reset();
     ic_->updatePreedit();
     ic_->updateUserInterface(UserInterfaceComponent::InputPanel);

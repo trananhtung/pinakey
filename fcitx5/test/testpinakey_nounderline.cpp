@@ -91,6 +91,9 @@ public:
         : InputContext(mgr, program) {
         setCapabilityFlags(CapabilityFlags{CapabilityFlag::SurroundingText});
         created();
+        // App lành mạnh công bố surrounding text ngay khi nhận focus (GTK/Qt/Chromium đều vậy),
+        // kể cả khi ô còn trống — đó là bằng chứng để addon dám dùng deleteSurroundingText.
+        syncSurrounding();
     }
     ~DocInputContext() override { destroy(); }
 
@@ -329,6 +332,7 @@ public:
     explicit NfdInputContext(InputContextManager &mgr) : InputContext(mgr, "nfdapp") {
         setCapabilityFlags(CapabilityFlags{CapabilityFlag::SurroundingText});
         created();
+        syncSurrounding(); // app lành mạnh: công bố surrounding text ngay lúc focus
     }
     ~NfdInputContext() override { destroy(); }
     const char *frontend() const override { return "doc"; }
@@ -408,6 +412,54 @@ constexpr TelexCase kTelexCases[] = {
     {"ddaay laf vieejt", "đây là việt"},
     {"chaof banj", "chào bạn"},
     {"ddoongf ys", "đồng ý"},
+};
+
+/// Hồ sơ gnome-wayland-vte: gnome-terminal (VTE) trong phiên GNOME Wayland — đúng cấu hình mặc
+/// định của Ubuntu. Ba sự thật ghép lại thành một cái bẫy:
+///   1. GNOME nói chuyện với fcitx5 qua frontend IBus, và `IBusFrontend::createInputContext`
+///      LUÔN tạo context với program RỖNG (fcitx5 5.1.x, tham số bị bỏ) → rule transport theo
+///      tên app (#67) không bao giờ khớp "gnome-terminal", terminal KHÔNG bị ép preedit.
+///   2. mutter quảng cáo capability cố định `IBUS_CAP_PREEDIT_TEXT|FOCUS|SURROUNDING_TEXT` cho
+///      MỌI app Wayland → addon tưởng terminal hỗ trợ surrounding text.
+///   3. VTE hiện thực `im_retrieve_surrounding`/`im_delete_surrounding` là `return false`
+///      (FIXME upstream, bug 726191) → nó KHÔNG BAO GIỜ gửi surrounding text, và
+///      `deleteSurroundingText` là NO-OP.
+/// Hệ quả: addon đi đường diff-replace, xoá không được nhưng vẫn commit chuỗi mới → chữ cũ còn
+/// nguyên, chữ mới nối thêm ("vieviêviệt"). Chỉ hỏng ở phím SINH BIẾN ĐỔI (dấu/mũ) nên người
+/// dùng thấy "thỉnh thoảng mất tiếng Việt".
+class GnomeWaylandVteInputContext : public InputContext {
+public:
+    explicit GnomeWaylandVteInputContext(InputContextManager &mgr)
+        : InputContext(mgr, /*program=*/"") {
+        setCapabilityFlags(
+            CapabilityFlags{CapabilityFlag::SurroundingText, CapabilityFlag::Preedit});
+        created();
+    }
+    ~GnomeWaylandVteInputContext() override { destroy(); }
+    const char *frontend() const override { return "doc"; }
+
+    int deleteCalls() const { return deleteCalls_; }
+    std::string text() const { return doc_; }
+    void clearDoc() { doc_.clear(); }
+
+    void commitStringImpl(const std::string &text) override { doc_ += text; }
+    /// VTE: `im_delete_surrounding` trả false — lệnh xoá bay vào hư không, tài liệu không đổi.
+    void deleteSurroundingTextImpl(int, unsigned int) override { ++deleteCalls_; }
+    void forwardKeyImpl(const ForwardKeyEvent &) override {}
+    void updatePreeditImpl() override {}
+
+    /// Surrounding text CŨ còn sót từ app trước: fcitx5 dùng CHUNG một input context cho mọi
+    /// app Wayland (mutter tạo đúng một cái) và không tự vô hiệu hoá cache khi đổi focus, nên
+    /// văn bản của trình duyệt vẫn nằm đó khi người dùng nhảy sang terminal.
+    void seedStaleSurrounding(const std::string &text) {
+        const auto n = static_cast<unsigned int>(fromUtf8(text).size());
+        surroundingText().setText(text, n, n);
+        updateSurroundingText();
+    }
+
+private:
+    std::string doc_;
+    int deleteCalls_ = 0;
 };
 
 /// Hồ sơ no-st-preedit: app KHÔNG có SurroundingText (terminal thuần) → addon phải đi đường
@@ -719,6 +771,37 @@ int main() {
         FCITX_ASSERT(nfd->text() == "vie\u0302jt ")
             << "nfd-store: doc=\"" << nfd->text()
             << "\", mong đợi \"vie\\u0302jt \" (xuống cấp xác định, không nát)";
+
+        // ============== gnome-wayland-vte ==============
+        // Terminal trên GNOME Wayland (mặc định Ubuntu): capability nói CÓ SurroundingText,
+        // program rỗng nên rule terminal (#67) không khớp — nhưng deleteSurroundingText là
+        // no-op. Addon phải thấy client CHƯA từng gửi surrounding text và rơi về preedit:
+        // chữ ra đúng, tuyệt đối không gọi deleteSurroundingText.
+        auto vte = std::make_unique<GnomeWaylandVteInputContext>(instance.inputContextManager());
+        vte->focusIn();
+        instance.setCurrentInputMethod(vte.get(), "pinakey", true);
+        for (const auto &c : kTelexCases) {
+            vte->reset();
+            vte->clearDoc();
+            expectType(vte.get(), std::string(c.keys) + " ", std::string(c.expected) + " ");
+        }
+        FCITX_ASSERT(vte->deleteCalls() == 0)
+            << "gnome-wayland-vte phải đi đường preedit, không được deleteSurroundingText ("
+            << vte->deleteCalls() << " lần)";
+
+        // …kể cả khi surrounding text CŨ của app trước còn nằm trong cache: mọi app Wayland
+        // dùng CHUNG một input context, nên rời focus phải vứt cache đi, không thì cái đường
+        // diff-replace sống lại ở terminal và xoá hụt như cũ.
+        vte->reset();
+        vte->clearDoc();
+        vte->seedStaleSurrounding("trang web cu ");
+        vte->focusOut(); // đổi app trên GNOME Wayland = FocusOut/FocusIn trên cùng một context
+        vte->focusIn();
+        instance.setCurrentInputMethod(vte.get(), "pinakey", true);
+        expectType(vte.get(), "vieetj ", "việt ");
+        FCITX_ASSERT(vte->deleteCalls() == 0)
+            << "surrounding text cũ của app trước làm terminal quay lại diff-replace ("
+            << vte->deleteCalls() << " lần xoá)";
 
         instance.exit();
     });
