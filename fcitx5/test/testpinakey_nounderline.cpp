@@ -143,14 +143,30 @@ public:
 
     /// Cập nhật surrounding text của fcitx5 cho khớp tài liệu — như một app cư xử đúng mực.
     void syncSurrounding() {
+        if (!publish_) {
+            // Client thôi cấp surrounding text: cache của fcitx5 phải trở về vô hiệu.
+            surroundingText().invalidate();
+            updateSurroundingText();
+            return;
+        }
         surroundingText().setText(toUtf8(doc_), cursor_, cursor_);
         updateSurroundingText();
+    }
+    /// Client ngừng cấp surrounding text GIỮA CHỪNG (ô văn bản đổi loại, widget nhả quyền…).
+    void stopPublishingSurrounding() {
+        publish_ = false;
+        syncSurrounding();
+    }
+    void resumePublishingSurrounding() {
+        publish_ = true;
+        syncSurrounding();
     }
 
 private:
     std::u32string doc_;
     size_t cursor_ = 0;
     int deleteCalls_ = 0;
+    bool publish_ = true;
 };
 
 /// InputContext giả lập LibreOffice Writer (issue #66): CÓ khả năng SurroundingText nhưng báo cáo
@@ -771,6 +787,50 @@ int main() {
         FCITX_ASSERT(nfd->text() == "vie\u0302jt ")
             << "nfd-store: doc=\"" << nfd->text()
             << "\", mong đợi \"vie\\u0302jt \" (xuống cấp xác định, không nát)";
+
+        // ============== surrounding text tắt GIỮA TỪ (góp ý review) ==============
+        // App lành mạnh đang gõ dở thì thôi cấp surrounding text: đường diff-replace phải
+        // nhường preedit NGAY, không xoá thêm lần nào nữa và không soạn đè lên đoạn đã commit
+        // (đúp kiểu "vievie"). Phần đã vào tài liệu giữ nguyên, phần còn lại gõ mới từ đầu.
+        ic->focusIn();
+        ic->reset();
+        ic->clearDoc();
+        sendKeys(ic.get(), "vie");
+        FCITX_ASSERT(ic->text() == "vie") << "trước khi tắt surrounding: " << ic->text();
+        const int delsBeforeStop = ic->deleteCalls();
+        ic->stopPublishingSurrounding();
+        sendKeys(ic.get(), "ejt ");
+        FCITX_ASSERT(ic->deleteCalls() == delsBeforeStop)
+            << "vẫn xoá surrounding text sau khi client thôi cấp ("
+            << (ic->deleteCalls() - delsBeforeStop) << " lần)";
+        FCITX_ASSERT(ic->text() == "vieẹt ")
+            << "tắt surrounding giữa từ: doc=\"" << ic->text()
+            << "\", mong đợi \"vieẹt \" (giữ \"vie\" đã commit, phần sau gõ lại từ đầu)";
+
+        // Quay lại focus: app lành mạnh công bố lại surrounding text lúc focus-in (GTK/Qt/
+        // Chromium đều vậy) → phải trở lại gõ không gạch chân, không kẹt ở preedit vĩnh viễn.
+        ic->resumePublishingSurrounding();
+        ic->reset();
+        ic->clearDoc();
+        ic->focusOut(); // addon vứt cache surrounding text của app vừa rời
+        ic->focusIn();
+        instance.setCurrentInputMethod(ic.get(), "pinakey", true);
+        ic->syncSurrounding(); // client công bố lại khi nhận focus
+        const int delsBeforeRefocus = ic->deleteCalls();
+        expectType(ic.get(), "vieetj ", "việt ");
+        FCITX_ASSERT(ic->deleteCalls() > delsBeforeRefocus)
+            << "sau khi lấy lại focus vẫn kẹt ở preedit (không diff-replace lần nào)";
+
+        // Đổi kiểu gõ (Ctrl+Space) KHÔNG phải đổi app: cache surrounding text phải còn nguyên,
+        // nếu không thì mỗi lần bật/tắt bộ gõ lại mất một từ vào preedit vô cớ.
+        ic->reset();
+        ic->clearDoc(); // công bố surrounding text lần cuối trước khi đổi kiểu gõ
+        instance.setCurrentInputMethod(ic.get(), "keyboard-us", true);
+        instance.setCurrentInputMethod(ic.get(), "pinakey", true);
+        const int delsBeforeImSwitch = ic->deleteCalls();
+        expectType(ic.get(), "vieetj ", "việt ");
+        FCITX_ASSERT(ic->deleteCalls() > delsBeforeImSwitch)
+            << "đổi kiểu gõ đã vứt nhầm cache surrounding text (rơi về preedit)";
 
         // ============== gnome-wayland-vte ==============
         // Terminal trên GNOME Wayland (mặc định Ubuntu): capability nói CÓ SurroundingText,

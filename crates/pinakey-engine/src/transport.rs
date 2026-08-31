@@ -99,7 +99,6 @@ mod tests {
             "foot",
             "ghostty",
             "urxvt-256color",
-            // …và nhóm bắt bằng mẫu chung "terminal".
             "mate-terminal",
             "qterminal",
             "io.elementary.terminal",
@@ -109,6 +108,13 @@ mod tests {
         for p in ["firefox", "google-chrome", "gedit", ""] {
             assert_eq!(r.lookup(p), TransportPref::Auto, "{p:?} phải là auto");
         }
+        // Mẫu khớp chuỗi con: tên cửa sổ THIẾT LẬP của gnome-terminal chứa "gnome-terminal"
+        // nhưng là hộp thoại GTK bình thường — dòng `auto` đặt sau phải gỡ nó ra khỏi preedit.
+        assert_eq!(
+            r.lookup("Gnome-terminal-preferences"),
+            TransportPref::Auto,
+            "cửa sổ thiết lập không phải terminal"
+        );
     }
 
     #[test]
