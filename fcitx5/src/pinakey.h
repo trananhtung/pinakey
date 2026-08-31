@@ -79,6 +79,9 @@ private:
     // Client đã THẬT SỰ gửi surrounding text chưa (capability chỉ là lời hứa) — điều kiện bắt
     // buộc để dùng đường diff-replace; xem chú thích ở pinakey.cpp.
     bool surroundingUsable() const;
+    // #180: client có báo CÓ tài liệu làm chỗ dựa cho đoạn engine đang theo dõi không — bất biến
+    // bắt buộc trước mọi deleteSurroundingText; xem chú thích ở pinakey.cpp.
+    bool surroundingBacksSegment();
     // #60: in trạng thái surrounding text (text/cursor/anchor) khi PINAKEY_DEBUG_SURROUNDING=1 —
     // no-op nếu tắt. `where` là nhãn điểm gọi để đối chiếu với thao tác thật lúc đo thủ công.
     void debugLogSurrounding(const char *where) const;
@@ -96,7 +99,7 @@ private:
     void replayBufferedKeys();             // gõ nhanh khi đang xoá → replay sau khi ACK xong
     void flushPendingForward();            // #118: forward phím non-text đã hoãn sau chuỗi xoá
     void forwardKeyTap(uint32_t sym, uint32_t state); // #118: forward press+release một cú gõ
-    bool wantReplaceMode() const; // có dùng diff-and-replace (SurroundingText hoặc uinput) không
+    bool wantReplaceMode();       // có dùng diff-and-replace (SurroundingText hoặc uinput) không
     bool useUinput() const;       // không có SurroundingText nhưng có server uinput
     bool shouldPassThrough() const;
 
@@ -111,6 +114,10 @@ private:
     InputContext *ic_;
     PkEngine *core_;
     bool emojiMode_ = false;
+    // #180: đã bắt quả tang client báo tài liệu RỖNG trong khi addon đang giữ segment đã commit
+    // vào đó → không dùng deleteSurroundingText nữa cho tới khi client báo lại được tài liệu
+    // (hoặc reset/đổi focus). Chốt lại để cả từ đi trọn một đường, không lật qua lại giữa chừng.
+    bool surroundingUnbacked_ = false;
     std::string emojiQuery_; // gồm cả dấu ':' đầu, ví dụ ":grin"
 
     // ----- trạng thái ACK cho chế độ uinput (xoá-bằng-Backspace, app không có SurroundingText) -----
