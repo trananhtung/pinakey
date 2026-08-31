@@ -13,6 +13,7 @@
 #include <fcitx-utils/keysymgen.h>
 #include <fcitx-utils/log.h>
 #include <fcitx-utils/textformatflags.h>
+#include <fcitx-utils/utf8.h>
 #include <fcitx/candidatelist.h>
 #include <fcitx/event.h>
 #include <fcitx/inputpanel.h>
@@ -660,6 +661,58 @@ void PinaKeyState::debugLogSurrounding(const char *where) const {
                  << " len=" << st.text().size() << " text=\"" << st.text() << "\"";
 }
 
+/// #181: cập nhật cache surroundingText của fcitx5 cho khớp phần văn bản mà CHÍNH addon vừa ghi
+/// (xoá `del` ký tự trước con trỏ rồi chèn `ins`), để phím kế tiếp không so segment với ảnh cũ.
+///
+/// fcitx5 không tự cập nhật cache sau deleteSurroundingText/commitString (inputcontext.cpp chỉ
+/// chuyển tiếp xuống frontend), còn client gửi ảnh mới về theo nhịp riêng của nó:
+///  - client ĐỒNG BỘ (một số toolkit, và harness test ở đây) gửi ngay trong lời gọi ghi bên trên
+///    → cache đã đúng, áp delta lần nữa là xoá/chèn KÉP;
+///  - client HOÃN (fcitx5-gtk: gdk_threads_add_idle_full ở G_PRIORITY_DEFAULT_IDLE) thì cache còn
+///    là ảnh cũ cho tới lượt vòng lặp sau → phím kế tiếp reset oan giữa từ.
+///
+/// Phân biệt bằng đúng bất biến mà `resetIfDocumentDiverged()` sẽ kiểm ở phím sau: văn bản trước
+/// con trỏ đã kết thúc bằng chuỗi vừa commit chưa. Rồi thì client đã gửi, không đụng vào.
+///
+/// Giới hạn có chủ ý: chỉ suy ra khi `ins` không rỗng. Xoá thuần (del>0, ins rỗng) không có cái
+/// đuôi nào để nhận biết client đã gửi hay chưa, nên để nguyên như trước — giữ hành vi cũ còn hơn
+/// đoán sai rồi xoá kép.
+void PinaKeyState::syncSurroundingAfterOwnWrite(uint32_t del, std::string_view ins) {
+    if (ins.empty()) {
+        return;
+    }
+    auto &st = ic_->surroundingText();
+    if (!st.isValid() || st.text().empty()) {
+        // Không có nền đáng tin để suy ra; bịa ra sẽ qua mặt chính guard #7/#180. Cache RỖNG là
+        // tín hiệu #180 dùng để kết luận "client không thật sự chống lưng cho lệnh xoá" (VTE báo
+        // hợp lệ nhưng không bao giờ gửi nội dung) — ghi đè lên đó là gỡ mất lá chắn đó.
+        return;
+    }
+    const std::string &text = st.text();
+    const unsigned int cursor = st.cursor();
+    const size_t bytePos = pinakey::surroundingBytePosBeforeCursor(text, cursor);
+    // UTF-8 tự đồng bộ nên so byte là đủ (cùng lối với resetIfDocumentDiverged).
+    if (bytePos >= ins.size() && text.compare(bytePos - ins.size(), ins.size(), ins) == 0) {
+        return; // client đã gửi ảnh mới rồi.
+    }
+    if (del > 0) {
+        st.deleteText(-static_cast<int>(del), del); // tự lùi con trỏ, đặt anchor = cursor
+        if (!st.isValid()) {
+            return; // gặp UTF-8 hỏng thì deleteText tự invalidate; đừng ghép lên đống đổ nát.
+        }
+    }
+    const std::string &base = st.text();
+    const unsigned int at = st.cursor();
+    const size_t insPos = pinakey::surroundingBytePosBeforeCursor(base, at);
+    std::string updated;
+    updated.reserve(base.size() + ins.size());
+    updated.append(base, 0, insPos);
+    updated.append(ins);
+    updated.append(base, insPos, std::string::npos);
+    const unsigned int newCursor = at + static_cast<unsigned int>(utf8::length(ins));
+    st.setText(updated, newCursor, newCursor);
+}
+
 /// Áp lệnh thay thế: xoá N ký tự trước con trỏ rồi commit chuỗi mới. Không hiện preedit.
 void PinaKeyState::applyReplaceResult() {
     const uint32_t del = pk_engine_replace_delete(core_);
@@ -677,14 +730,25 @@ void PinaKeyState::applyReplaceResult() {
     if (del > 0) {
         ic_->deleteSurroundingText(-static_cast<int>(del), del);
     }
-    // #181 (diện theo dõi, CHƯA sửa): commit đi ngay sau lệnh xoá, không chờ app áp xong. Giao
-    // thức giữ đúng thứ tự nhưng app xử lý xoá bất đồng bộ (GTK dùng idle callback). fcitx5-lotus
-    // vá bằng sleep 5–20ms; PinaKey chưa có báo cáo nào và KHÔNG bê sleep vào đường nóng (chặn
-    // event loop của MỌI input context + ăn ngân sách latency mỗi phím). Có báo cáo thì hoãn
-    // commit qua event loop chứ không ngủ — chi tiết trong #181.
+    // #181: thứ tự hai thông điệp KHÔNG phải vấn đề — deleteSurroundingText và commitString đi
+    // cùng một kênh có thứ tự (D-Bus per-connection), và client áp cả hai đồng bộ (fcitx5-gtk:
+    // hai callback đều là g_signal_emit). Nên KHÔNG cần sleep kiểu fcitx5-lotus.
+    //
+    // Cái CẦN sửa là cache: fcitx5 không tự cập nhật surroundingText sau hai lời gọi này
+    // (inputcontext.cpp chỉ chuyển tiếp xuống frontend), còn client gửi ảnh mới về CHẬM —
+    // fcitx5-gtk xin lại qua gdk_threads_add_idle_full(G_PRIORITY_DEFAULT_IDLE, …), mà idle là
+    // mức ưu tiên thấp nhất. Hai phím dồn trong một nhịp vòng lặp (gõ nhanh, phím lặp, app vừa
+    // bận) thì phím sau chạy trước khi ảnh mới về, resetIfDocumentDiverged() so segment với ảnh
+    // CŨ, thấy "lệch" giả và reset oan giữa từ → "vieetj" ra "viêtj".
+    //
+    // Vì vậy tự đồng bộ cache ngay tại đây: ta biết chính xác vừa ghi gì. Upstream có sẵn
+    // SurroundingText::deleteText cho đúng việc này ("update the local state of surrounding text
+    // before client send it back"); phần chèn không có helper nên ghép tay. Khi client gửi ảnh
+    // thật về, nó ghi đè lên — đây chỉ là lấp khoảng trống giữa hai thời điểm.
     if (ins && ins[0] != '\0') {
         ic_->commitString(ins);
     }
+    syncSurroundingAfterOwnWrite(del, ins ? ins : "");
     // Bảo đảm không còn preedit sót lại khi chuyển từ chế độ preedit sang replace.
     auto &panel = ic_->inputPanel();
     if (!panel.empty()) {
