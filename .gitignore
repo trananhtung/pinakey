@@ -2,4 +2,4 @@
 /dist
 
 # fcitx5 C++ build dir
-fcitx5/build/
+fcitx5/build*/

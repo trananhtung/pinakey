@@ -1,5 +1,0 @@
-/home/tony-tran/.local/lib/fcitx5/pinakey.so
-/home/tony-tran/.local/share/fcitx5/inputmethod/pinakey.conf
-/home/tony-tran/.local/share/fcitx5/addon/pinakey.conf
-/home/tony-tran/.local/share/icons/hicolor/scalable/apps/pinakey.svg
-/home/tony-tran/.local/share/pinakey/transport-rules.conf
