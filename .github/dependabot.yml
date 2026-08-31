@@ -1,0 +1,24 @@
+# Cập nhật phụ thuộc tự động. Gom thành MỘT PR mỗi hệ sinh thái, mỗi tuần một lần: bộ gõ có
+# ít phụ thuộc và cổng CI nặng (e2e dựng .deb rồi cài thật), nên PR lẻ tẻ vừa ồn vừa tốn runner.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      cargo:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]

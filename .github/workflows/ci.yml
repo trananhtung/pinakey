@@ -5,6 +5,16 @@ on:
     branches: [main]
   pull_request:
 
+# Push mới trên cùng một PR huỷ lượt chạy cũ (main thì không — mỗi commit trên main phải có
+# kết quả riêng). Trước đây chỉ release.yml có concurrency, nên mỗi lần force-push là CI chạy
+# chồng nhau, đốt runner và trả kết quả của commit đã cũ.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
@@ -41,6 +51,10 @@ jobs:
 
   fcitx5:
     runs-on: ubuntu-latest
+    # CodeQL đẩy kết quả lên tab Security của repo.
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v5
 
@@ -65,11 +79,24 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-fcitx5-${{ hashFiles('**/Cargo.lock') }}
 
+      # CodeQL quét addon C++ — lớp duy nhất chạm con trỏ thô, FFI và bộ đệm UTF-8, nơi #154
+      # (out_of_range làm sập cả fcitx5) từng xảy ra. Init TRƯỚC build để nó theo dõi compiler;
+      # lõi Rust đã có clippy + `unsafe` khoanh vùng ở pinakey-ffi nên chưa đưa vào đây (CodeQL
+      # cho Rust còn ở public preview).
+      - name: Init CodeQL (addon C++)
+        uses: github/codeql-action/init@v4
+        with:
+          languages: c-cpp
+          build-mode: manual
+
       - name: Configure & build addon (cargo builds the Rust core)
         run: |
           # PINAKEY_BUILD_UINPUT_SERVER=ON: daemon opt-in nhưng CI vẫn compile-check (#72).
           cmake -S fcitx5 -B fcitx5/build -DCMAKE_INSTALL_PREFIX=/usr -DPINAKEY_BUILD_UINPUT_SERVER=ON
           cmake --build fcitx5/build
+
+      - name: CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
 
       - name: Integration tests (run via real fcitx5 test harness)
         run: ctest --test-dir fcitx5/build --output-on-failure
