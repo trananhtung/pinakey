@@ -430,6 +430,75 @@ constexpr TelexCase kTelexCases[] = {
     {"ddoongf ys", "đồng ý"},
 };
 
+/// Hồ sơ short-st: app CÓ SurroundingText, CÓ công bố (isValid() = true) nhưng nội dung báo về
+/// không phản ánh tài liệu — luôn nói "trước con trỏ chẳng có gì" trong khi tài liệu đang có chữ.
+/// Gặp ở app báo cáo lạc hậu/rỗng một nhịp, và là dạng thô của thứ fcitx5-lotus vá bằng
+/// `!surrounding.text().empty()`. Khác hồ sơ VTE ở chỗ deleteSurroundingText Ở ĐÂY CÓ TÁC DỤNG
+/// THẬT: tin lời client mà xoá thì ăn nhầm ký tự thật của người dùng. (#180)
+class ShortSurroundingInputContext : public InputContext {
+public:
+    explicit ShortSurroundingInputContext(InputContextManager &mgr)
+        : InputContext(mgr, "shortstapp") {
+        setCapabilityFlags(CapabilityFlags{CapabilityFlag::SurroundingText});
+        created();
+        publishEmpty();
+    }
+    ~ShortSurroundingInputContext() override { destroy(); }
+    const char *frontend() const override { return "doc"; }
+
+    int deleteCalls() const { return deleteCalls_; }
+    std::string text() const { return toUtf8(doc_); }
+
+    void commitStringImpl(const std::string &text) override {
+        auto u = fromUtf8(text);
+        doc_.insert(cursor_, u);
+        cursor_ += u.size();
+        publishEmpty();
+    }
+    /// App bình thường: lệnh xoá CÓ hiệu lực thật trên tài liệu.
+    void deleteSurroundingTextImpl(int offset, unsigned int size) override {
+        ++deleteCalls_;
+        long start = static_cast<long>(cursor_) + offset;
+        if (start < 0) {
+            start = 0;
+        }
+        if (static_cast<size_t>(start) > doc_.size()) {
+            start = static_cast<long>(doc_.size());
+        }
+        size_t n = size;
+        if (static_cast<size_t>(start) + n > doc_.size()) {
+            n = doc_.size() - static_cast<size_t>(start);
+        }
+        doc_.erase(static_cast<size_t>(start), n);
+        cursor_ = static_cast<size_t>(start);
+        publishEmpty();
+    }
+    void forwardKeyImpl(const ForwardKeyEvent &) override {}
+    void updatePreeditImpl() override {}
+
+    /// Client sửa mình: từ giờ báo đúng nội dung tài liệu như app lành mạnh.
+    void startReportingDocument() {
+        honest_ = true;
+        publishEmpty();
+    }
+
+private:
+    /// Báo về "hợp lệ nhưng rỗng": isValid() = true, cursor = 0 — không có ký tự nào trước con trỏ.
+    void publishEmpty() {
+        if (honest_) {
+            surroundingText().setText(toUtf8(doc_), static_cast<unsigned int>(cursor_),
+                                      static_cast<unsigned int>(cursor_));
+        } else {
+            surroundingText().setText("", 0, 0);
+        }
+        updateSurroundingText();
+    }
+    std::u32string doc_;
+    size_t cursor_ = 0;
+    int deleteCalls_ = 0;
+    bool honest_ = false;
+};
+
 /// Hồ sơ gnome-wayland-vte: gnome-terminal (VTE) trong phiên GNOME Wayland — đúng cấu hình mặc
 /// định của Ubuntu. Ba sự thật ghép lại thành một cái bẫy:
 ///   1. GNOME nói chuyện với fcitx5 qua frontend IBus, và `IBusFrontend::createInputContext`
@@ -831,6 +900,31 @@ int main() {
         expectType(ic.get(), "vieetj ", "việt ");
         FCITX_ASSERT(ic->deleteCalls() > delsBeforeImSwitch)
             << "đổi kiểu gõ đã vứt nhầm cache surrounding text (rơi về preedit)";
+
+        // ============== short-st (#180) ==============
+        // Client báo surrounding text hợp lệ nhưng RỖNG trong khi tài liệu đang có chữ: đoạn engine
+        // theo dõi không nằm trong phần văn bản trước con trỏ mà client báo → tuyệt đối không được
+        // phát deleteSurroundingText (ở hồ sơ này lệnh xoá CÓ hiệu lực, xoá là ăn nhầm chữ thật).
+        auto shortSt = std::make_unique<ShortSurroundingInputContext>(instance.inputContextManager());
+        shortSt->focusIn();
+        instance.setCurrentInputMethod(shortSt.get(), "pinakey", true);
+        sendKeys(shortSt.get(), "vieetj ");
+        FCITX_ASSERT(shortSt->deleteCalls() == 0)
+            << "xoá surrounding text dù client báo trước con trỏ không có ký tự nào ("
+            << shortSt->deleteCalls() << " lần)";
+        FCITX_ASSERT(shortSt->text() == "việt ")
+            << "short-st: doc=\"" << shortSt->text() << "\", mong đợi \"việt \"";
+
+        // Kết luận "client câm" được chốt lại, nhưng KHÔNG vĩnh viễn: client báo lại được tài liệu
+        // thì phím kế tiếp phải quay về gõ không gạch chân ngay, không kẹt preedit cả phiên.
+        shortSt->startReportingDocument();
+        const int delsBeforeHonest = shortSt->deleteCalls();
+        sendKeys(shortSt.get(), "tieengs ");
+        FCITX_ASSERT(shortSt->text() == "việt tiếng ")
+            << "short-st sau khi client sửa mình: doc=\"" << shortSt->text()
+            << "\", mong đợi \"việt tiếng \"";
+        FCITX_ASSERT(shortSt->deleteCalls() > delsBeforeHonest)
+            << "client đã báo lại được tài liệu mà vẫn kẹt ở preedit (không diff-replace lần nào)";
 
         // ============== gnome-wayland-vte ==============
         // Terminal trên GNOME Wayland (mặc định Ubuntu): capability nói CÓ SurroundingText,

@@ -122,6 +122,8 @@ void PinaKeyState::clearUinputAckState() {
 
 void PinaKeyState::reset() {
     clearUinputAckState();
+    // #180: phiên gõ mới → cho client một cơ hội nữa chứng minh nó báo được tài liệu.
+    surroundingUnbacked_ = false;
 
     // Dọn trạng thái emoji: reset là "vứt bỏ" (không commit) — nếu để sót, phím gõ sau khi quay
     // lại context này bị nuốt vào query emoji vô hình.
@@ -259,7 +261,7 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
         // #60: đang có vùng chọn (autocomplete bôi chọn gợi ý, hoặc người dùng bôi chọn rồi
         // gõ) → app có thể áp deleteSurroundingText vào vùng chọn thay vì trước con trỏ
         // (vùng chết đã quan sát ở Chromium) → xoá nhầm. Nhường preedit tới khi hết selection.
-        if (surroundingUsable() && !surroundingHasSelection()) {
+        if (surroundingUsable() && !surroundingHasSelection() && surroundingBacksSegment()) {
             resetIfDocumentDiverged(); // #7: con trỏ nhảy → quên segment cũ, không xoá nhầm.
             const bool handled = pk_engine_process_key_replace(core_, sym, state);
             applyReplaceResult();
@@ -300,12 +302,12 @@ void PinaKeyState::keyEvent(KeyEvent &keyEvent) {
 
 /// Có dùng diff-and-replace (gõ không gạch chân) không — qua SurroundingText hoặc qua uinput.
 /// App có surrounding text không đáng tin (LibreOffice, #66) không tính: nó dùng preedit.
-bool PinaKeyState::wantReplaceMode() const {
+bool PinaKeyState::wantReplaceMode() {
     if (!pk_engine_no_underline(core_)) {
         return false;
     }
     return (surroundingUsable() && !pk_engine_surrounding_text_unreliable(core_) &&
-            !surroundingHasSelection()) ||
+            !surroundingHasSelection() && surroundingBacksSegment()) ||
            useUinput();
 }
 
@@ -528,6 +530,7 @@ void PinaKeyState::deactivate(bool imSwitch) {
     // giữ nguyên: vẫn đúng client, đúng ô văn bản đó.
     if (!imSwitch) {
         ic_->surroundingText().invalidate();
+        surroundingUnbacked_ = false; // #180: app khác, kết luận cũ hết hiệu lực
     }
     ic_->inputPanel().reset();
     ic_->updatePreedit();
@@ -596,6 +599,41 @@ bool PinaKeyState::surroundingEndsWithWordSpace() const {
     return std::isalnum(lead) != 0;
 }
 
+/// #180: BẤT BIẾN TRƯỚC KHI XOÁ — khi engine đang theo dõi một segment (`prev_displayed`: chuỗi
+/// nó đã commit vào tài liệu và sắp xoá đi để thay), client phải BÁO CÓ tài liệu. Client bảo
+/// "trước sau con trỏ chẳng có gì" trong khi chính ta vừa commit chữ vào đó là nói dối hoặc lạc
+/// hậu — không có gì làm chỗ dựa cho `deleteSurroundingText`, mà lệnh xoá ở app bình thường thì
+/// có hiệu lực THẬT: xoá theo là ăn nhầm ký tự của người dùng, còn xoá hụt rồi vẫn commit thì nát
+/// chữ đúng kiểu terminal GNOME Wayland (#179). Nhường preedit là đường an toàn — như guard
+/// selection (#60) ngay bên dưới.
+///
+/// Đây là phần mà `resetIfDocumentDiverged()` (#7) KHÔNG bắt được: nó chỉ so segment với văn bản
+/// trước con trỏ rồi reset khi lệch, nên client báo rỗng cũng chỉ dẫn tới reset — engine gõ tiếp
+/// bằng đường replace trên một tài liệu mà nó không quan sát được. Ngược lại, con trỏ NHẢY (người
+/// dùng click, #7) thì client vẫn báo đủ nội dung: chỗ đó phải để #7 xử lý, không được đẩy về
+/// preedit. Hai điều kiện bổ nhau nên cùng chạy: guard này chặn client câm, #7 chỉnh vị trí.
+///
+/// fcitx5-lotus rút ra cùng kết luận và vá bằng `!surrounding.text().empty()` (commit b615d02).
+///
+/// Kết luận được CHỐT LẠI (`surroundingUnbacked_`) chứ không tính lại mỗi phím: sau khi nhường
+/// preedit, engine bị reset nên nó không còn theo dõi segment nào — tính lại thì phím kế tiếp
+/// thấy "segment rỗng, không có gì để xoá" và quay về đường replace, cứ thế lật qua lật lại giữa
+/// hai đường ngay giữa một từ (mỗi phím commit thô một ký tự, chữ ra không dấu). Chốt lại thì cả
+/// từ đi trọn đường preedit. Client báo lại được tài liệu lúc nào thì mở khoá ngay lúc đó.
+bool PinaKeyState::surroundingBacksSegment() {
+    const auto &st = ic_->surroundingText();
+    if (st.isValid() && !st.text().empty()) {
+        surroundingUnbacked_ = false; // client báo có tài liệu → tin lại được
+        return true;
+    }
+    // Tài liệu client báo rỗng: chỉ là NÓI DỐI khi chính ta đang giữ một segment đã commit vào đó
+    // (ô văn bản rỗng thật thì segment cũng rỗng, và phím lúc đó không sinh lệnh xoá nào).
+    if (const char *seg = pk_engine_replace_segment(core_); seg && seg[0] != '\0') {
+        surroundingUnbacked_ = true;
+    }
+    return !surroundingUnbacked_;
+}
+
 /// #60: surrounding text đang có vùng chọn không (cursor != anchor)? Không đọc được
 /// surrounding text thì coi như không có — giữ nguyên hành vi cũ, không hồi quy.
 bool PinaKeyState::surroundingHasSelection() const {
@@ -632,9 +670,18 @@ void PinaKeyState::applyReplaceResult() {
         FCITX_INFO() << "[pinakey #60] applyReplace deleteSurroundingText(-" << del << "," << del
                      << ") insert=\"" << (ins ? ins : "") << "\"";
     }
+    // #180: tới được đây thì lệnh xoá đã có chỗ dựa: client báo tài liệu KHÔNG rỗng
+    // (surroundingBacksSegment) và văn bản trước con trỏ kết thúc đúng bằng segment, nếu không
+    // resetIfDocumentDiverged() (#7) đã vứt segment và `del` phải bằng 0 — `diff_replace` phía
+    // Rust chỉ xoá phần đuôi của segment nên không bao giờ xoá quá những gì đã kiểm.
     if (del > 0) {
         ic_->deleteSurroundingText(-static_cast<int>(del), del);
     }
+    // #181 (diện theo dõi, CHƯA sửa): commit đi ngay sau lệnh xoá, không chờ app áp xong. Giao
+    // thức giữ đúng thứ tự nhưng app xử lý xoá bất đồng bộ (GTK dùng idle callback). fcitx5-lotus
+    // vá bằng sleep 5–20ms; PinaKey chưa có báo cáo nào và KHÔNG bê sleep vào đường nóng (chặn
+    // event loop của MỌI input context + ăn ngân sách latency mỗi phím). Có báo cáo thì hoãn
+    // commit qua event loop chứ không ngủ — chi tiết trong #181.
     if (ins && ins[0] != '\0') {
         ic_->commitString(ins);
     }
