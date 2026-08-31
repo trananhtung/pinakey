@@ -124,9 +124,15 @@ Khác bộ gõ truyền thống (hiện chữ gạch chân rồi mới “chốt
 - App không hỗ trợ *Surrounding Text* (terminal, vài app Electron) → **tự lùi về chế độ preedit** (có dòng tạm/gạch chân nhưng gõ luôn đúng). Đây là hành vi mặc định, tin cậy.
 - Một số app **có** Surrounding Text nhưng dùng không đáng tin (LibreOffice, terminal) → PinaKey
   **tự nhận diện theo tên app** và dùng preedit, không cần chỉnh gì.
+- App **hứa** có Surrounding Text nhưng không bao giờ gửi (terminal trên GNOME Wayland là ca kinh
+  điển: VTE chưa hiện thực) → PinaKey thấy không có dữ liệu thật nên cũng lùi về preedit. Chữ luôn
+  đúng, chỉ là có dòng tạm.
 - **Tự chỉnh per-app:** tạo `~/.config/pinakey/transport-rules.conf`, mỗi dòng
   `preedit|replace|auto <tên-app>` (ví dụ `preedit slack`) — rule của bạn **thắng** rule có sẵn.
   Danh sách có sẵn xem `/usr/share/pinakey/transport-rules.conf`.
+  ⚠️ Trong phiên **GNOME Wayland**, fcitx5 không biết tên app đang gõ (mọi app dùng chung một
+  input context của mutter) nên rule per-app **không có tác dụng** ở đó; PinaKey tự xoay xở bằng
+  cách chỉ gõ không gạch chân với app thật sự cấp Surrounding Text.
 - Có một chế độ **thử nghiệm** dùng daemon uinput để bỏ gạch chân ở cả terminal, nhưng **không ổn định trên GNOME Wayland** — xem [mục 9](#9-thử-nghiệm-gõ-không-gạch-chân-ở-terminal-uinput).
 
 ---

@@ -92,6 +92,17 @@ mod tests {
             "gnome-terminal-server",
             "kitty",
             "Alacritty",
+            // Nhóm terminal hay gặp trên Ubuntu nhưng tên không chứa "terminal".
+            "kgx",
+            "org.gnome.Console",
+            "ptyxis",
+            "foot",
+            "ghostty",
+            "urxvt-256color",
+            // …và nhóm bắt bằng mẫu chung "terminal".
+            "mate-terminal",
+            "qterminal",
+            "io.elementary.terminal",
         ] {
             assert_eq!(r.lookup(p), TransportPref::Preedit, "{p} phải là preedit");
         }
