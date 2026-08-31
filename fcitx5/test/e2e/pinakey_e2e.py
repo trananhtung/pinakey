@@ -61,30 +61,42 @@ class Fcitx:
         self.im = dbus.Interface(self.bus.get_object(FCITX, "/org/freedesktop/portal/inputmethod"), IM1)
         self.ctl = dbus.Interface(self.bus.get_object(FCITX, "/controller"), CTL1)
 
-    def new_ic(self, program, surrounding):
+    def new_ic(self, program, mode):
         path, _uuid = self.im.CreateInputContext([("program", program)])
         ic = dbus.Interface(self.bus.get_object(FCITX, path), IC1)
         doc = {"text": [], "cursor": 0}
+
+        def publish():
+            # Client "real" cư xử như GTK/Qt/Chromium: mỗi lần tài liệu đổi thì báo lại văn bản
+            # quanh con trỏ. Client "liar" quảng cáo cap nhưng KHÔNG BAO GIỜ gửi (VTE).
+            if mode != "real":
+                return
+            text = "".join(doc["text"])
+            ic.SetSurroundingText(text, dbus.UInt32(doc["cursor"]), dbus.UInt32(doc["cursor"]))
 
         def on_commit(s):
             s = str(s)
             doc["text"][doc["cursor"]:doc["cursor"]] = list(s)
             doc["cursor"] += len(s)
+            publish()
 
         def on_delete(offset, nchar):
             start = max(0, doc["cursor"] + int(offset))
             end = min(len(doc["text"]), start + int(nchar))
             del doc["text"][start:end]
             doc["cursor"] = start
+            publish()
 
         self.bus.add_signal_receiver(on_commit, "CommitString", IC1, path=path)
         self.bus.add_signal_receiver(on_delete, "DeleteSurroundingText", IC1, path=path)
-        cap = CAP_PREEDIT | (CAP_SURROUNDING if surrounding else 0)
+        cap = CAP_PREEDIT | (CAP_SURROUNDING if mode in ("real", "liar") else 0)
         ic.SetCapability(dbus.UInt64(cap))
         ic.FocusIn()
         # IC mới mặc định ở keyboard-us (inactive) → chọn PinaKey cho IC đang focus.
         pump(60)
         self.ctl.SetCurrentIM("pinakey")
+        pump(60)
+        publish() # app thật công bố surrounding text ngay khi nhận focus (kể cả ô còn trống)
         pump(60)
         return ic, doc
 
@@ -116,20 +128,28 @@ def type_tokens(ic, tokens):
         send(ic, keysym(t))
 
 
-# Mỗi ca: (nhãn, surrounding?, danh sách token phím, chuỗi tài liệu mong đợi)
+# Mỗi ca: (nhãn, chế độ surrounding text, danh sách token phím, chuỗi tài liệu mong đợi)
 # Token là ký tự đơn, hoặc tên phím đặc biệt ("space"/"return"…).
+# Chế độ surrounding text của client giả lập:
+#   "none" — không quảng cáo capability (terminal thuần) → addon dùng preedit.
+#   "real" — quảng cáo VÀ công bố surrounding text như GTK/Qt/Chromium thật → gõ không gạch chân.
+#   "liar" — quảng cáo nhưng KHÔNG BAO GIỜ công bố, và lệnh xoá cũng vô hiệu: đúng gnome-terminal
+#            (VTE) trên GNOME Wayland. Addon phải tự nhận ra và lùi về preedit, chữ vẫn đúng.
 CASES = [
     # --- Telex, chế độ preedit (app không có surrounding text) ---
-    ("telex-1-tu", False, list("vieetj") + ["space"], "việt "),
-    ("telex-tieng", False, list("tieengs") + ["space"], "tiếng "),
-    ("telex-fallback", False, list("loz") + ["space"], "loz "),
-    ("telex-dau-sac", False, list("as") + ["space"], "á "),
-    # --- Gõ không gạch chân (app có SurroundingText) ---
-    ("nounderline-cau", True, list("tieengs vieetj"), "tiếng việt"),
-    ("nounderline-daumu", True, list("ddaay laf tieengs vieetj"), "đây là tiếng việt"),
-    ("nounderline-1tu", True, list("dduongwf"), "đường"),
+    ("telex-1-tu", "none", list("vieetj") + ["space"], "việt "),
+    ("telex-tieng", "none", list("tieengs") + ["space"], "tiếng "),
+    ("telex-fallback", "none", list("loz") + ["space"], "loz "),
+    ("telex-dau-sac", "none", list("as") + ["space"], "á "),
+    # --- Gõ không gạch chân (app có SurroundingText và dùng được) ---
+    ("nounderline-cau", "real", list("tieengs vieetj"), "tiếng việt"),
+    ("nounderline-daumu", "real", list("ddaay laf tieengs vieetj"), "đây là tiếng việt"),
+    ("nounderline-1tu", "real", list("dduongwf"), "đường"),
+    # --- App hứa suông (terminal GNOME Wayland): phải lùi preedit, không được nát chữ ---
+    ("liar-st-cau", "liar", list("tieengs vieetj") + ["space"], "tiếng việt "),
+    ("liar-st-daumu", "liar", list("dduongwf") + ["space"], "đường "),
     # --- Emoji theo mã hex ---
-    ("emoji-hex", False, [":"] + list("u1f600") + ["return"], "\U0001F600"),
+    ("emoji-hex", "none", [":"] + list("u1f600") + ["return"], "\U0001F600"),
 ]
 
 
@@ -137,8 +157,8 @@ def main():
     fx = Fcitx()
     failures = []
     try:
-        for label, surrounding, tokens, expected in CASES:
-            ic, doc = fx.new_ic("e2e-" + label, surrounding)
+        for label, mode, tokens, expected in CASES:
+            ic, doc = fx.new_ic("e2e-" + label, mode)
             type_tokens(ic, tokens)
             pump(250)
             got = "".join(doc["text"])

@@ -76,6 +76,9 @@ private:
     // #60: có vùng chọn (cursor != anchor) trong surrounding text không — khi có, đường
     // replace phải nhường preedit vì offset của deleteSurroundingText không còn đáng tin.
     bool surroundingHasSelection() const;
+    // Client đã THẬT SỰ gửi surrounding text chưa (capability chỉ là lời hứa) — điều kiện bắt
+    // buộc để dùng đường diff-replace; xem chú thích ở pinakey.cpp.
+    bool surroundingUsable() const;
     // #60: in trạng thái surrounding text (text/cursor/anchor) khi PINAKEY_DEBUG_SURROUNDING=1 —
     // no-op nếu tắt. `where` là nhãn điểm gọi để đối chiếu với thao tác thật lúc đo thủ công.
     void debugLogSurrounding(const char *where) const;

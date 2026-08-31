@@ -46,10 +46,7 @@ impl TrieNode {
     pub fn find_prefix(&self, prefix: &str) -> Option<HashMap<String, String>> {
         let mut node = self;
         for c in prefix.chars() {
-            match node.children.get(&c) {
-                Some(n) => node = n,
-                None => return None,
-            }
+            node = node.children.get(&c)?;
         }
         let mut lookup = HashMap::new();
         node.dfs(&mut lookup, prefix);
