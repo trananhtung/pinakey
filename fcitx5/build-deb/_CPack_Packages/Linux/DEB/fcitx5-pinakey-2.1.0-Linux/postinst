@@ -1,0 +1,42 @@
+#!/bin/sh
+# postinst của gói .deb fcitx5-pinakey: cập nhật cache icon, nạp lại udev rule, và in hướng dẫn rõ ràng.
+set -e
+case "$1" in
+  configure)
+    # Cập nhật cache icon để biểu tượng PinaKey hiện đúng trong menu/khay.
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+      gtk-update-icon-cache -q -f /usr/share/icons/hicolor 2>/dev/null || true
+    fi
+    # Nạp lại udev rule cho /dev/uinput — CHỈ khi gói có kèm daemon uinput (chế độ thử nghiệm,
+    # mặc định không đóng gói). Bản mặc định không có rule này nên bỏ qua.
+    if [ -f /usr/lib/udev/rules.d/99-pinakey-uinput.rules ] && command -v udevadm >/dev/null 2>&1; then
+      udevadm control --reload-rules 2>/dev/null || true
+      udevadm trigger 2>/dev/null || true
+    fi
+    cat <<'MSG'
+
+========================================================================
+  PinaKey đã được cài. Còn 2-3 bước để bắt đầu gõ:
+
+  1) Khởi động lại fcitx5:   fcitx5 -r -d
+     (hoặc ĐĂNG XUẤT rồi đăng nhập lại)
+
+  2) Mở:  fcitx5-configtool
+     → thêm input method "PinaKey" (Tiếng Việt).
+       Nếu không thấy: bỏ tick "Only Show Current Language".
+
+  3) Nhấn Ctrl+Space để chuyển sang PinaKey, gõ thử:  vieetj → việt
+
+  Đang dùng chế độ uinput thử nghiệm (USAGE.md mục 9)? Sau NÂNG CẤP
+  phải restart cả daemon lẫn fcitx5 (protocol nội bộ có thể đã đổi):
+       systemctl --user restart pinakey-uinput-server && fcitx5 -r -d
+
+  Nếu fcitx5 chưa phải bộ gõ của hệ thống, chạy 1 LẦN:
+       im-config -n fcitx5
+  rồi ĐĂNG XUẤT / đăng nhập lại.
+========================================================================
+
+MSG
+    ;;
+esac
+exit 0

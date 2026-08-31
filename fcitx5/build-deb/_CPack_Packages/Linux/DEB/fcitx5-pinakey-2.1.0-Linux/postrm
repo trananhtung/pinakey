@@ -1,0 +1,11 @@
+#!/bin/sh
+# postrm của gói .deb fcitx5-pinakey: làm mới cache icon sau khi gỡ.
+set -e
+case "$1" in
+  remove|purge)
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+      gtk-update-icon-cache -q -f /usr/share/icons/hicolor 2>/dev/null || true
+    fi
+    ;;
+esac
+exit 0
