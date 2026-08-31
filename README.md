@@ -73,7 +73,7 @@ Vừa mở `:` đã thấy 9 emoji dùng gần nhất, chọn bằng phím số.
 - Từ điển chính tả "giải oan" cho từ mượn, cộng từ điển riêng của bạn ở `~/.config/pinakey/dict.txt`.
 - Gõ tắt (macro), có cả `$DATE` và `$TIME` tự điền.
 - Tự bỏ qua app tiếng Anh (terminal, IDE) và ô mật khẩu.
-- Vài tiện ích nhỏ, mặc định tắt: w thành ư theo 3 mức, tự viết hoa đầu câu, hai dấu cách thành `. `.
+- Vài tiện ích nhỏ, mặc định tắt: w thành ư theo 3 mức, tự viết hoa đầu câu, hai dấu cách thành một dấu chấm rồi một dấu cách.
 - Sửa file macro hay từ điển là có hiệu lực ngay, không phải khởi động lại.
 - Giao diện thiết lập đồ họa viết bằng egui, bấm lưu là áp dụng luôn.
 
@@ -225,7 +225,7 @@ Cảm ơn những người đã đóng góp cho PinaKey ([bảng emoji](https://
 Dự án theo chuẩn [all-contributors](https://github.com/all-contributors/all-contributors): mọi loại
 đóng góp đều được ghi nhận, không riêng code. Để thêm người đóng góp, comment trong issue hoặc PR:
 
-```
+```text
 @all-contributors please add @username for code, doc
 ```
 
