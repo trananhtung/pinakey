@@ -1059,6 +1059,30 @@ int main() {
         FCITX_ASSERT(gtkapp->text() == "việt ")
             << "cache surrounding cũ một nhịp làm nát chữ: \"" << gtkapp->text() << "\"";
 
+        // Telegram Desktop (Qt) trên GNOME Wayland (qua mutter + frontend IBus): khác fcitx5-gtk
+        // ở chỗ nó KHÔNG gửi lại surrounding text sau một lần xoá-chèn, kể cả khi người dùng gõ
+        // chậm — log PINAKEY_DEBUG_SURROUNDING đo được 'w' biến "đuo"→"đuơ" rồi 112ms sau phím
+        // 'j' vẫn thấy cache "đuo". Ảnh mới chỉ tới sau một lần commit THUẦN (không kèm xoá).
+        // Trên 2.1.1 (chưa có bản sửa #181), mọi phím ngay sau một phép biến đổi đều reset oan
+        // giữa từ: "ddanhs thuwr tieengs vieetj" ra "đánh thưr tiêngs viêtj".
+        auto telegram = std::make_unique<DeferredSyncInputContext>(instance.inputContextManager());
+        telegram->focusIn();
+        instance.setCurrentInputMethod(telegram.get(), "pinakey", true);
+        for (char c : std::string("ddanhs thuwr tieengs vieetj laafn truowcs ")) {
+            const int before = telegram->deleteCalls();
+            Key key = (c == ' ') ? Key("space") : Key(std::string(1, c));
+            KeyEvent ke(telegram.get(), key, false);
+            telegram->keyEvent(ke);
+            if (telegram->deleteCalls() == before) {
+                telegram->flushSurrounding(); // chỉ commit thuần mới làm client gửi ảnh mới
+            }
+        }
+        FCITX_ASSERT(telegram->deleteCalls() > 0)
+            << "phép biến đổi phải đi đường diff-replace chứ không phải preedit";
+        FCITX_ASSERT(telegram->text() == "đánh thử tiếng việt lần trước ")
+            << "client không gửi lại surrounding sau xoá-chèn làm nát chữ: \""
+            << telegram->text() << "\"";
+
         instance.exit();
     });
 
