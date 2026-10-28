@@ -1276,12 +1276,23 @@ mod tests {
         use crate::transport::TransportPref;
         let mut core = EngineCore::new(default_cfg());
         assert_eq!(core.transport_for_app(), TransportPref::Auto);
-        for p in ["soffice.bin", "libreoffice-writer", "kitty", "Alacritty"] {
+        for p in [
+            "soffice.bin",
+            "libreoffice-writer",
+            "kitty",
+            "Alacritty",
+            // Context chung của mọi app GNOME Wayland (mutter gộp lô text-input-v3).
+            "gnome-shell",
+        ] {
             core.set_wm_class(p.to_string());
             assert_eq!(
                 core.transport_for_app(),
                 TransportPref::Preedit,
                 "{p} phải ép preedit"
+            );
+            assert!(
+                core.is_surrounding_text_unreliable(),
+                "{p} phải bỏ diff-replace"
             );
         }
         for p in ["firefox", "google-chrome", "gedit"] {

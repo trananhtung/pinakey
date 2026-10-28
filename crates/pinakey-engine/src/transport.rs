@@ -142,4 +142,20 @@ mod tests {
         assert_eq!(r.lookup("slack"), TransportPref::Preedit);
         assert_eq!(r.lookup("discord"), TransportPref::Preedit);
     }
+
+    #[test]
+    fn gnome_shell_context_is_preedit_and_user_can_override() {
+        // Input context chung của mọi app GNOME Wayland (program "gnome-shell"): mutter gộp lệnh
+        // xoá/chèn của các phím sát nhau vào một lô text-input-v3, chỉ giữ lệnh cuối → built-in
+        // phải ép preedit.
+        let mut r = TransportRules::empty();
+        r.append_layer(EMBEDDED_RULES);
+        assert_eq!(r.lookup("gnome-shell"), TransportPref::Preedit);
+        // Program rỗng (fcitx5 cũ) và app thường giữ nguyên Auto — rule không lan sang chỗ khác.
+        assert_eq!(r.lookup(""), TransportPref::Auto);
+        assert_eq!(r.lookup("org.gnome.TextEditor"), TransportPref::Auto);
+        // Người dùng chấp nhận rủi ro để giữ gõ không gạch chân: lớp ~/.config thắng built-in.
+        r.append_layer("replace gnome-shell\n");
+        assert_eq!(r.lookup("gnome-shell"), TransportPref::Replace);
+    }
 }

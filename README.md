@@ -52,12 +52,18 @@ Telex, VNI, VIQR, kèm vài biến thể dựng sẵn, trong đó có Telex đơ
 | Firefox, Chrome, VS Code, Telegram, phần lớn app GTK và Qt | Không gạch chân |
 | Terminal: gnome-terminal, konsole, kitty, foot, ghostty… | Còn gạch chân (preedit) |
 | LibreOffice | Còn gạch chân (preedit) |
+| Mọi app trong phiên **GNOME Wayland** (mặc định Ubuntu) | Còn gạch chân (preedit) |
 
 PinaKey chỉ bỏ được gạch chân khi app cho phép đọc và xoá chữ đã hiện ra (Surrounding Text).
 Terminal thì không cho thật: VTE nhận lệnh xoá rồi bỏ qua luôn, nên nếu cứ cố sẽ ra chữ rối như
 `tieêngếng`. LibreOffice có cho, nhưng báo cáo sai vị trí khi gõ nhanh. Gặp hai nhóm này PinaKey tự
 lùi về preedit, chữ vẫn ra đúng, chỉ là có gạch chân trong lúc soạn. Bạn không phải cấu hình gì cả;
 danh sách nằm sẵn trong bộ gõ và sửa được ở `~/.config/pinakey/transport-rules.conf`.
+
+Trên GNOME Wayland, mọi app đi qua chung một kênh của GNOME Shell. Kênh này gộp lệnh xoá/chèn của
+các phím gõ sát nhau và chỉ giữ lệnh cuối, nên gõ không gạch chân ở đó sẽ mất dấu, mất chữ khi gõ
+nhanh. Vì vậy PinaKey dùng preedit cho cả phiên này. Ai vẫn muốn thử không gạch chân thì thêm
+`replace gnome-shell` vào file trên (xem mục 4 của USAGE).
 
 Có thêm chế độ uinput để bỏ gạch chân ở cả terminal, nhưng còn thử nghiệm và tắt sẵn
 (xem mục 9 của USAGE).

@@ -316,8 +316,11 @@ bool PinaKeyState::wantReplaceMode() {
 /// mới là bằng chứng client đã thật sự gửi văn bản quanh con trỏ trong phiên focus này.
 ///
 /// Vì sao phải kiểm: trên GNOME Wayland (mặc định của Ubuntu) mọi app nói chuyện với fcitx5 qua
-/// frontend IBus, mà `IBusFrontend::createInputContext` luôn tạo context với **program rỗng** —
-/// rule transport theo tên app (#67) không thể nhận ra terminal. mutter thì quảng cáo cứng
+/// MỘT input context chung do gnome-shell tạo (frontend IBus) — rule transport theo tên app (#67)
+/// không thể nhận ra terminal. fcitx5 mới (đã kiểm 5.1.19) đặt program "gnome-shell" cho context
+/// đó và rule built-in `preedit gnome-shell` ép preedit cả context (mutter gộp lô text-input-v3,
+/// xem transport-rules.conf); bản cũ hơn có thể để program rỗng, và khi người dùng tự ghi đè
+/// `replace gnome-shell` thì kiểm tra này lại là lá chắn chính. mutter quảng cáo cứng
 /// `IBUS_CAP_SURROUNDING_TEXT` cho MỌI app. Trong khi đó VTE (gnome-terminal) hiện thực
 /// `im_retrieve_surrounding`/`im_delete_surrounding` là `return false`: không bao giờ gửi
 /// surrounding text và NUỐT lệnh xoá. Tin vào capability ở đây = xoá không được nhưng vẫn commit

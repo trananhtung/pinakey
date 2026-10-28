@@ -18,12 +18,14 @@
 #include <fcitx/inputcontextmanager.h>
 #include <fcitx/inputmethodgroup.h>
 #include <fcitx/inputmethodmanager.h>
+#include <fcitx/inputpanel.h>
 #include <fcitx/instance.h>
 
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 
 using namespace fcitx;
@@ -501,9 +503,11 @@ private:
 
 /// Hồ sơ gnome-wayland-vte: gnome-terminal (VTE) trong phiên GNOME Wayland — đúng cấu hình mặc
 /// định của Ubuntu. Ba sự thật ghép lại thành một cái bẫy:
-///   1. GNOME nói chuyện với fcitx5 qua frontend IBus, và `IBusFrontend::createInputContext`
-///      LUÔN tạo context với program RỖNG (fcitx5 5.1.x, tham số bị bỏ) → rule transport theo
-///      tên app (#67) không bao giờ khớp "gnome-terminal", terminal KHÔNG bị ép preedit.
+///   1. GNOME nói chuyện với fcitx5 qua frontend IBus bằng MỘT context chung. Bản fcitx5 cũ để
+///      program RỖNG cho context đó (fcitx5 mới đặt "gnome-shell" và rule built-in ép preedit
+///      — xem hồ sơ gnome-shell-mutter) → rule transport theo tên app (#67) không bao giờ khớp
+///      "gnome-terminal", terminal KHÔNG bị ép preedit. Hồ sơ này giữ program rỗng để khoá
+///      lá chắn còn lại cho bản cũ.
 ///   2. mutter quảng cáo capability cố định `IBUS_CAP_PREEDIT_TEXT|FOCUS|SURROUNDING_TEXT` cho
 ///      MỌI app Wayland → addon tưởng terminal hỗ trợ surrounding text.
 ///   3. VTE hiện thực `im_retrieve_surrounding`/`im_delete_surrounding` là `return false`
@@ -629,6 +633,133 @@ public:
 private:
     std::u32string doc_;
     size_t cursor_ = 0;
+    int deleteCalls_ = 0;
+};
+
+/// Số byte UTF-8 của ký tự bắt đầu bằng byte `lead` — như bảng `g_utf8_skip` của GLib (byte
+/// continuation cũng tính là bước 1, đúng cách GLib đếm khi con trỏ rơi giữa một ký tự).
+size_t utf8Skip(unsigned char lead) {
+    if (lead >= 0xF0) {
+        return 4;
+    }
+    if (lead >= 0xE0) {
+        return 3;
+    }
+    if (lead >= 0xC0) {
+        return 2;
+    }
+    return 1;
+}
+
+/// Hồ sơ gnome-shell-mutter: MỌI app Wayland trong phiên GNOME (mặc định Ubuntu) — fcitx5 5.1.19
+/// thấy đúng MỘT input context, program "gnome-shell", frontend IBus. Mô hình hoá đường đi thật
+/// (đã đối chiếu mã nguồn mutter 50 `meta-wayland-text-input.c`, GTK 4 `gtkimcontextwayland.c`
+/// và log D-Bus đo trên máy người dùng):
+///   1. gnome-shell gửi phím bất đồng bộ (`process_key_event_async`), không chờ phím trước.
+///   2. mutter đẩy từng lệnh IME (commit_string, delete_surrounding_text, preedit_string) xuống
+///      app rồi hẹn MỘT `done` ở idle — mọi lệnh tới trước idle đó gộp thành một lô.
+///   3. text-input-v3 là double-buffered: trong một lô, mỗi loại lệnh CHỈ GIỮ LỆNH CUỐI; lệnh xoá
+///      áp lên tài liệu TRƯỚC lô rồi mới chèn.
+///   4. mutter đổi "số ký tự cần xoá" sang byte bằng bản sao surrounding text RIÊNG của nó (ảnh
+///      app báo lần cuối); thiếu ký tự trước con trỏ thì `g_return_if_fail` bỏ luôn lệnh xoá. App
+///      (GTK 4) đổi byte ngược lại sang ký tự trên tài liệu hiện tại của nó.
+///
+/// `done()` = idle của mutter đã chạy. Gọi sau mỗi phím = gõ thong thả; dồn hai phím rồi mới gọi
+/// = gõ nhanh / phím chồng nhau (log thật: 't' và 'y' cách nhau 0,1ms).
+class MutterBatchInputContext : public InputContext {
+public:
+    explicit MutterBatchInputContext(InputContextManager &mgr)
+        : InputContext(mgr, "gnome-shell") {
+        setCapabilityFlags(
+            CapabilityFlags{CapabilityFlag::SurroundingText, CapabilityFlag::Preedit});
+        created();
+        publish();
+    }
+    ~MutterBatchInputContext() override { destroy(); }
+    const char *frontend() const override { return "doc"; }
+
+    /// >0 nghĩa là addon đi đường diff-replace (xoá-chèn từng phím) thay vì preedit.
+    int deleteCalls() const { return deleteCalls_; }
+
+    void commitStringImpl(const std::string &text) override { pendingCommit_ = text; }
+    void deleteSurroundingTextImpl(int offset, unsigned int size) override {
+        ++deleteCalls_;
+        // mutter: offset/size theo ký tự, đổi sang byte trên bản sao riêng (có thể đã cũ).
+        const size_t cursor = mutterCursor_;
+        size_t before = cursor;
+        for (int i = 0; i > offset; --i) {
+            if (before == 0) {
+                return; // g_return_if_fail (before >= start): lệnh xoá bị bỏ.
+            }
+            do {
+                --before;
+            } while (before > 0 &&
+                     (static_cast<unsigned char>(mutterText_[before]) & 0xC0) == 0x80);
+        }
+        (void)size; // addon luôn xoá ngay trước con trỏ: size == -offset, after_length = 0.
+        pendingDeleteBytes_ = cursor - before;
+        hasPendingDelete_ = true;
+    }
+    void forwardKeyImpl(const ForwardKeyEvent &) override {}
+    void updatePreeditImpl() override {
+        pendingPreedit_ = inputPanel().clientPreedit().toString();
+        hasPendingPreedit_ = true;
+    }
+
+    /// Idle `done` của mutter chạy: app áp lô (xoá → chèn → preedit) rồi báo surrounding text mới.
+    void done() {
+        if (hasPendingDelete_) {
+            // GTK 4: g_utf8_pointer_to_offset(cursor - before_length, cursor) trên tài liệu
+            // hiện tại của app.
+            const std::string cur = toUtf8(doc_.substr(0, cursor_));
+            size_t i = cur.size() > pendingDeleteBytes_ ? cur.size() - pendingDeleteBytes_ : 0;
+            size_t chars = 0;
+            while (i < cur.size()) {
+                i += utf8Skip(static_cast<unsigned char>(cur[i]));
+                ++chars;
+            }
+            chars = std::min(chars, cursor_);
+            doc_.erase(cursor_ - chars, chars);
+            cursor_ -= chars;
+        }
+        if (pendingCommit_) {
+            const auto u = fromUtf8(*pendingCommit_);
+            doc_.insert(cursor_, u);
+            cursor_ += u.size();
+        }
+        if (hasPendingPreedit_) {
+            preedit_ = pendingPreedit_;
+        }
+        hasPendingDelete_ = false;
+        pendingDeleteBytes_ = 0;
+        pendingCommit_.reset();
+        hasPendingPreedit_ = false;
+        publish();
+    }
+
+    std::string text() const { return toUtf8(doc_); }
+    std::string preedit() const { return preedit_; }
+
+private:
+    /// App gửi set_surrounding_text + commit: mutter lưu bản sao, gnome-shell chuyển cho fcitx5.
+    void publish() {
+        mutterText_ = toUtf8(doc_);
+        mutterCursor_ = toUtf8(doc_.substr(0, cursor_)).size();
+        const auto c = static_cast<unsigned int>(cursor_);
+        surroundingText().setText(mutterText_, c, c);
+        updateSurroundingText();
+    }
+
+    std::u32string doc_;
+    size_t cursor_ = 0;
+    std::string preedit_;
+    std::string mutterText_;
+    size_t mutterCursor_ = 0; // byte, như text_input->surrounding.cursor
+    std::optional<std::string> pendingCommit_;
+    bool hasPendingDelete_ = false;
+    size_t pendingDeleteBytes_ = 0;
+    std::string pendingPreedit_;
+    bool hasPendingPreedit_ = false;
     int deleteCalls_ = 0;
 };
 
@@ -1082,6 +1213,72 @@ int main() {
         FCITX_ASSERT(telegram->text() == "đánh thử tiếng việt lần trước ")
             << "client không gửi lại surrounding sau xoá-chèn làm nát chữ: \""
             << telegram->text() << "\"";
+
+        // ============== gnome-shell-mutter ==============
+        // GNOME Wayland: mọi app đi qua MỘT input context "gnome-shell" và mutter gộp lệnh IME
+        // của các phím tới sát nhau vào một lô text-input-v3, chỉ giữ lệnh cuối mỗi loại. Đường
+        // diff-replace (mỗi phím một cặp xoá + chèn) mất chữ ngay khi hai phím chung lô — log thật
+        // trên Ubuntu 26.04: 't','y' cách nhau 0,1ms biến "không rất" thành "không aasty" (mất
+        // 't', lệnh xoá ăn nhầm 'r'). Rule built-in ép preedit cho context này: preedit là trạng
+        // thái trọn vẹn (lệnh cuối thắng vẫn đúng) và chỉ commit một lần khi ngắt từ.
+        auto tap = [](InputContext *target, char c) {
+            Key key = (c == ' ') ? Key("space") : Key(std::string(1, c));
+            KeyEvent ke(target, key, false);
+            target->keyEvent(ke);
+        };
+        auto mutter = std::make_unique<MutterBatchInputContext>(instance.inputContextManager());
+        mutter->focusIn();
+        instance.setCurrentInputMethod(mutter.get(), "pinakey", true);
+
+        // Gõ thong thả: idle của mutter chạy sau từng phím.
+        for (char c : std::string("tieengs ")) {
+            tap(mutter.get(), c);
+            mutter->done();
+        }
+        FCITX_ASSERT(mutter->text() == "tiếng ")
+            << "gnome-shell gõ thong thả: \"" << mutter->text() << "\"";
+
+        // Gõ nhanh: từng cặp phím chung một lô ("ee" biến đổi ngay sau một chữ thường, rồi
+        // "tj" chồng nhau) — đúng chỗ đường diff-replace đánh rơi lệnh commit đầu lô.
+        for (const char *pair : {"vi", "ee", "tj", " "}) {
+            for (const char *p = pair; *p; ++p) {
+                tap(mutter.get(), *p);
+            }
+            mutter->done();
+        }
+        FCITX_ASSERT(mutter->text() == "tiếng việt ")
+            << "gnome-shell gõ nhanh (hai phím chung lô text-input-v3) làm nát chữ: \""
+            << mutter->text() << "\", mong đợi \"tiếng việt \"";
+        FCITX_ASSERT(mutter->deleteCalls() == 0)
+            << "gnome-shell phải đi đường preedit, không được deleteSurroundingText ("
+            << mutter->deleteCalls() << " lần)";
+
+        // Chữ đang soạn nằm ở preedit, tài liệu chưa nhận gì cho tới khi ngắt từ.
+        for (char c : std::string("ddu")) {
+            tap(mutter.get(), c);
+        }
+        mutter->done();
+        FCITX_ASSERT(mutter->preedit() == "đu" && mutter->text() == "tiếng việt ")
+            << "preedit=\"" << mutter->preedit() << "\" doc=\"" << mutter->text() << "\"";
+
+        // Rule NGƯỜI DÙNG `replace gnome-shell` phải thắng built-in (ai chấp nhận rủi ro để giữ
+        // gõ không gạch chân trên GNOME). Engine đọc rule lúc tạo context.
+        {
+            std::ofstream rules(xdgDir + "/pinakey/transport-rules.conf");
+            rules << "preedit userpreeditapp\nreplace gnome-shell\n";
+        }
+        auto mutterReplace =
+            std::make_unique<MutterBatchInputContext>(instance.inputContextManager());
+        mutterReplace->focusIn();
+        instance.setCurrentInputMethod(mutterReplace.get(), "pinakey", true);
+        for (char c : std::string("tieengs ")) {
+            tap(mutterReplace.get(), c);
+            mutterReplace->done();
+        }
+        FCITX_ASSERT(mutterReplace->text() == "tiếng ")
+            << "override replace gõ thong thả: \"" << mutterReplace->text() << "\"";
+        FCITX_ASSERT(mutterReplace->deleteCalls() > 0)
+            << "rule người dùng 'replace gnome-shell' phải đưa context về diff-replace";
 
         instance.exit();
     });
