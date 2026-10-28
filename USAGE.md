@@ -139,6 +139,10 @@ Khác bộ gõ truyền thống (hiện chữ gạch chân rồi mới “chốt
   aasty"). Preedit không bị ảnh hưởng. Nếu vẫn muốn gõ không gạch chân trên GNOME Wayland và chấp
   nhận rủi ro đó, thêm dòng `replace gnome-shell` vào `~/.config/pinakey/transport-rules.conf` rồi
   khởi động lại fcitx5 (`fcitx5 -r`).
+  ⚠️ Hạn chế với fcitx5 5.1.19 (bản của Ubuntu 26.04): bản này báo GNOME *xoá* preedit khi mất
+  focus, nên nếu bạn click chỗ khác, đổi cửa sổ hay bấm nút (vd. nút Gửi) bằng chuột lúc từ cuối
+  **chưa kết thúc**, từ đó sẽ mất. Gõ dấu cách hoặc Enter trước khi click. fcitx5 upstream bản mới
+  hơn đã sửa (báo GNOME *chốt* preedit thay vì xoá).
 - Có một chế độ **thử nghiệm** dùng daemon uinput để bỏ gạch chân ở cả terminal, nhưng **không ổn định trên GNOME Wayland** — xem [mục 9](#9-thử-nghiệm-gõ-không-gạch-chân-ở-terminal-uinput).
 
 ---
