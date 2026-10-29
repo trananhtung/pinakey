@@ -1,7 +1,8 @@
 # Hướng dẫn sử dụng PinaKey
 
 **PinaKey** là bộ gõ tiếng Việt cho Linux (nền **fcitx5**). Trải nghiệm mặc định là **gõ không gạch
-chân** — chữ tiếng Việt hiện thẳng như gõ thường, không có dòng gạch chân chờ xác nhận.
+chân** — chữ tiếng Việt hiện thẳng như gõ thường, không có dòng gạch chân chờ xác nhận. Riêng phiên
+GNOME Wayland dùng preedit (có gạch chân) để gõ nhanh không mất chữ — xem [mục 4](#4-gõ-không-gạch-chân-mặc-định).
 
 ---
 
@@ -131,8 +132,17 @@ Khác bộ gõ truyền thống (hiện chữ gạch chân rồi mới “chốt
   `preedit|replace|auto <tên-app>` (ví dụ `preedit slack`) — rule của bạn **thắng** rule có sẵn.
   Danh sách có sẵn xem `/usr/share/pinakey/transport-rules.conf`.
   ⚠️ Trong phiên **GNOME Wayland**, fcitx5 không biết tên app đang gõ (mọi app dùng chung một
-  input context của mutter) nên rule per-app **không có tác dụng** ở đó; PinaKey tự xoay xở bằng
-  cách chỉ gõ không gạch chân với app thật sự cấp Surrounding Text.
+  input context tên `gnome-shell`) nên rule per-app **không có tác dụng** ở đó.
+- **GNOME Wayland (mặc định Ubuntu) dùng preedit cho mọi app** — chữ đang soạn có gạch chân. Lý do:
+  mutter gộp lệnh xoá/chèn của các phím gõ sát nhau vào một lô và chỉ giữ lệnh cuối, nên gõ không
+  gạch chân ở đây làm **mất dấu, mất hoặc đúp chữ khi gõ nhanh** (ví dụ "không rất" thành "không
+  aasty"). Preedit không bị ảnh hưởng. Nếu vẫn muốn gõ không gạch chân trên GNOME Wayland và chấp
+  nhận rủi ro đó, thêm dòng `replace gnome-shell` vào `~/.config/pinakey/transport-rules.conf` rồi
+  khởi động lại fcitx5 (`fcitx5 -r`).
+  ⚠️ Hạn chế với fcitx5 5.1.19 (bản của Ubuntu 26.04): bản này báo GNOME *xoá* preedit khi mất
+  focus, nên nếu bạn click chỗ khác, đổi cửa sổ hay bấm nút (vd. nút Gửi) bằng chuột lúc từ cuối
+  **chưa kết thúc**, từ đó sẽ mất. Gõ dấu cách hoặc Enter trước khi click. fcitx5 upstream bản mới
+  hơn đã sửa (báo GNOME *chốt* preedit thay vì xoá).
 - Có một chế độ **thử nghiệm** dùng daemon uinput để bỏ gạch chân ở cả terminal, nhưng **không ổn định trên GNOME Wayland** — xem [mục 9](#9-thử-nghiệm-gõ-không-gạch-chân-ở-terminal-uinput).
 
 ---
@@ -252,7 +262,7 @@ Rồi `fcitx5 -r -d` (hoặc đăng nhập lại).
 | Không thấy PinaKey trong configtool | Bỏ tick “Only Show Current Language”; chạy `fcitx5 -r -d` rồi mở lại. |
 | Gõ ra tiếng Anh | Nhấn **Ctrl+Space** để chuyển sang PinaKey; kiểm tra biểu tượng khay. |
 | Terminal hiện gạch chân | Bình thường: terminal không hỗ trợ Surrounding Text nên dùng preedit (gõ vẫn đúng). Muốn thử bỏ gạch chân: chế độ uinput thử nghiệm (mục 9) — lưu ý không ổn định trên GNOME Wayland. |
-| Trình duyệt/editor hiện gạch chân | App đó chưa cấp Surrounding Text, hoặc cờ "Không gạch chân preedit" đang tắt → bật lại trong công cụ thiết lập PinaKey. |
+| Trình duyệt/editor hiện gạch chân | Trong phiên GNOME Wayland đây là hành vi mặc định (xem [mục 4](#4-gõ-không-gạch-chân-mặc-định)). Phiên khác: app đó chưa cấp Surrounding Text, hoặc cờ "Không gạch chân preedit" đang tắt → bật lại trong công cụ thiết lập PinaKey. |
 | **Không gõ được tiếng Việt trong Slack / Discord / VS Code… (app cài bằng snap/flatpak)** | App chạy trong sandbox **thiếu GTK immodule `fcitx5`** → mọi bộ gõ đều chết, không riêng PinaKey. Cài bản **`.deb`/native** thay cho snap/flatpak (xem mục **“App snap/flatpak”** bên dưới). |
 | Gõ tắt/từ điển không ăn | Kiểm tra đường dẫn file trong `~/.config/pinakey/`. |
 | Không gõ được ở ô mật khẩu | **Cố ý**: PinaKey tự tắt ở ô mật khẩu (an toàn). Gõ trực tiếp không qua bộ gõ. |
