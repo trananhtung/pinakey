@@ -9,11 +9,15 @@
   # Nix từ chối → không build được về nguyên tắc. Khai báo repo gốc làm input giúp `src` là một
   # store path hợp lệ, reproducible (ghim trong flake.lock) và pure-eval được. (#164)
   #
-  # KHUNG MẪU: để build đúng cây mã ĐANG LÀM VIỆC (local) thay vì main trên GitHub, override input:
+  # Input ghim vào TAG phát hành trùng `version` bên dưới — không theo nhánh mặc định, kẻo gói
+  # mang nhãn X.Y.Z lại build mã main mới hơn. Mỗi lần phát hành nâng tag cùng version;
+  # tools/check-versions.sh bắt lệch ở CI.
+  #
+  # KHUNG MẪU: để build đúng cây mã ĐANG LÀM VIỆC (local) thay vì bản phát hành, override input:
   #     nix build path:./packaging --override-input pinakey-src "path:$(git rev-parse --show-toplevel)"
   # Lưu ý build phase chạy cargo trong CMake nên CẦN MẠNG cho crates; muốn build offline thuần Nix
   # thì thay bằng cơ chế vendor (fetchCargoVendor/importCargoLock) — ngoài phạm vi khung mẫu này.
-  inputs.pinakey-src.url = "github:trananhtung/pinakey";
+  inputs.pinakey-src.url = "github:trananhtung/pinakey/v2.1.3";
   inputs.pinakey-src.flake = false;
 
   outputs = { self, nixpkgs, pinakey-src }:

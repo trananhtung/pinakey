@@ -9,6 +9,9 @@ cd "$(dirname "$0")/.."
 cargo_ver=$(grep -m1 -oP '^\s*version\s*=\s*"\K[0-9]+\.[0-9]+\.[0-9]+' Cargo.toml)
 pkgbuild_ver=$(grep -m1 -oP '^pkgver=\K[0-9]+\.[0-9]+\.[0-9]+' packaging/PKGBUILD)
 flake_ver=$(grep -m1 -oP 'version\s*=\s*"\K[0-9]+\.[0-9]+\.[0-9]+' packaging/flake.nix)
+# Input mã nguồn của flake phải ghim đúng tag phát hành (github:…/vX.Y.Z), không theo main.
+flake_src_ver=$(grep -m1 -oP 'pinakey-src\.url\s*=\s*"github:[^/]+/[^/]+/v\K[0-9]+\.[0-9]+\.[0-9]+' \
+    packaging/flake.nix || true)
 
 fail=0
 check() {
@@ -19,9 +22,10 @@ check() {
 }
 check "packaging/PKGBUILD (pkgver)" "$pkgbuild_ver"
 check "packaging/flake.nix (version)" "$flake_ver"
+check "packaging/flake.nix (tag pinakey-src)" "${flake_src_ver:-<không ghim tag>}"
 
 if [ "$fail" -ne 0 ]; then
     echo "Cập nhật cho khớp Cargo.toml ($cargo_ver) rồi chạy lại." >&2
     exit 1
 fi
-echo "✓ Version đồng bộ với Cargo.toml = $cargo_ver (PKGBUILD, flake.nix)"
+echo "✓ Version đồng bộ với Cargo.toml = $cargo_ver (PKGBUILD, flake.nix, tag nguồn của flake)"
